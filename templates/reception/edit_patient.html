@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Patient Record: {{ patient.full_name }} ({{ patient.hospital_id }}){% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+
+    <!-- Header & Breadcrumb -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
+                <a href="{{ url_for('reception.dashboard') }}" class="hover:text-slate-900">Reception Desk</a>
+                <span>/</span>
+                <a href="{{ url_for('reception.patient_detail', patient_id=patient.id) }}" class="hover:text-slate-900">{{ patient.hospital_id }}</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">Edit Record</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Edit Master Patient Record</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Updating master demographic, contact, and payer data for {{ patient.full_name }}</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <span class="font-mono text-xs font-bold px-2.5 py-1 bg-slate-100 text-slate-800 border border-slate-300 rounded">
+                {{ patient.hospital_id }}
+            </span>
+            <a href="{{ url_for('reception.patient_detail', patient_id=patient.id) }}" class="btn-secondary text-xs">
+                Cancel
+            </a>
+        </div>
+    </div>
+
+    <!-- Edit Form -->
+    <form method="POST" action="{{ url_for('reception.edit_patient', patient_id=patient.id) }}" enctype="multipart/form-data" class="space-y-6">
+        
+        <!-- SECTION 1: Demographics & Photo -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
+            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-200">
+                <div class="w-6 h-6 rounded bg-slate-900 text-white flex items-center justify-center text-xs font-mono font-bold">
+                    1
+                </div>
+                <h2 class="text-sm font-bold text-slate-900">Demographics & Identity Verification</h2>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                <!-- Left: Form Inputs -->
+                <div class="lg:col-span-8 space-y-4">
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="first_name" class="block text-xs font-bold text-slate-700 mb-1">
+                                First Name <span class="text-rose-600">*</span>
+                            </label>
+                            <input type="text" name="first_name" id="first_name" value="{{ patient.first_name }}" required class="form-input text-sm">
+                        </div>
+
+                        <div>
+                            <label for="last_name" class="block text-xs font-bold text-slate-700 mb-1">
+                                Last / Family Name <span class="text-rose-600">*</span>
+                            </label>
+                            <input type="text" name="last_name" id="last_name" value="{{ patient.last_name }}" required class="form-input text-sm">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label for="date_of_birth" class="block text-xs font-bold text-slate-700 mb-1">
+                                Date of Birth <span class="text-rose-600">*</span>
+                            </label>
+                            <input type="date" name="date_of_birth" id="date_of_birth" value="{{ patient.date_of_birth.strftime('%Y-%m-%d') }}" required class="form-input text-sm">
+                        </div>
+
+                        <div>
+                            <label for="gender" class="block text-xs font-bold text-slate-700 mb-1">
+                                Biological Gender <span class="text-rose-600">*</span>
+                            </label>
+                            <select name="gender" id="gender" class="form-select text-sm" required>
+                                <option value="Male" {% if patient.gender == 'Male' %}selected{% endif %}>Male</option>
+                                <option value="Female" {% if patient.gender == 'Female' %}selected{% endif %}>Female</option>
+                                <option value="Other" {% if patient.gender == 'Other' %}selected{% endif %}>Other</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="national_id" class="block text-xs font-bold text-slate-700 mb-1">
+                                National ID / Passport
+                            </label>
+                            <input type="text" name="national_id" id="national_id" value="{{ patient.national_id or '' }}" placeholder="e.g. 28491043" class="form-input text-sm font-mono">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="blood_group" class="block text-xs font-bold text-slate-700 mb-1">
+                                Blood Group
+                            </label>
+                            <select name="blood_group" id="blood_group" class="form-select text-sm">
+                                <option value="" {% if not patient.blood_group %}selected{% endif %}>Unknown / Not Tested</option>
+                                <option value="O+" {% if patient.blood_group == 'O+' %}selected{% endif %}>O+ (Positive)</option>
+                                <option value="O-" {% if patient.blood_group == 'O-' %}selected{% endif %}>O- (Negative)</option>
+                                <option value="A+" {% if patient.blood_group == 'A+' %}selected{% endif %}>A+ (Positive)</option>
+                                <option value="A-" {% if patient.blood_group == 'A-' %}selected{% endif %}>A- (Negative)</option>
+                                <option value="B+" {% if patient.blood_group == 'B+' %}selected{% endif %}>B+ (Positive)</option>
+                                <option value="B-" {% if patient.blood_group == 'B-' %}selected{% endif %}>B- (Negative)</option>
+                                <option value="AB+" {% if patient.blood_group == 'AB+' %}selected{% endif %}>AB+ (Positive)</option>
+                                <option value="AB-" {% if patient.blood_group == 'AB-' %}selected{% endif %}>AB- (Negative)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="allergies" class="block text-xs font-bold text-slate-700 mb-1">
+                                Known Allergies / Adverse Reactions
+                            </label>
+                            <input type="text" name="allergies" id="allergies" value="{{ patient.allergies or '' }}" placeholder="e.g. Penicillin, NSAIDs, etc." class="form-input text-sm">
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Right: Front-Desk Webcam Photo Update -->
+                <div class="lg:col-span-4 bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Patient Identification Photo
+                        </label>
+                        <span class="text-[10px] text-slate-400 font-mono">Current Photo</span>
+                    </div>
+
+                    <!-- Video / Canvas / Current Photo Container -->
+                    <div class="relative w-full aspect-4/3 bg-slate-200 rounded-lg overflow-hidden border border-slate-300 flex items-center justify-center">
+                        <video id="webcam-video" autoplay playsinline class="w-full h-full object-cover hidden"></video>
+                        <img id="photo-preview" src="{% if patient.photo_filename %}{{ url_for('static', filename='uploads/photos/' ~ patient.photo_filename) }}{% endif %}" alt="{{ patient.full_name }}" class="w-full h-full object-cover {% if not patient.photo_filename %}hidden{% endif %}">
+                        
+                        <div id="webcam-placeholder" class="text-center p-4 {% if patient.photo_filename %}hidden{% endif %}">
+                            <div class="w-10 h-10 mx-auto rounded-full bg-slate-300 text-slate-600 flex items-center justify-center mb-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                                </svg>
+                            </div>
+                            <span class="text-xs text-slate-500 font-semibold block">No Photo Stored</span>
+                        </div>
+                    </div>
+
+                    <input type="hidden" name="webcam_image" id="webcam_image">
+
+                    <div class="space-y-2">
+                        <div class="grid grid-cols-2 gap-2">
+                            <button type="button" onclick="initWebcam()" class="btn-secondary text-xs py-1.5">
+                                Start Camera
+                            </button>
+                            <button type="button" id="btn-capture-photo" onclick="captureSnapshot()" disabled class="btn-primary text-xs py-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                                Snap Photo
+                            </button>
+                        </div>
+                        <button type="button" id="btn-retake-photo" onclick="retakeSnapshot()" class="btn-secondary text-xs w-full py-1.5 hidden text-rose-700 border-rose-300 hover:bg-rose-50">
+                            Retake Photo
+                        </button>
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-200">
+                        <label class="block text-[11px] text-slate-500 mb-1">Replace with file upload:</label>
+                        <input type="file" name="photo_file" id="photo_file" accept="image/*" class="text-xs text-slate-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300 w-full">
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- SECTION 2: Contact Details & Residence -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
+            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-200">
+                <div class="w-6 h-6 rounded bg-slate-900 text-white flex items-center justify-center text-xs font-mono font-bold">
+                    2
+                </div>
+                <h2 class="text-sm font-bold text-slate-900">Contact & Residential Details</h2>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="phone" class="block text-xs font-bold text-slate-700 mb-1">
+                        Primary Phone Number <span class="text-rose-600">*</span>
+                    </label>
+                    <input type="tel" name="phone" id="phone" value="{{ patient.phone }}" required class="form-input text-sm font-mono">
+                </div>
+
+                <div>
+                    <label for="residential_address" class="block text-xs font-bold text-slate-700 mb-1">
+                        Residential Address / Physical Location
+                    </label>
+                    <input type="text" name="residential_address" id="residential_address" value="{{ patient.residential_address or '' }}" placeholder="e.g. House 14, Kilimani Ring Rd, Nairobi" class="form-input text-sm">
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 3: Primary Payer / Billing Category -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5" x-data="{ payer: '{{ patient.primary_payer }}' }">
+            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-200">
+                <div class="w-6 h-6 rounded bg-slate-900 text-white flex items-center justify-center text-xs font-mono font-bold">
+                    3
+                </div>
+                <h2 class="text-sm font-bold text-slate-900">Billing & Payer Category</h2>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label class="cursor-pointer">
+                    <input type="radio" name="primary_payer" value="Cash" x-model="payer" class="peer sr-only">
+                    <div class="p-3.5 rounded-lg border border-slate-300 text-center peer-checked:border-slate-900 peer-checked:bg-slate-100 peer-checked:ring-1 peer-checked:ring-slate-900 transition-all">
+                        <div class="text-xs font-bold text-slate-900">Direct Cash / Self-Pay</div>
+                    </div>
+                </label>
+
+                <label class="cursor-pointer">
+                    <input type="radio" name="primary_payer" value="Insurance" x-model="payer" class="peer sr-only">
+                    <div class="p-3.5 rounded-lg border border-slate-300 text-center peer-checked:border-slate-900 peer-checked:bg-slate-100 peer-checked:ring-1 peer-checked:ring-slate-900 transition-all">
+                        <div class="text-xs font-bold text-slate-900">Health Insurance Scheme</div>
+                    </div>
+                </label>
+
+                <label class="cursor-pointer">
+                    <input type="radio" name="primary_payer" value="Corporate" x-model="payer" class="peer sr-only">
+                    <div class="p-3.5 rounded-lg border border-slate-300 text-center peer-checked:border-slate-900 peer-checked:bg-slate-100 peer-checked:ring-1 peer-checked:ring-slate-900 transition-all">
+                        <div class="text-xs font-bold text-slate-900">Corporate Scheme</div>
+                    </div>
+                </label>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2" x-show="payer !== 'Cash'" x-cloak>
+                <div>
+                    <label for="insurance_company" class="block text-xs font-bold text-slate-700 mb-1">
+                        Insurance Provider / Scheme Name
+                    </label>
+                    <input type="text" name="insurance_company" id="insurance_company" value="{{ patient.insurance_company or '' }}" placeholder="e.g. Social Health Authority (SHA)" class="form-input text-sm">
+                </div>
+
+                <div>
+                    <label for="insurance_policy_number" class="block text-xs font-bold text-slate-700 mb-1">
+                        Policy / Member Number
+                    </label>
+                    <input type="text" name="insurance_policy_number" id="insurance_policy_number" value="{{ patient.insurance_policy_number or '' }}" placeholder="e.g. SHA-902184-B" class="form-input text-sm font-mono">
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 4: Next of Kin / Emergency Contact -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
+            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-200">
+                <div class="w-6 h-6 rounded bg-slate-900 text-white flex items-center justify-center text-xs font-mono font-bold">
+                    4
+                </div>
+                <h2 class="text-sm font-bold text-slate-900">Emergency Contact (Next of Kin)</h2>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <label for="next_of_kin_name" class="block text-xs font-bold text-slate-700 mb-1">
+                        Next of Kin Full Name <span class="text-rose-600">*</span>
+                    </label>
+                    <input type="text" name="next_of_kin_name" id="next_of_kin_name" value="{{ patient.next_of_kin_name }}" required class="form-input text-sm">
+                </div>
+
+                <div>
+                    <label for="next_of_kin_phone" class="block text-xs font-bold text-slate-700 mb-1">
+                        Contact Phone Number <span class="text-rose-600">*</span>
+                    </label>
+                    <input type="tel" name="next_of_kin_phone" id="next_of_kin_phone" value="{{ patient.next_of_kin_phone }}" required class="form-input text-sm font-mono">
+                </div>
+
+                <div>
+                    <label for="next_of_kin_relation" class="block text-xs font-bold text-slate-700 mb-1">
+                        Relationship <span class="text-rose-600">*</span>
+                    </label>
+                    <select name="next_of_kin_relation" id="next_of_kin_relation" class="form-select text-sm" required>
+                        <option value="Spouse" {% if patient.next_of_kin_relation == 'Spouse' %}selected{% endif %}>Spouse</option>
+                        <option value="Parent" {% if patient.next_of_kin_relation == 'Parent' %}selected{% endif %}>Parent</option>
+                        <option value="Child" {% if patient.next_of_kin_relation == 'Child' %}selected{% endif %}>Child</option>
+                        <option value="Sibling" {% if patient.next_of_kin_relation == 'Sibling' %}selected{% endif %}>Sibling</option>
+                        <option value="Guardian" {% if patient.next_of_kin_relation == 'Guardian' %}selected{% endif %}>Guardian</option>
+                        <option value="Other" {% if patient.next_of_kin_relation == 'Other' %}selected{% endif %}>Other Relative</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit Strip -->
+        <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
+            <a href="{{ url_for('reception.patient_detail', patient_id=patient.id) }}" class="btn-secondary text-sm">
+                Cancel
+            </a>
+            <button type="submit" class="btn-primary text-sm px-6 py-2.5 shadow-md">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                Update Patient Record
+            </button>
+        </div>
+
+    </form>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/webcam.js') }}"></script>
+{% endblock %}

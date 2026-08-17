@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}Triage Assessment Logs & History - Nursing Station{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header & Date Navigation -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
+                <a href="{{ url_for('triage.dashboard') }}" class="hover:text-slate-900">Triage Station</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">Assessment Logs</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Triage Assessment Logs & History</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Audit trail of clinical vitals captured and routed to doctors</p>
+        </div>
+
+        <!-- Date Filter -->
+        <div class="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-300 shadow-xs">
+            <form method="GET" action="{{ url_for('triage.history') }}" class="flex items-center gap-2">
+                <input 
+                    type="date" 
+                    name="date" 
+                    value="{{ filter_date.strftime('%Y-%m-%d') }}" 
+                    onchange="this.form.submit()"
+                    class="py-1 px-2.5 text-xs font-mono font-bold border-slate-300 rounded focus:ring-slate-900 focus:border-slate-900"
+                >
+                {% if search_q %}<input type="hidden" name="q" value="{{ search_q }}">{% endif %}
+                {% if acuity != 'all' %}<input type="hidden" name="acuity" value="{{ acuity }}">{% endif %}
+            </form>
+
+            {% if filter_date != today %}
+                <a href="{{ url_for('triage.history', date=today.strftime('%Y-%m-%d')) }}" class="px-2.5 py-1 text-xs font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300">
+                    Today
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Search & Acuity Filter Strip -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <form method="GET" action="{{ url_for('triage.history') }}" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+            <input type="hidden" name="date" value="{{ filter_date.strftime('%Y-%m-%d') }}">
+
+            <!-- Search input -->
+            <div class="sm:col-span-6 relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </div>
+                <input 
+                    type="text" 
+                    name="q" 
+                    value="{{ search_q }}" 
+                    placeholder="Search by Patient Name, Hospital ID, or Phone..."
+                    class="form-input pl-9 text-xs py-2 rounded-lg"
+                >
+            </div>
+
+            <!-- Acuity filter dropdown -->
+            <div class="sm:col-span-4">
+                <select name="acuity" onchange="this.form.submit()" class="form-select text-xs py-2 rounded-lg">
+                    <option value="all" {% if acuity == 'all' %}selected{% endif %}>All Acuity Levels</option>
+                    <option value="red" {% if acuity == 'red' %}selected{% endif %}>Red (Emergency)</option>
+                    <option value="yellow" {% if acuity == 'yellow' %}selected{% endif %}>Yellow (Urgent)</option>
+                    <option value="green" {% if acuity == 'green' %}selected{% endif %}>Green (Routine)</option>
+                </select>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="sm:col-span-2">
+                <button type="submit" class="btn-primary text-xs w-full py-2">
+                    Filter Logs
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Triage Assessment Table (No Horizontal Scroll) -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-900">
+                Logged Assessments for {{ filter_date.strftime('%d %B %Y') }}
+            </h2>
+            <span class="text-xs font-mono font-bold text-slate-700 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+                {{ records|length }} Assessments
+            </span>
+        </div>
+
+        {% if records %}
+            <div class="w-full overflow-hidden">
+                <table class="w-full text-left text-sm table-auto">
+                    <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+                        <tr>
+                            <th class="py-3.5 px-4 w-[12%]">Time</th>
+                            <th class="py-3.5 px-4 w-[24%]">Patient Name</th>
+                            <th class="py-3.5 px-4 w-[26%]">Vitals Summary</th>
+                            <th class="py-3.5 px-4 w-[14%]">Acuity</th>
+                            <th class="py-3.5 px-4 w-[16%]">Routed Doctor</th>
+                            <th class="py-3.5 px-4 text-right w-[8%]">Profile</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 bg-white">
+                        {% for r in records %}
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                
+                                <!-- Time -->
+                                <td class="py-3.5 px-4 whitespace-nowrap font-mono text-xs text-slate-600">
+                                    {{ r.created_at.strftime('%H:%M') }}
+                                </td>
+
+                                <!-- Patient Name -->
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <a href="{{ url_for('reception.patient_detail', patient_id=r.patient.id) }}" class="font-bold text-slate-900 hover:text-slate-700 text-sm hover:underline">
+                                        {{ r.patient.full_name }}
+                                    </a>
+                                    <div class="text-xs font-mono text-slate-500">
+                                        {{ r.patient.hospital_id }} &bull; {{ r.patient.gender }}, {{ r.patient.age }}y
+                                    </div>
+                                </td>
+
+                                <!-- Vitals Summary -->
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <div class="font-mono font-bold text-xs text-slate-900">
+                                        BP: {{ r.bp_display }} &bull; HR: {{ r.pulse_rate or '-' }} bpm
+                                    </div>
+                                    <div class="text-slate-500 font-mono text-[11px] mt-0.5">
+                                        Temp: {{ r.temperature or '-' }}&deg;C &bull; SpO2: {{ r.spo2 or '-' }}% &bull; BMI: {{ r.bmi or '-' }}
+                                    </div>
+                                </td>
+
+                                <!-- Acuity Badge -->
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <span class="px-2.5 py-0.5 rounded text-xs font-mono font-bold 
+                                        {% if r.triage_category == 'red' %}bg-rose-100 text-rose-800 border border-rose-300
+                                        {% elif r.triage_category == 'yellow' %}bg-amber-100 text-amber-800 border border-amber-300
+                                        {% else %}bg-slate-100 text-slate-800 border border-slate-300{% endif %}">
+                                        {{ r.triage_category|upper }}
+                                    </span>
+                                </td>
+
+                                <!-- Routed Doctor -->
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <div class="font-semibold text-slate-900 text-xs truncate max-w-[140px]" title="{{ r.assigned_doctor or r.destination_clinic }}">
+                                        {{ r.assigned_doctor or r.destination_clinic }}
+                                    </div>
+                                    <div class="text-slate-400 font-mono text-[11px]">By {{ r.recorded_by }}</div>
+                                </td>
+
+                                <!-- Action -->
+                                <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                                    <a href="{{ url_for('reception.patient_detail', patient_id=r.patient.id) }}" class="p-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded border border-slate-300 inline-block transition-colors" title="View Patient Chart">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                        </svg>
+                                    </a>
+                                </td>
+
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-12 px-4">
+                <div class="w-10 h-10 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-sm font-bold text-slate-800">No Assessment Records Found</h3>
+                <p class="text-xs text-slate-500 mt-1">No triage records match the selected date or search filter.</p>
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

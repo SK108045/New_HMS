@@ -1,0 +1,614 @@
+{% extends "base.html" %}
+
+{% block title %}POS Cashier Terminal & Settlement - Billing Portal{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="posTerminal()">
+
+    <!-- Top Station Command Header & Shift Strip -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-0.5">
+                <span>Billing Station</span>
+                <span>/</span>
+                <span class="text-slate-900 font-bold">POS Terminal</span>
+                <span>/</span>
+                <span class="text-slate-700 font-mono">{{ active_shift.shift_code }}</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Point-of-Sale Cashier Terminal</h1>
+            <p class="text-xs text-slate-500 font-mono">Consolidate clinical staged charges, execute multi-tender split payments & issue tax receipts</p>
+        </div>
+
+        <!-- Shift & Cashier Status -->
+        <div class="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200 text-xs font-mono">
+            <div>
+                <span class="text-slate-400 block text-[10px] uppercase">Active Shift:</span>
+                <strong class="text-slate-900">{{ active_shift.shift_code }}</strong>
+            </div>
+            <div class="h-6 w-px bg-slate-200"></div>
+            <div>
+                <span class="text-slate-400 block text-[10px] uppercase">Drawer Float:</span>
+                <strong class="text-slate-900">KES {{ "%.2f"|format(active_shift.opening_float) }}</strong>
+            </div>
+            <div class="h-6 w-px bg-slate-200"></div>
+            <div>
+                <span class="text-slate-400 block text-[10px] uppercase">Shift Revenue:</span>
+                <strong class="text-slate-900">KES {{ "%.2f"|format(active_shift.total_revenue) }}</strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dual-Panel POS Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- =================== LEFT PANEL: PATIENT FOLIOS STREAM (4 Cols) =================== -->
+        <div class="lg:col-span-4 space-y-4">
+            
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                
+                <!-- Search Box -->
+                <div class="p-3.5 border-b border-slate-200 bg-slate-50">
+                    <form method="GET" action="{{ url_for('billing.pos') }}">
+                        <div class="relative">
+                            <input 
+                                type="text" 
+                                name="q" 
+                                value="{{ search_q }}" 
+                                placeholder="Search Name, Hospital ID or Phone..."
+                                class="form-input text-xs py-1.5 pl-8 rounded-lg"
+                            >
+                            <svg class="w-4 h-4 text-slate-400 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Folio List Header -->
+                <div class="p-3 border-b border-slate-200 bg-slate-100/50 flex items-center justify-between text-xs font-bold text-slate-700">
+                    <span>Patient Folios Awaiting Checkout</span>
+                    <span class="font-mono bg-white px-2 py-0.5 rounded border border-slate-300">{{ patient_folios|length }}</span>
+                </div>
+
+                <!-- Folios Stream -->
+                <div class="divide-y divide-slate-100 max-h-[580px] overflow-y-auto no-scrollbar">
+                    {% for folio in patient_folios %}
+                        {% set p = folio.patient %}
+                        <a 
+                            href="{{ url_for('billing.pos', patient_id=p.id) }}"
+                            class="block p-3.5 transition-colors {% if selected_patient and selected_patient.id == p.id %}bg-slate-900 text-white font-medium{% else %}hover:bg-slate-50 text-slate-800{% endif %}"
+                        >
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="font-bold text-sm truncate {% if selected_patient and selected_patient.id == p.id %}text-white{% else %}text-slate-900{% endif %}">
+                                        {{ p.full_name }}
+                                    </div>
+                                    <div class="text-xs font-mono {% if selected_patient and selected_patient.id == p.id %}text-slate-300{% else %}text-slate-500{% endif %} mt-0.5">
+                                        {{ p.hospital_id }} &bull; {{ p.gender }}, {{ p.age }}y
+                                    </div>
+                                    <div class="text-[11px] font-mono mt-1 {% if selected_patient and selected_patient.id == p.id %}text-slate-300{% else %}text-slate-500{% endif %}">
+                                        Payer: <strong>{{ p.primary_payer }}</strong> {% if p.insurance_company %}({{ p.insurance_company }}){% endif %}
+                                    </div>
+                                </div>
+
+                                <div class="text-right shrink-0">
+                                    <span class="block font-mono font-bold text-sm {% if selected_patient and selected_patient.id == p.id %}text-white{% elif folio.unpaid_total > 0 %}text-slate-900 font-extrabold{% else %}text-slate-400{% endif %}">
+                                        KES {{ "%.2f"|format(folio.unpaid_total) }}
+                                    </span>
+                                    {% if folio.unpaid_items_count > 0 %}
+                                        <span class="inline-block mt-1 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold {% if selected_patient and selected_patient.id == p.id %}bg-slate-800 text-white border border-slate-700{% else %}bg-amber-100 text-amber-900 border border-amber-300{% endif %}">
+                                            {{ folio.unpaid_items_count }} items
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </a>
+                    {% else %}
+                        <div class="p-8 text-center text-xs text-slate-400 font-mono">
+                            No patient folios found matching search.
+                        </div>
+                    {% endfor %}
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- =================== RIGHT PANEL: ACTIVE CHECKOUT REGISTER (8 Cols) =================== -->
+        <div class="lg:col-span-8 space-y-6">
+            
+            {% if selected_patient %}
+                
+                <!-- Patient Profile Card Banner -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-xl bg-slate-900 text-white font-mono font-bold text-lg flex items-center justify-center shadow-xs">
+                            {{ selected_patient.first_name[0] }}{{ selected_patient.last_name[0] }}
+                        </div>
+                        <div>
+                            <h2 class="text-base font-bold text-slate-900">{{ selected_patient.full_name }}</h2>
+                            <div class="text-xs font-mono text-slate-500 flex items-center gap-2 mt-0.5">
+                                <span>{{ selected_patient.hospital_id }}</span>
+                                <span>&bull;</span>
+                                <span>{{ selected_patient.gender }}, {{ selected_patient.age }} yrs</span>
+                                <span>&bull;</span>
+                                <span>Tel: {{ selected_patient.phone }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-right font-mono text-xs">
+                        <div class="text-slate-500 text-[10px] uppercase">Primary Payer Scheme:</div>
+                        <span class="inline-block px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-900 border border-slate-300 mt-0.5">
+                            {{ selected_patient.primary_payer }} {% if selected_patient.insurance_company %}&bull; {{ selected_patient.insurance_company }}{% endif %}
+                        </span>
+                        {% if selected_patient.insurance_policy_number %}
+                            <div class="text-[11px] text-slate-500 mt-1">Policy: {{ selected_patient.insurance_policy_number }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Itemized Staged Charges Table -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    
+                    <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">Encounter Folio Line Items</h3>
+                            <p class="text-xs text-slate-500 font-mono">Aggregated charges from Consultation, Laboratory, Pharmacy, and Procedures</p>
+                        </div>
+
+                        <!-- Add Manual Tariff Item Button -->
+                        <button 
+                            type="button" 
+                            @click="showAddTariffModal = true" 
+                            class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300 text-xs font-mono font-bold text-slate-800"
+                        >
+                            + Add Service / Tariff
+                        </button>
+                    </div>
+
+                    {% if staged_items %}
+                        <div class="w-full overflow-hidden">
+                            <table class="w-full text-left text-sm table-auto">
+                                <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs font-mono">
+                                    <tr>
+                                        <th class="py-3 px-4 w-[40%]">Service / Item Description</th>
+                                        <th class="py-3 px-4 w-[20%]">Department</th>
+                                        <th class="py-3 px-4 w-[12%]">Qty</th>
+                                        <th class="py-3 px-4 w-[14%]">Unit Price</th>
+                                        <th class="py-3 px-4 text-right w-[14%]">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200 bg-white font-mono text-xs">
+                                    {% for item in staged_items %}
+                                        <tr class="hover:bg-slate-50/70 transition-colors">
+                                            <td class="py-3 px-4 font-sans font-bold text-slate-900">
+                                                {{ item.item_description }}
+                                            </td>
+                                            <td class="py-3 px-4">
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800 border border-slate-300 uppercase">
+                                                    {{ item.service_type }}
+                                                </span>
+                                            </td>
+                                            <td class="py-3 px-4 text-slate-800 font-bold">{{ item.quantity }}</td>
+                                            <td class="py-3 px-4 text-slate-700">KES {{ "%.2f"|format(item.unit_price) }}</td>
+                                            <td class="py-3 px-4 text-right font-bold text-slate-900">KES {{ "%.2f"|format(item.total_amount) }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="p-8 text-center text-xs text-slate-400 font-mono">
+                            No staged billing items found on this patient's folio. Click "+ Add Service / Tariff" to stage a charge.
+                        </div>
+                    {% endif %}
+
+                    <!-- Folio Financial Computation Bar -->
+                    {% set folio_subtotal = staged_items|sum(attribute='total_amount') %}
+                    <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono">
+                        <div class="flex items-center gap-3 text-xs">
+                            <label class="text-slate-600 font-bold">Discount / Waiver (KES):</label>
+                            <input 
+                                type="number" 
+                                x-model.number="discount" 
+                                min="0" 
+                                max="{{ folio_subtotal }}" 
+                                class="form-input text-xs font-mono font-bold w-28 py-1"
+                            >
+                        </div>
+
+                        <div class="text-right space-y-0.5">
+                            <div class="text-xs text-slate-500">
+                                Subtotal: <strong class="text-slate-800">KES {{ "%.2f"|format(folio_subtotal) }}</strong>
+                            </div>
+                            <div class="text-base font-extrabold text-slate-900">
+                                Net Payable: KES <span x-text="formatMoney(Math.max(0, {{ folio_subtotal }} - discount))"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Split Payment Tender Register Station -->
+                {% if selected_invoice %}
+                    <form 
+                        method="POST" 
+                        action="{{ url_for('billing.process_settlement', invoice_id=selected_invoice.id) }}"
+                        class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-6"
+                    >
+                        <input type="hidden" name="discount_amount" :value="discount">
+
+                        <div class="border-b border-slate-200 pb-3 flex items-center justify-between">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900">Multi-Tender Split Payment Station</h3>
+                                <p class="text-xs text-slate-500 font-mono">Accept single tender or combination of Cash, M-Pesa, Insurance Co-pay, and Card</p>
+                            </div>
+
+                            <span class="text-xs font-mono font-bold bg-slate-900 text-white px-3 py-1 rounded-md">
+                                Bill Due: KES <span x-text="formatMoney(netDue)"></span>
+                            </span>
+                        </div>
+
+                        <!-- Payment Method Tabs -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            
+                            <!-- 1. Cash Tender (with Auto-Change Calculator) -->
+                            <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-slate-900"></span>
+                                        <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">1. Cash Settlement</h4>
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        @click="cashAmount = remainingUnallocated(); cashTendered = cashAmount;" 
+                                        class="text-[10px] font-mono font-bold px-2 py-0.5 bg-slate-200 hover:bg-slate-300 rounded text-slate-800"
+                                    >
+                                        Auto-Fill Cash
+                                    </button>
+                                </div>
+
+                                <div>
+                                    <label class="block text-[11px] font-mono text-slate-600 mb-1">Cash Allocation (KES)</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.5" 
+                                        name="cash_amount" 
+                                        x-model.number="cashAmount" 
+                                        class="form-input text-xs font-mono font-bold py-1.5"
+                                    >
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3 pt-1">
+                                    <div>
+                                        <label class="block text-[11px] font-mono text-slate-600 mb-1">Cash Tendered by Patient</label>
+                                        <input 
+                                            type="number" 
+                                            step="0.5" 
+                                            name="cash_tendered" 
+                                            x-model.number="cashTendered" 
+                                            class="form-input text-xs font-mono font-bold py-1.5"
+                                        >
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-mono text-slate-600 mb-1">Change Due to Patient</label>
+                                        <input 
+                                            type="text" 
+                                            readonly 
+                                            :value="formatMoney(Math.max(0, cashTendered - cashAmount))" 
+                                            class="form-input text-xs font-mono font-bold py-1.5 bg-slate-100 text-slate-900"
+                                        >
+                                        <input type="hidden" name="change_returned" :value="Math.max(0, cashTendered - cashAmount)">
+                                    </div>
+                                </div>
+
+                                <!-- Quick Cash Denomination Buttons -->
+                                <div class="flex items-center gap-1.5 pt-1">
+                                    <span class="text-[10px] text-slate-400 font-mono">Quick Tender:</span>
+                                    <button type="button" @click="cashTendered += 100" class="px-2 py-0.5 bg-white border border-slate-300 rounded text-[10px] font-mono font-bold hover:bg-slate-100">+100</button>
+                                    <button type="button" @click="cashTendered += 500" class="px-2 py-0.5 bg-white border border-slate-300 rounded text-[10px] font-mono font-bold hover:bg-slate-100">+500</button>
+                                    <button type="button" @click="cashTendered += 1000" class="px-2 py-0.5 bg-white border border-slate-300 rounded text-[10px] font-mono font-bold hover:bg-slate-100">+1,000</button>
+                                    <button type="button" @click="cashTendered = cashAmount" class="px-2 py-0.5 bg-white border border-slate-300 rounded text-[10px] font-mono font-bold hover:bg-slate-100">Exact</button>
+                                </div>
+                            </div>
+
+                            <!-- 2. M-Pesa Mobile Money -->
+                            <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-slate-900"></span>
+                                        <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">2. M-Pesa Mobile Money</h4>
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        @click="mpesaAmount = remainingUnallocated();" 
+                                        class="text-[10px] font-mono font-bold px-2 py-0.5 bg-slate-200 hover:bg-slate-300 rounded text-slate-800"
+                                    >
+                                        Auto-Fill M-Pesa
+                                    </button>
+                                </div>
+
+                                <div>
+                                    <label class="block text-[11px] font-mono text-slate-600 mb-1">M-Pesa Amount (KES)</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.5" 
+                                        name="mpesa_amount" 
+                                        x-model.number="mpesaAmount" 
+                                        class="form-input text-xs font-mono font-bold py-1.5"
+                                    >
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-[11px] font-mono text-slate-600 mb-1">M-Pesa Ref Code</label>
+                                        <input 
+                                            type="text" 
+                                            name="mpesa_reference" 
+                                            placeholder="e.g. QHD89X72K1" 
+                                            class="form-input text-xs font-mono font-bold uppercase py-1.5"
+                                        >
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-mono text-slate-600 mb-1">Sender Mobile No.</label>
+                                        <input 
+                                            type="text" 
+                                            name="mpesa_phone" 
+                                            value="{{ selected_patient.phone }}" 
+                                            class="form-input text-xs font-mono py-1.5"
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 3. Insurance / Corporate Claim Deduct -->
+                            <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-slate-900"></span>
+                                        <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">3. Insurance / SHA Claim</h4>
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        @click="insuranceAmount = remainingUnallocated();" 
+                                        class="text-[10px] font-mono font-bold px-2 py-0.5 bg-slate-200 hover:bg-slate-300 rounded text-slate-800"
+                                    >
+                                        Auto-Fill Claim
+                                    </button>
+                                </div>
+
+                                <div>
+                                    <label class="block text-[11px] font-mono text-slate-600 mb-1">Claim / Pre-Auth Amount (KES)</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.5" 
+                                        name="insurance_amount" 
+                                        x-model.number="insuranceAmount" 
+                                        class="form-input text-xs font-mono font-bold py-1.5"
+                                    >
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-[11px] font-mono text-slate-600 mb-1">Insurer Name</label>
+                                        <input 
+                                            type="text" 
+                                            name="insurance_company" 
+                                            value="{{ selected_patient.insurance_company or 'Social Health Authority (SHA)' }}" 
+                                            class="form-input text-xs font-bold py-1.5"
+                                        >
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-mono text-slate-600 mb-1">Claim Pre-Auth No.</label>
+                                        <input 
+                                            type="text" 
+                                            name="insurance_claim_number" 
+                                            placeholder="e.g. AUTH-99201" 
+                                            class="form-input text-xs font-mono uppercase py-1.5"
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 4. Debit / Credit Card -->
+                            <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-slate-900"></span>
+                                        <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">4. Bank Card (POS)</h4>
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        @click="cardAmount = remainingUnallocated();" 
+                                        class="text-[10px] font-mono font-bold px-2 py-0.5 bg-slate-200 hover:bg-slate-300 rounded text-slate-800"
+                                    >
+                                        Auto-Fill Card
+                                    </button>
+                                </div>
+
+                                <div>
+                                    <label class="block text-[11px] font-mono text-slate-600 mb-1">Card Amount (KES)</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.5" 
+                                        name="card_amount" 
+                                        x-model.number="cardAmount" 
+                                        class="form-input text-xs font-mono font-bold py-1.5"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label class="block text-[11px] font-mono text-slate-600 mb-1">POS Terminal Authorization Code</label>
+                                    <input 
+                                        type="text" 
+                                        name="card_auth_code" 
+                                        placeholder="e.g. AUTH-6610" 
+                                        class="form-input text-xs font-mono uppercase py-1.5"
+                                    >
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Split Tender Summary Bar -->
+                        <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs">
+                            <div>
+                                <span class="text-slate-500">Tender Allocated: </span>
+                                <strong class="text-slate-900 font-bold">KES <span x-text="formatMoney(totalAllocated())"></span></strong>
+                            </div>
+
+                            <div>
+                                <span class="text-slate-500">Remaining Balance: </span>
+                                <strong class="font-bold" :class="remainingDue() > 0 ? 'text-amber-700' : 'text-slate-900'">
+                                    KES <span x-text="formatMoney(Math.max(0, remainingDue()))"></span>
+                                </strong>
+                            </div>
+
+                            <div>
+                                <label class="text-slate-600 font-bold mr-1">Attending Cashier:</label>
+                                <select name="cashier_name" class="form-select text-xs font-bold py-1">
+                                    {% for c in cashiers_list %}
+                                        <option value="{{ c }}">{{ c }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Settlement Action Button -->
+                        <div class="flex items-center justify-end gap-3 pt-2">
+                            <button 
+                                type="submit" 
+                                :disabled="totalAllocated() <= 0"
+                                class="btn-primary text-xs py-2.5 px-6 shadow-sm font-bold flex items-center gap-2"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                </svg>
+                                <span>Settle Folio & Issue Official Receipt</span>
+                            </button>
+                        </div>
+
+                    </form>
+                {% endif %}
+
+            {% else %}
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center">
+                    <div class="w-12 h-12 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-sm font-bold text-slate-900">No Patient Folio Selected</h3>
+                    <p class="text-xs text-slate-500 mt-1">Select an active patient from the left stream to begin POS settlement.</p>
+                </div>
+            {% endif %}
+
+        </div>
+
+    </div>
+
+    <!-- Modal: Add Tariff Service Item to Folio -->
+    {% if selected_patient %}
+        <div x-show="showAddTariffModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div @click.away="showAddTariffModal = false" class="bg-white rounded-xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                    <h3 class="font-bold text-sm text-slate-900">Stage Procedural / Tariff Charge</h3>
+                    <button @click="showAddTariffModal = false" class="text-slate-400 hover:text-slate-900 font-bold">✕</button>
+                </div>
+
+                <form action="{{ url_for('billing.add_tariff_item', patient_id=selected_patient.id) }}" method="POST" class="space-y-3 text-xs">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Standard Hospital Tariff Catalog</label>
+                        <select 
+                            class="form-select text-xs font-bold"
+                            @change="
+                                const opt = $event.target.options[$event.target.selectedIndex];
+                                if (opt.value) {
+                                    $refs.descInput.value = opt.getAttribute('data-name');
+                                    $refs.priceInput.value = opt.getAttribute('data-price');
+                                    $refs.deptInput.value = opt.getAttribute('data-cat');
+                                }
+                            "
+                        >
+                            <option value="">-- Choose from Standard Tariffs --</option>
+                            {% for t in tariffs %}
+                                <option value="{{ t.code }}" data-name="{{ t.name }}" data-price="{{ t.price }}" data-cat="{{ t.category }}">
+                                    [{{ t.category }}] {{ t.name }} - KES {{ "%.2f"|format(t.price) }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Service Description</label>
+                        <input type="text" x-ref="descInput" name="item_description" placeholder="e.g. Injection Administration Fee" class="form-input text-xs font-bold" required>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Department</label>
+                            <input type="text" x-ref="deptInput" name="service_type" value="procedure" class="form-input text-xs font-mono">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Quantity</label>
+                            <input type="number" name="quantity" value="1" min="1" class="form-input text-xs font-mono font-bold" required>
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Unit Price (KES)</label>
+                            <input type="number" step="0.5" x-ref="priceInput" name="unit_price" value="500.0" min="0" class="form-input text-xs font-mono font-bold" required>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+                        <button type="button" @click="showAddTariffModal = false" class="btn-secondary text-xs py-2 px-3">Cancel</button>
+                        <button type="submit" class="btn-primary text-xs py-2 px-4">✓ Add to Folio</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function posTerminal() {
+    return {
+        showAddTariffModal: false,
+        discount: 0,
+        cashAmount: 0,
+        cashTendered: 0,
+        mpesaAmount: 0,
+        insuranceAmount: 0,
+        cardAmount: 0,
+        
+        get netDue() {
+            {% if staged_items %}
+                const sub = {{ staged_items|sum(attribute='total_amount') }};
+                return Math.max(0, sub - this.discount);
+            {% else %}
+                return 0;
+            {% endif %}
+        },
+
+        totalAllocated() {
+            return (this.cashAmount || 0) + (this.mpesaAmount || 0) + (this.insuranceAmount || 0) + (this.cardAmount || 0);
+        },
+
+        remainingDue() {
+            return this.netDue - this.totalAllocated();
+        },
+
+        remainingUnallocated() {
+            return Math.max(0, this.netDue - this.totalAllocated());
+        },
+
+        formatMoney(num) {
+            return (Number(num) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+    }
+}
+</script>
+{% endblock %}

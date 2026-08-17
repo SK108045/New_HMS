@@ -1,0 +1,56 @@
+<div class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl border border-slate-300 shadow-2xl max-w-md w-full overflow-hidden text-center p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+        
+        <div class="w-14 h-14 mx-auto rounded-full {% if queue_entry.priority == 'emergency' %}bg-rose-100 text-rose-700{% elif queue_entry.priority == 'urgent' %}bg-amber-100 text-amber-700{% else %}bg-slate-100 text-slate-800{% endif %} flex items-center justify-center">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+        </div>
+
+        <div>
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Intake Completed & Queued</span>
+            <div class="mt-1 text-3xl font-extrabold font-mono {% if queue_entry.priority == 'emergency' %}text-rose-700{% elif queue_entry.priority == 'urgent' %}text-amber-700{% else %}text-slate-900{% endif %}">
+                {{ queue_entry.ticket_number }}
+            </div>
+            <div class="mt-1.5">
+                {% if queue_entry.priority == 'emergency' %}
+                    <span class="badge-emergency text-xs font-bold uppercase tracking-wider">Emergency Route</span>
+                {% elif queue_entry.priority == 'urgent' %}
+                    <span class="badge-urgent text-xs font-bold uppercase tracking-wider">Urgent Route</span>
+                {% else %}
+                    <span class="badge-normal text-xs font-semibold">Standard OPD</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="bg-slate-50 rounded-lg p-4 border border-slate-200 text-xs text-left space-y-2 font-mono">
+            <div class="flex justify-between">
+                <span class="text-slate-500">Patient:</span>
+                <span class="font-bold text-slate-900">{{ patient.full_name }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-500">Hospital ID:</span>
+                <span class="text-slate-900 font-bold">{{ patient.hospital_id }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-500">Department:</span>
+                <span class="text-slate-800">{{ queue_entry.destination_department }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-500">Check-in Time:</span>
+                <span class="text-slate-800">{{ queue_entry.checked_in_at.strftime('%H:%M:%S') }}</span>
+            </div>
+        </div>
+
+        <div class="pt-2">
+            <button 
+                type="button" 
+                onclick="document.getElementById('modal-container').innerHTML = ''"
+                class="btn-primary text-xs w-full py-2.5"
+            >
+                Done / Return to Workspace
+            </button>
+        </div>
+
+    </div>
+</div>

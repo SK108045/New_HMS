@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Drug Batches & Stock Movement Ledger - Pharmacy Portal{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
+                <a href="{{ url_for('pharmacy.dashboard') }}" class="hover:text-slate-900">Pharmacy Station</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">Batches & Ledger</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Drug Batches & Stock Movement Ledger</h1>
+            <p class="text-xs text-slate-500 mt-0.5">FEFO batch traceability, remaining counts, expiry dates, and real-time inventory transactions</p>
+        </div>
+    </div>
+
+    <!-- Section 1: Active Drug Batches Registry (FEFO Tracking) -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-900">
+                Active Drug Batches (FEFO Expiry Order)
+            </h2>
+            <span class="text-xs font-mono font-bold text-slate-700 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+                {{ batches|length }} Batches
+            </span>
+        </div>
+
+        {% if batches %}
+            <div class="w-full overflow-hidden">
+                <table class="w-full text-left text-sm table-auto">
+                    <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+                        <tr>
+                            <th class="py-3.5 px-4 w-[18%]">Batch Number</th>
+                            <th class="py-3.5 px-4 w-[28%]">Medication Product</th>
+                            <th class="py-3.5 px-4 w-[16%]">Units (Rem / Rec)</th>
+                            <th class="py-3.5 px-4 w-[18%]">Expiry Date</th>
+                            <th class="py-3.5 px-4 text-right w-[20%]">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 bg-white">
+                        {% for b in batches %}
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="py-3.5 px-4 whitespace-nowrap font-mono font-bold text-slate-900 text-xs">
+                                    {{ b.batch_number }}
+                                </td>
+                                <td class="py-3.5 px-4">
+                                    <div class="font-bold text-slate-900 text-xs">{{ b.medication.name }}</div>
+                                    <div class="text-[11px] font-mono text-slate-500">Supplier: {{ b.supplier }}</div>
+                                </td>
+                                <td class="py-3.5 px-4 whitespace-nowrap font-mono text-xs font-bold text-slate-800">
+                                    {{ b.quantity_remaining }} / {{ b.quantity_received }}
+                                </td>
+                                <td class="py-3.5 px-4 whitespace-nowrap font-mono text-xs text-slate-800">
+                                    {{ b.expiry_date.strftime('%d %b %Y') }}
+                                    <span class="text-slate-400 font-normal">({{ b.days_to_expiry }}d)</span>
+                                </td>
+                                <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                                    {% if b.status == 'depleted' %}
+                                        <span class="px-2 py-0.5 rounded text-xs font-mono font-bold bg-slate-100 text-slate-500">Depleted</span>
+                                    {% elif b.expiry_status == 'critical_30d' or b.expiry_status == 'expired' %}
+                                        <span class="px-2 py-0.5 rounded text-xs font-mono font-bold bg-rose-100 text-rose-800 border border-rose-300">🚨 Expiring &lt;30d</span>
+                                    {% elif b.expiry_status == 'warning_60d' %}
+                                        <span class="px-2 py-0.5 rounded text-xs font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300">⚠️ Expiring &lt;60d</span>
+                                    {% else %}
+                                        <span class="px-2 py-0.5 rounded text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-300">Active &bull; Safe</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-8 text-slate-400 text-xs font-mono">
+                No active drug batches registered.
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Section 2: Recent Stock Transactions Movement Ledger -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-900">
+                Recent Stock Movements & Transactions (Audit Ledger)
+            </h2>
+            <span class="text-xs font-mono font-bold text-slate-700 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+                {{ transactions|length }} Records
+            </span>
+        </div>
+
+        {% if transactions %}
+            <div class="w-full overflow-hidden">
+                <table class="w-full text-left text-sm table-auto">
+                    <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+                        <tr>
+                            <th class="py-3 px-4 w-[16%]">Time</th>
+                            <th class="py-3 px-4 w-[28%]">Medication</th>
+                            <th class="py-3 px-4 w-[16%]">Movement</th>
+                            <th class="py-3 px-4 w-[16%]">Balance (Prev &rarr; New)</th>
+                            <th class="py-3 px-4 text-right w-[24%]">Operator & Ref</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 bg-white">
+                        {% for t in transactions %}
+                            <tr class="hover:bg-slate-50/80 transition-colors font-mono text-xs">
+                                <td class="py-3 px-4 whitespace-nowrap text-slate-600">
+                                    {{ t.created_at.strftime('%d %b %H:%M') }}
+                                </td>
+                                <td class="py-3 px-4">
+                                    <div class="font-bold text-slate-900">{{ t.medication.name }}</div>
+                                </td>
+                                <td class="py-3 px-4 whitespace-nowrap">
+                                    {% if t.quantity_change < 0 %}
+                                        <span class="px-2 py-0.5 rounded font-bold bg-slate-100 text-slate-900 border border-slate-300">
+                                            Dispensed ({{ t.quantity_change }})
+                                        </span>
+                                    {% else %}
+                                        <span class="px-2 py-0.5 rounded font-bold bg-slate-900 text-white">
+                                            Restocked (+{{ t.quantity_change }})
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-4 whitespace-nowrap text-slate-800">
+                                    {{ t.previous_stock }} &rarr; <strong class="text-slate-900">{{ t.new_stock }}</strong>
+                                </td>
+                                <td class="py-3 px-4 text-right whitespace-nowrap text-slate-600 truncate">
+                                    {{ t.recorded_by }} &bull; {{ t.reference_id or '-' }}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-8 text-slate-400 text-xs font-mono">
+                No inventory transactions logged.
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

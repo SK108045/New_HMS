@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Live Intake & Triage Queue Board{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header & Live Indicators -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
+                <a href="{{ url_for('reception.dashboard') }}" class="hover:text-slate-900">Reception Desk</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">Triage Queue Management</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <h1 class="text-xl font-bold text-slate-900 tracking-tight">Live Intake & Triage Queue</h1>
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                    <span class="w-2 h-2 rounded-full bg-slate-600 animate-pulse"></span>
+                    Live Feed
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">Real-time patient triage queue routing & tracking</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button 
+                hx-get="{{ url_for('reception.live_queue', status=filter) }}"
+                hx-target="#queue-table-container"
+                class="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Refresh Now
+            </button>
+            
+            <a href="{{ url_for('reception.dashboard') }}" class="btn-primary text-xs py-2 px-3.5">
+                + Check In Patient
+            </a>
+        </div>
+    </div>
+
+    <!-- Status Filters Strip -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-3 flex items-center justify-between gap-3 flex-wrap">
+        <div class="flex items-center gap-1.5 flex-wrap">
+            <a href="{{ url_for('reception.live_queue', status='active') }}" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all {% if filter == 'active' %}bg-slate-900 text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100{% endif %}">
+                Active Queue (Waiting & In-Progress)
+            </a>
+            <a href="{{ url_for('reception.live_queue', status='waiting') }}" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all {% if filter == 'waiting' %}bg-slate-900 text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100{% endif %}">
+                Waiting Only
+            </a>
+            <a href="{{ url_for('reception.live_queue', status='completed') }}" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all {% if filter == 'completed' %}bg-slate-900 text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100{% endif %}">
+                Completed Today
+            </a>
+            <a href="{{ url_for('reception.live_queue', status='cancelled') }}" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all {% if filter == 'cancelled' %}bg-slate-900 text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100{% endif %}">
+                Cancelled Tickets
+            </a>
+        </div>
+
+        <div class="text-xs text-slate-500 font-mono">
+            Auto-refreshes every 15 seconds
+        </div>
+    </div>
+
+    <!-- Queue Table Board -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div 
+            id="queue-table-container"
+            hx-get="{{ url_for('reception.live_queue', status=filter) }}"
+            hx-trigger="queueUpdated from:body, every 15s"
+        >
+            {% include "reception/partials/queue_table.html" %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

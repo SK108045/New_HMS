@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Dispensation Audit Logs & History - Pharmacy Portal{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header & Date Navigation -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
+                <a href="{{ url_for('pharmacy.dashboard') }}" class="hover:text-slate-900">Pharmacy Station</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">Dispensation Logs</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Dispensation Audit Logs & History</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Verified dispensing transaction ledger, pharmacist signatures, and patient receipts</p>
+        </div>
+
+        <div class="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-300 shadow-xs">
+            <form method="GET" action="{{ url_for('pharmacy.history') }}" class="flex items-center gap-2">
+                <input 
+                    type="date" 
+                    name="date" 
+                    value="{{ filter_date.strftime('%Y-%m-%d') }}" 
+                    onchange="this.form.submit()"
+                    class="py-1 px-2.5 text-xs font-mono font-bold border-slate-300 rounded focus:ring-slate-900 focus:border-slate-900"
+                >
+                {% if search_q %}<input type="hidden" name="q" value="{{ search_q }}">{% endif %}
+            </form>
+
+            {% if filter_date != today %}
+                <a href="{{ url_for('pharmacy.history', date=today.strftime('%Y-%m-%d')) }}" class="px-2.5 py-1 text-xs font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300">
+                    Today
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Search Strip -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <form method="GET" action="{{ url_for('pharmacy.history') }}" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+            <input type="hidden" name="date" value="{{ filter_date.strftime('%Y-%m-%d') }}">
+
+            <div class="sm:col-span-10 relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </div>
+                <input 
+                    type="text" 
+                    name="q" 
+                    value="{{ search_q }}" 
+                    placeholder="Search by Patient Name, Hospital ID, Dispensation #, or Pharmacist..."
+                    class="form-input pl-9 text-xs py-2 rounded-lg"
+                >
+            </div>
+
+            <div class="sm:col-span-2">
+                <button type="submit" class="btn-primary text-xs w-full py-2">
+                    Search Logs
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Dispensations Table (No Horizontal Scroll) -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-900">
+                Completed Dispensations for {{ filter_date.strftime('%d %B %Y') }}
+            </h2>
+            <span class="text-xs font-mono font-bold text-slate-700 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+                {{ records|length }} Dispensations
+            </span>
+        </div>
+
+        {% if records %}
+            <div class="w-full overflow-hidden">
+                <table class="w-full text-left text-sm table-auto">
+                    <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+                        <tr>
+                            <th class="py-3.5 px-4 w-[16%]">Dispense # & Time</th>
+                            <th class="py-3.5 px-4 w-[24%]">Patient Name</th>
+                            <th class="py-3.5 px-4 w-[34%]">Medications & Batches</th>
+                            <th class="py-3.5 px-4 w-[14%]">Pharmacist</th>
+                            <th class="py-3.5 px-4 text-right w-[12%]">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 bg-white">
+                        {% for r in records %}
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <span class="font-mono font-bold text-slate-900 text-xs">{{ r.dispensation_number }}</span>
+                                    <div class="text-[11px] font-mono text-slate-500">{{ r.created_at.strftime('%H:%M') }}</div>
+                                </td>
+
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <a href="{{ url_for('reception.patient_detail', patient_id=r.patient.id) }}" class="font-bold text-slate-900 hover:text-slate-700 text-sm hover:underline">
+                                        {{ r.patient.full_name }}
+                                    </a>
+                                    <div class="text-xs font-mono text-slate-500">
+                                        {{ r.patient.hospital_id }} &bull; {{ r.patient.gender }}, {{ r.patient.age }}y
+                                    </div>
+                                </td>
+
+                                <td class="py-3.5 px-4 text-xs font-mono">
+                                    <div class="space-y-0.5">
+                                        {% for item in r.dispensed_items %}
+                                            <div class="text-slate-800">
+                                                &bull; <strong class="text-slate-900">{{ item.drug }}</strong> (Qty: {{ item.quantity }}) &bull; Batch: {{ item.batch_number }}
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+
+                                <td class="py-3.5 px-4 whitespace-nowrap text-xs text-slate-800 font-semibold truncate max-w-[140px]">
+                                    {{ r.pharmacist_name }}
+                                </td>
+
+                                <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                                    <a href="{{ url_for('pharmacy.dispense_label', dispense_id=r.id) }}" class="btn-primary text-xs py-1.5 px-3">
+                                        Label &rarr;
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-12 px-4">
+                <div class="w-10 h-10 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-sm font-bold text-slate-800">No Dispensation Logs Found</h3>
+                <p class="text-xs text-slate-500 mt-1">No medication dispensations recorded for the selected date or search filter.</p>
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

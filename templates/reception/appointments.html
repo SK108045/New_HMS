@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block title %}Appointments & Clinic Schedule - Front Desk{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header & Date Navigation -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
+                <a href="{{ url_for('reception.dashboard') }}" class="hover:text-slate-900">Reception Desk</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">Appointments</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Clinic Schedule & Appointments</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Manage patient consultation bookings, arrivals, and 1-click triage routing</p>
+        </div>
+
+        <!-- Date Stepper Navigator -->
+        <div class="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-300 shadow-xs">
+            <a href="{{ url_for('reception.appointments', date=prev_date.strftime('%Y-%m-%d')) }}" class="p-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors" title="Previous Day">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </a>
+
+            <form method="GET" action="{{ url_for('reception.appointments') }}" class="flex items-center gap-2">
+                <input 
+                    type="date" 
+                    name="date" 
+                    value="{{ filter_date.strftime('%Y-%m-%d') }}" 
+                    onchange="this.form.submit()"
+                    class="py-1 px-2.5 text-xs font-mono font-bold border-slate-300 rounded focus:ring-slate-900 focus:border-slate-900"
+                >
+            </form>
+
+            <a href="{{ url_for('reception.appointments', date=next_date.strftime('%Y-%m-%d')) }}" class="p-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors" title="Next Day">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </a>
+
+            {% if filter_date != today %}
+                <a href="{{ url_for('reception.appointments', date=today.strftime('%Y-%m-%d')) }}" class="px-2.5 py-1 text-xs font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300">
+                    Jump Today
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Main 12-Col Workspace: Schedule Table vs Booking Drawer -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Left 8-Cols: Day's Appointments List -->
+        <div class="lg:col-span-8 space-y-6">
+            
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="p-4 sm:px-6 border-b border-slate-200 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-3 h-3 rounded-full bg-slate-800"></div>
+                        <h2 class="text-base font-bold text-slate-900">
+                            Bookings for {{ filter_date.strftime('%A, %d %B %Y') }}
+                        </h2>
+                        <span class="text-xs font-mono font-bold text-slate-700 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+                            {{ day_appointments|length }} Scheduled
+                        </span>
+                    </div>
+
+                    {% if filter_date == today %}
+                        <span class="text-xs font-mono font-bold px-2.5 py-1 bg-slate-100 text-slate-900 border border-slate-300 rounded">
+                            Today's Active Schedule
+                        </span>
+                    {% endif %}
+                </div>
+
+                {% if day_appointments %}
+                    <div class="w-full overflow-hidden">
+                        <table class="w-full text-left text-sm table-auto">
+                            <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+                                <tr>
+                                    <th class="py-3.5 px-4 w-[18%]">Time Slot</th>
+                                    <th class="py-3.5 px-4 w-[32%]">Patient Name</th>
+                                    <th class="py-3.5 px-4 w-[26%]">Clinic / Clinician</th>
+                                    <th class="py-3.5 px-4 text-right w-[24%]">Status & Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 bg-white">
+                                {% for app in day_appointments %}
+                                    <tr class="hover:bg-slate-50/80 transition-colors">
+                                        
+                                        <!-- Time -->
+                                        <td class="py-3.5 px-4 whitespace-nowrap">
+                                            <span class="font-mono font-bold text-xs px-2 py-1 bg-slate-100 text-slate-900 border border-slate-300 rounded">
+                                                {{ app.scheduled_time }}
+                                            </span>
+                                        </td>
+
+                                        <!-- Patient Name -->
+                                        <td class="py-3.5 px-4 whitespace-nowrap">
+                                            <a href="{{ url_for('reception.patient_detail', patient_id=app.patient.id) }}" class="font-bold text-slate-900 hover:text-slate-700 text-sm hover:underline">
+                                                {{ app.patient.full_name }}
+                                            </a>
+                                            <div class="text-xs font-mono text-slate-500">
+                                                {{ app.patient.hospital_id }} &bull; {{ app.patient.phone }}
+                                            </div>
+                                        </td>
+
+                                        <!-- Clinic & Doctor -->
+                                        <td class="py-3.5 px-4 whitespace-nowrap">
+                                            <div class="font-semibold text-slate-900 text-sm">{{ app.department }}</div>
+                                            <div class="text-xs text-slate-500">{{ app.doctor_name or 'Assigned On Arrival' }}</div>
+                                        </td>
+
+                                        <!-- Status & Action -->
+                                        <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                                            <div class="flex items-center justify-end gap-2">
+                                                <span class="px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-300">
+                                                    {{ app.status }}
+                                                </span>
+
+                                                {% if app.status == 'scheduled' %}
+                                                    <form method="POST" action="{{ url_for('reception.checkin_from_appointment', appointment_id=app.id) }}" class="inline">
+                                                        <button type="submit" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded shadow-xs inline-flex items-center gap-1">
+                                                            Check In
+                                                        </button>
+                                                    </form>
+                                                {% elif app.status == 'checked_in' %}
+                                                    <span class="px-2 py-0.5 bg-slate-200 text-slate-800 border border-slate-300 rounded font-bold text-xs font-mono">
+                                                        In Triage
+                                                    </span>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-12 px-4">
+                        <div class="w-10 h-10 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-800">No Appointments Scheduled for this Date</h3>
+                        <p class="text-xs text-slate-500 mt-1">Use the booking form on the right to schedule patient visits.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Upcoming 7 Days Appointments -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                <div class="flex items-center justify-between pb-3.5 mb-3.5 border-b border-slate-200">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">Upcoming Clinic Forecast (Next 7 Days)</h3>
+                        <p class="text-xs text-slate-500">Upcoming scheduled consultations</p>
+                    </div>
+                    <span class="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded border border-slate-200">{{ upcoming_appointments|length }} Total</span>
+                </div>
+
+                {% if upcoming_appointments %}
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        {% for u_app in upcoming_appointments %}
+                            <div class="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 flex items-start justify-between text-xs">
+                                <div class="space-y-1">
+                                    <div class="font-bold text-slate-900 text-sm">{{ u_app.patient.full_name }}</div>
+                                    <div class="text-slate-500 font-mono text-xs">{{ u_app.patient.hospital_id }} &bull; {{ u_app.department }}</div>
+                                    <div class="text-slate-600 italic text-xs">{{ u_app.reason or 'Consultation' }}</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-300">
+                                        {{ u_app.scheduled_date.strftime('%d %b') }}
+                                    </div>
+                                    <div class="text-xs text-slate-500 font-mono mt-0.5">{{ u_app.scheduled_time }}</div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-6 text-slate-400 text-xs">
+                        No upcoming appointments in the next 7 days.
+                    </div>
+                {% endif %}
+            </div>
+
+        </div>
+
+        <!-- Right 4-Cols: Schedule New Visit Form -->
+        <div class="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4 sticky top-20">
+            <div class="pb-3 border-b border-slate-200">
+                <h3 class="text-sm font-bold text-slate-900">Book New Appointment</h3>
+                <p class="text-xs text-slate-500">Schedule future clinic consultation</p>
+            </div>
+
+            <form method="POST" action="{{ url_for('reception.appointments') }}" class="space-y-4">
+                
+                <!-- Patient Selector -->
+                <div>
+                    <label for="patient_id" class="block text-xs font-bold text-slate-700 mb-1">
+                        Select Patient <span class="text-rose-600">*</span>
+                    </label>
+                    <select name="patient_id" id="patient_id" class="form-select text-xs" required>
+                        <option value="">-- Choose Registered Patient --</option>
+                        {% for p in all_patients %}
+                            <option value="{{ p.id }}" {% if selected_patient_id == p.id %}selected{% endif %}>
+                                {{ p.full_name }} ({{ p.hospital_id }}) - {{ p.phone }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="mt-1 text-right">
+                        <a href="{{ url_for('reception.register') }}" class="text-xs text-slate-900 hover:text-slate-700 font-bold">
+                            + Register New Patient
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Date & Time -->
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div>
+                        <label for="scheduled_date" class="block text-xs font-bold text-slate-700 mb-1">
+                            Visit Date <span class="text-rose-600">*</span>
+                        </label>
+                        <input type="date" name="scheduled_date" id="scheduled_date" value="{{ filter_date.strftime('%Y-%m-%d') }}" required class="form-input text-xs">
+                    </div>
+
+                    <div>
+                        <label for="scheduled_time" class="block text-xs font-bold text-slate-700 mb-1">
+                            Time Slot <span class="text-rose-600">*</span>
+                        </label>
+                        <select name="scheduled_time" id="scheduled_time" class="form-select text-xs" required>
+                            <option value="08:00">08:00 AM</option>
+                            <option value="08:30">08:30 AM</option>
+                            <option value="09:00">09:00 AM</option>
+                            <option value="09:30" selected>09:30 AM</option>
+                            <option value="10:00">10:00 AM</option>
+                            <option value="10:30">10:30 AM</option>
+                            <option value="11:00">11:00 AM</option>
+                            <option value="11:30">11:30 AM</option>
+                            <option value="12:00">12:00 PM</option>
+                            <option value="14:00">02:00 PM</option>
+                            <option value="14:30">02:30 PM</option>
+                            <option value="15:00">03:00 PM</option>
+                            <option value="15:30">03:30 PM</option>
+                            <option value="16:00">04:00 PM</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Department -->
+                <div>
+                    <label for="department" class="block text-xs font-bold text-slate-700 mb-1">
+                        Clinic / Department <span class="text-rose-600">*</span>
+                    </label>
+                    <select name="department" id="department" class="form-select text-xs" required>
+                        <option value="General OPD" selected>General OPD</option>
+                        <option value="Cardiology Clinic">Cardiology Clinic</option>
+                        <option value="Pediatrics Clinic">Pediatrics Clinic</option>
+                        <option value="OB / GYN Clinic">OB / GYN Clinic</option>
+                        <option value="Orthopedic Clinic">Orthopedic Clinic</option>
+                        <option value="Dental Clinic">Dental Clinic</option>
+                        <option value="Eye Clinic">Eye Clinic</option>
+                    </select>
+                </div>
+
+                <!-- Doctor -->
+                <div>
+                    <label for="doctor_name" class="block text-xs font-bold text-slate-700 mb-1">
+                        Specific Doctor <span class="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input type="text" name="doctor_name" id="doctor_name" placeholder="e.g. Dr. Njoroge" class="form-input text-xs">
+                </div>
+
+                <!-- Reason -->
+                <div>
+                    <label for="reason" class="block text-xs font-bold text-slate-700 mb-1">
+                        Reason for Visit / Clinical Notes
+                    </label>
+                    <textarea name="reason" id="reason" rows="2" placeholder="e.g. Bi-annual review, follow up..." class="form-input text-xs"></textarea>
+                </div>
+
+                <!-- Submit -->
+                <div class="pt-2">
+                    <button type="submit" class="btn-primary text-xs w-full py-2.5 shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                        Confirm & Schedule Booking
+                    </button>
+                </div>
+
+            </form>
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}

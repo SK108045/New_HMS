@@ -1,0 +1,1260 @@
+{% extends "base.html" %}
+
+{% block title %}Doctor Consultation & EMR - {{ patient.full_name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="doctorConsultation()">
+
+    <!-- Header & Breadcrumbs -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
+                <a href="{{ url_for('doctor.dashboard') }}" class="hover:text-slate-900">Doctor Room</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">Consultation & EMR Encounter</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <h1 class="text-xl font-bold text-slate-900 tracking-tight">Clinical Consultation & Order Entry</h1>
+                <span class="font-mono text-xs font-bold px-2.5 py-1 bg-slate-900 text-white rounded-md">
+                    Ticket: {{ queue_entry.ticket_number }}
+                </span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a href="{{ url_for('doctor.dashboard') }}" class="btn-secondary text-xs">
+                &larr; Exit to Waiting Room
+            </a>
+        </div>
+    </div>
+
+    <!-- Patient 360° Banner with Live Triage Vitals Strip -->
+    {% set latest_v = patient.latest_vitals %}
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+        
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            
+            <!-- Patient Demographics -->
+            <div class="flex items-center gap-4">
+                {% if patient.photo_filename %}
+                    <img src="{{ url_for('static', filename='uploads/photos/' ~ patient.photo_filename) }}" alt="{{ patient.full_name }}" class="w-14 h-14 rounded-xl object-cover border border-slate-200 shrink-0 shadow-xs">
+                {% else %}
+                    <div class="w-14 h-14 rounded-xl bg-slate-200 text-slate-800 font-bold flex items-center justify-center font-mono text-lg border border-slate-300 shrink-0">
+                        {{ patient.initials }}
+                    </div>
+                {% endif %}
+                <div>
+                    <div class="flex items-center gap-2.5 flex-wrap">
+                        <h2 class="font-bold text-slate-900 text-lg">{{ patient.full_name }}</h2>
+                        <span class="font-mono text-xs font-bold px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-300 rounded">
+                            {{ patient.hospital_id }}
+                        </span>
+                        <span class="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            {{ patient.gender }}, {{ patient.age }} yrs (DOB: {{ patient.date_of_birth.strftime('%d %b %Y') }})
+                        </span>
+                    </div>
+                    <div class="text-xs font-mono text-slate-500 mt-1">
+                        Payer: <strong class="text-slate-800">{{ patient.primary_payer }}</strong>
+                        {% if patient.insurance_company %} ({{ patient.insurance_company }}){% endif %}
+                        &bull; Phone: {{ patient.phone }}
+                        {% if patient.blood_group %} &bull; Blood: <strong class="text-slate-800">{{ patient.blood_group }}</strong>{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Allergy Alert Pill -->
+            <div>
+                {% if patient.allergies %}
+                    <div class="p-2.5 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2 text-xs text-rose-900">
+                        <span class="font-mono font-bold text-rose-700">⚠️ ALLERGIES:</span>
+                        <span class="font-semibold">{{ patient.allergies }}</span>
+                    </div>
+                {% else %}
+                    <span class="text-xs font-mono text-slate-400 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+                        No Known Drug Allergies (NKDA)
+                    </span>
+                {% endif %}
+            </div>
+
+        </div>
+
+        <!-- Latest Vitals Strip -->
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 overflow-x-auto text-xs font-mono">
+            <div class="flex items-center gap-4 flex-wrap">
+                <span class="text-slate-400 uppercase font-bold text-[11px]">Triage Vitals:</span>
+                {% if latest_v %}
+                    <div class="flex items-center gap-1">
+                        <span class="text-slate-500">BP:</span>
+                        <span class="font-bold {% if latest_v.is_bp_abnormal %}text-rose-600{% else %}text-slate-900{% endif %}">
+                            {{ latest_v.bp_display }}
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span class="text-slate-500">Pulse:</span>
+                        <span class="font-bold {% if latest_v.is_pulse_abnormal %}text-rose-600{% else %}text-slate-900{% endif %}">
+                            {{ latest_v.pulse_rate or '-' }} bpm
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span class="text-slate-500">Temp:</span>
+                        <span class="font-bold {% if latest_v.is_temp_abnormal %}text-rose-600{% else %}text-slate-900{% endif %}">
+                            {{ latest_v.temperature or '-' }}&deg;C
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span class="text-slate-500">SpO2:</span>
+                        <span class="font-bold {% if latest_v.is_spo2_abnormal %}text-rose-600{% else %}text-slate-900{% endif %}">
+                            {{ latest_v.spo2 or '-' }}%
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span class="text-slate-500">BMI:</span>
+                        <span class="font-bold text-slate-900">
+                            {{ latest_v.bmi or '-' }} ({{ latest_v.bmi_category or '-' }})
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span class="text-slate-500">Acuity:</span>
+                        <span class="px-1.5 py-0.2 rounded font-bold uppercase text-[10px] 
+                            {% if latest_v.triage_category == 'red' %}bg-rose-100 text-rose-800
+                            {% elif latest_v.triage_category == 'yellow' %}bg-amber-100 text-amber-800
+                            {% else %}bg-slate-100 text-slate-800{% endif %}">
+                            {{ latest_v.triage_category }}
+                        </span>
+                    </div>
+                {% else %}
+                    <span class="text-slate-400">No vitals captured for this ticket.</span>
+                {% endif %}
+            </div>
+
+            <button type="button" @click="activeTab = 'timeline'" class="text-xs font-bold text-slate-900 hover:text-slate-700 underline shrink-0">
+                View 360° History & PACS &rarr;
+            </button>
+        </div>
+
+    </div>
+
+    <!-- MAIN CONSULTATION FORM -->
+    <form method="POST" action="{{ url_for('doctor.consultation', queue_id=queue_entry.id) }}" class="space-y-6">
+        
+        <!-- Clinical Navigation Tabs Strip -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-1.5 flex items-center gap-2 overflow-x-auto text-xs font-bold">
+            
+            <button 
+                type="button" 
+                @click="activeTab = 'soap'" 
+                :class="activeTab === 'soap' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'"
+                class="px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                <span>1. SOAP Consultation & 3D Anatomy</span>
+            </button>
+
+            <button 
+                type="button" 
+                @click="activeTab = 'labs'" 
+                :class="activeTab === 'labs' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'"
+                class="px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
+                </svg>
+                <span>2. Electronic Lab Order (<span x-text="selectedLabs.length"></span>)</span>
+            </button>
+
+            <button 
+                type="button" 
+                @click="activeTab = 'rx'" 
+                :class="activeTab === 'rx' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'"
+                class="px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                </svg>
+                <span>3. e-Prescription Pad (<span x-text="prescriptions.length"></span>)</span>
+            </button>
+
+            <button 
+                type="button" 
+                @click="activeTab = 'timeline'" 
+                :class="activeTab === 'timeline' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'"
+                class="px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+                <span>4. 360° Timeline & PACS Viewer</span>
+            </button>
+
+        </div>
+
+        <!-- =================== TAB 1: SOAP CLINICAL CONSULTATION & 3D ANATOMICAL MAPPER =================== -->
+        <div x-show="activeTab === 'soap'" class="space-y-6">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                <!-- Left 7-Cols: Structured SOAP Textboxes & ICD-10 Search -->
+                <div class="lg:col-span-7 bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
+                    
+                    <div class="border-b border-slate-200 pb-3 flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">SOAP Consultation Notes</h3>
+                            <p class="text-xs text-slate-500 font-mono">Standardized Clinical EMR Documentation</p>
+                        </div>
+                        <span class="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded border border-slate-200">
+                            ICD-10 Enabled
+                        </span>
+                    </div>
+
+                    <!-- S: Subjective -->
+                    <div>
+                        <label for="subjective_notes" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                            <span class="w-4 h-4 rounded bg-slate-900 text-white inline-flex items-center justify-center text-[10px] mr-1">S</span>
+                            Subjective (Chief Complaint & History of Presenting Illness)
+                        </label>
+                        <textarea 
+                            name="subjective_notes" 
+                            id="subjective_notes" 
+                            rows="3" 
+                            class="form-input text-xs"
+                            placeholder="Patient reports acute onset of symptoms, pain severity, duration, aggravating/relieving factors..."
+                        >{{ (queue_entry and queue_entry.chief_complaint) or '' }}</textarea>
+                    </div>
+
+                    <!-- O: Objective -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label for="objective_notes" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                <span class="w-4 h-4 rounded bg-slate-900 text-white inline-flex items-center justify-center text-[10px] mr-1">O</span>
+                                Objective (Physical Examination & Clinical Observations)
+                            </label>
+                            <span class="text-[11px] text-slate-400 font-mono">Tip: Click 3D body zones to tag</span>
+                        </div>
+                        <textarea 
+                            name="objective_notes" 
+                            id="objective_notes" 
+                            x-model="objectiveText"
+                            rows="3" 
+                            class="form-input text-xs font-mono"
+                            placeholder="General examination: Alert, not in respiratory distress. Systemic examination findings..."
+                        ></textarea>
+
+                        <!-- Tagged Anatomical Zones Pill Strip -->
+                        <div class="mt-2 flex items-center gap-1.5 flex-wrap" x-show="taggedRegions.length > 0">
+                            <span class="text-[10px] font-bold uppercase text-slate-500">Examined Regions:</span>
+                            <template x-for="r in taggedRegions" :key="r">
+                                <span class="px-2 py-0.5 rounded-md bg-slate-900 text-white text-[11px] font-mono flex items-center gap-1">
+                                    <span x-text="r"></span>
+                                    <button type="button" @click="removeRegion(r)" class="text-slate-400 hover:text-white font-bold ml-1">&times;</button>
+                                </span>
+                            </template>
+                        </div>
+                        <input type="hidden" name="anatomical_regions" :value="JSON.stringify(taggedRegions)">
+                    </div>
+
+                    <!-- A: Assessment & Searchable ICD-10 Diagnosis -->
+                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            <span class="w-4 h-4 rounded bg-slate-900 text-white inline-flex items-center justify-center text-[10px] mr-1">A</span>
+                            Assessment & ICD-10 Primary Diagnosis <span class="text-rose-600">*</span>
+                        </label>
+
+                        <!-- Selected ICD-10 Badge Display -->
+                        <div class="flex items-center gap-2" x-show="selectedIcd10.code">
+                            <span class="px-2.5 py-1 bg-slate-900 text-white font-mono font-bold text-xs rounded-md" x-text="selectedIcd10.code"></span>
+                            <span class="font-bold text-xs text-slate-900" x-text="selectedIcd10.description"></span>
+                            <button type="button" @click="clearIcd10()" class="text-xs text-slate-400 hover:text-slate-700 ml-2">Change</button>
+                        </div>
+
+                        <input type="hidden" name="icd10_code" :value="selectedIcd10.code">
+                        <input type="hidden" name="icd10_description" :value="selectedIcd10.description">
+
+                        <!-- ICD-10 Autocomplete Search -->
+                        <div class="relative" x-show="!selectedIcd10.code">
+                            <input 
+                                type="text" 
+                                x-model="icd10Query"
+                                @input="searchIcd10()"
+                                placeholder="Search ICD-10 code (e.g. J06.9, Hypertension, Malaria, Diabetes, Gastritis)..."
+                                class="form-input text-xs"
+                            >
+                            
+                            <!-- Search Dropdown List -->
+                            <div 
+                                x-show="icd10Results.length > 0" 
+                                class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-30 max-h-48 overflow-y-auto divide-y divide-slate-100"
+                            >
+                                <template x-for="item in icd10Results" :key="item.code">
+                                    <div 
+                                        @click="selectIcd10(item)" 
+                                        class="p-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between text-xs transition-colors"
+                                    >
+                                        <div>
+                                            <span class="font-mono font-bold text-slate-900" x-text="item.code"></span>
+                                            <span class="ml-2 text-slate-700" x-text="item.description"></span>
+                                        </div>
+                                        <span class="text-[10px] text-slate-400 font-mono" x-text="item.category"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Common Presets Quick Pills -->
+                        <div class="pt-1 flex items-center gap-1.5 flex-wrap">
+                            <span class="text-[10px] text-slate-400 font-bold uppercase">Quick Pick:</span>
+                            {% for preset in icd10_database[:6] %}
+                                <button 
+                                    type="button" 
+                                    @click="selectIcd10({code: '{{ preset.code }}', description: '{{ preset.description }}'})" 
+                                    class="px-2 py-0.5 bg-white border border-slate-300 rounded text-[11px] font-mono text-slate-700 hover:bg-slate-100 hover:border-slate-400 transition-colors"
+                                >
+                                    {{ preset.code }} ({{ preset.category }})
+                                </button>
+                            {% endfor %}
+                        </div>
+
+                        <div>
+                            <textarea 
+                                name="assessment_notes" 
+                                rows="2" 
+                                class="form-input text-xs" 
+                                placeholder="Additional clinical diagnostic notes, differential diagnoses, or staging..."
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <!-- P: Plan -->
+                    <div>
+                        <label for="plan_notes" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                            <span class="w-4 h-4 rounded bg-slate-900 text-white inline-flex items-center justify-center text-[10px] mr-1">P</span>
+                            Plan & Patient Advice
+                        </label>
+                        <textarea 
+                            name="plan_notes" 
+                            id="plan_notes" 
+                            rows="2" 
+                            class="form-input text-xs"
+                            placeholder="Clinical management plan, lifestyle modifications, warning signs to watch for..."
+                        ></textarea>
+                    </div>
+
+                    <!-- Follow-up Review Date -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
+                        <div>
+                            <label for="follow_up_date" class="block text-xs font-bold text-slate-700 mb-1">
+                                Follow-up Review Date (Optional)
+                            </label>
+                            <input 
+                                type="date" 
+                                name="follow_up_date" 
+                                id="follow_up_date" 
+                                class="form-input text-xs"
+                            >
+                        </div>
+
+                        <div>
+                            <label for="doctor_name" class="block text-xs font-bold text-slate-700 mb-1">
+                                Attending Clinician
+                            </label>
+                            <select name="doctor_name" id="doctor_name" class="form-select text-xs font-bold">
+                                {% for doc in doctors_list %}
+                                    <option value="{{ doc }}" {% if queue_entry and queue_entry.assigned_doctor == doc %}selected{% endif %}>{{ doc }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Right 5-Cols: Three.js Interactive 3D Anatomical Body Examiner -->
+                <div class="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+                    
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-200">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">3D Anatomical Body Examiner</h3>
+                            <p class="text-[11px] text-slate-500 font-mono">Interactive spatial pain & examination mapping</p>
+                        </div>
+                        <span class="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                            Three.js 3D
+                        </span>
+                    </div>
+
+                    <!-- Three.js Canvas Container -->
+                    <div class="relative w-full h-80 bg-slate-950 rounded-xl overflow-hidden shadow-inner flex items-center justify-center">
+                        <canvas id="threeBodyCanvas" class="w-full h-full cursor-grab active:cursor-grabbing"></canvas>
+                        
+                        <!-- 3D Overlay Help Badge -->
+                        <div class="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-xs border border-slate-800 text-[10px] font-mono text-slate-300 px-2 py-1 rounded">
+                            Drag to rotate &bull; Scroll to zoom
+                        </div>
+
+                        <div class="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-xs border border-slate-800 text-[10px] font-mono text-slate-300 px-2 py-1 rounded">
+                            Click node to tag region
+                        </div>
+                    </div>
+
+                    <!-- Quick Anatomical Tag Buttons -->
+                    <div>
+                        <div class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Quick Anatomical Tagging</div>
+                        <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+                            <button type="button" @click="toggleRegion('Cranial / Head')" :class="hasRegion('Cranial / Head') ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'" class="p-1.5 rounded border border-slate-300 text-left transition-colors truncate">
+                                + Head & Cranium
+                            </button>
+                            <button type="button" @click="toggleRegion('Thorax / Chest')" :class="hasRegion('Thorax / Chest') ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'" class="p-1.5 rounded border border-slate-300 text-left transition-colors truncate">
+                                + Thorax / Chest
+                            </button>
+                            <button type="button" @click="toggleRegion('Abdomen & Pelvis')" :class="hasRegion('Abdomen & Pelvis') ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'" class="p-1.5 rounded border border-slate-300 text-left transition-colors truncate">
+                                + Abdomen & Pelvis
+                            </button>
+                            <button type="button" @click="toggleRegion('Spine & Back')" :class="hasRegion('Spine & Back') ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'" class="p-1.5 rounded border border-slate-300 text-left transition-colors truncate">
+                                + Spine / Lumbar
+                            </button>
+                            <button type="button" @click="toggleRegion('Upper Limbs')" :class="hasRegion('Upper Limbs') ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'" class="p-1.5 rounded border border-slate-300 text-left transition-colors truncate">
+                                + Upper Extremities
+                            </button>
+                            <button type="button" @click="toggleRegion('Lower Limbs')" :class="hasRegion('Lower Limbs') ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'" class="p-1.5 rounded border border-slate-300 text-left transition-colors truncate">
+                                + Lower Extremities
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- =================== TAB 2: ELECTRONIC LAB TEST REQUESTER =================== -->
+        <div x-show="activeTab === 'labs'" class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-6">
+            
+            <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-900">Diagnostic Laboratory Requester</h3>
+                    <p class="text-xs text-slate-500 font-mono">Select investigations to stage charges and dispatch to Lab Worklist</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-xs text-slate-500 font-mono">Staged Lab Total:</span>
+                    <span class="font-mono font-bold text-sm text-slate-900 ml-1">KES <span x-text="calcLabTotal()"></span></span>
+                </div>
+            </div>
+
+            <!-- Urgency & Indication -->
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                <div class="sm:col-span-8">
+                    <label for="lab_indication" class="block text-xs font-bold text-slate-700 mb-1">Clinical Indication / Reason for Lab Request</label>
+                    <input type="text" name="lab_indication" id="lab_indication" placeholder="e.g. Febrile illness, rule out malaria and UTI..." class="form-input text-xs">
+                </div>
+                <div class="sm:col-span-4">
+                    <label for="lab_urgency" class="block text-xs font-bold text-slate-700 mb-1">Urgency</label>
+                    <select name="lab_urgency" id="lab_urgency" class="form-select text-xs font-bold">
+                        <option value="routine">Routine</option>
+                        <option value="urgent">Urgent</option>
+                        <option value="stat">STAT / Emergency</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Lab Test Catalog Grid -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Available Diagnostic Investigations</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {% for test in lab_catalog %}
+                        <label class="p-3 rounded-xl border border-slate-200 hover:border-slate-400 bg-slate-50/60 cursor-pointer flex items-start justify-between gap-2 transition-all">
+                            <div class="flex items-start gap-2.5">
+                                <input 
+                                    type="checkbox" 
+                                    name="lab_tests" 
+                                    value="{{ test.id }}" 
+                                    x-model="selectedLabs"
+                                    class="rounded border-slate-300 text-slate-900 focus:ring-slate-900 mt-0.5"
+                                >
+                                <div>
+                                    <div class="font-bold text-xs text-slate-900">{{ test.name }}</div>
+                                    <div class="text-[10px] text-slate-500 font-mono">{{ test.category }} &bull; {{ test.code }}</div>
+                                </div>
+                            </div>
+                            <span class="font-mono text-xs font-bold text-slate-800 shrink-0">
+                                KES {{ test.cost }}
+                            </span>
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+
+        <!-- =================== TAB 3: e-PRESCRIPTION PAD =================== -->
+        <div x-show="activeTab === 'rx'" class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-6">
+            
+            <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-900">Electronic Prescription Pad (e-Rx)</h3>
+                    <p class="text-xs text-slate-500 font-mono">Formulary drug builder with auto-frequency and dosage presets</p>
+                </div>
+                <button type="button" @click="addPrescriptionRow()" class="btn-primary text-xs py-1.5 px-3">
+                    + Add Medication Row
+                </button>
+            </div>
+
+            <!-- Quick Add from Formulary -->
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Quick Add From Formulary:</span>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    {% for drug in drug_formulary[:6] %}
+                        <button 
+                            type="button" 
+                            @click="addPrescriptionPreset({
+                                name: '{{ drug.name }}',
+                                dosage: '{{ drug.default_dosage }}',
+                                frequency: '{{ drug.default_freq }}',
+                                duration: '{{ drug.default_dur }}',
+                                quantity: {{ drug.default_qty }},
+                                price: {{ drug.unit_price }},
+                                instructions: 'Take as directed'
+                            })" 
+                            class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-xs font-mono font-semibold rounded text-slate-800 transition-colors"
+                        >
+                            + {{ drug.name }}
+                        </button>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Prescription Items Table -->
+            <div class="space-y-3">
+                <template x-for="(item, index) in prescriptions" :key="index">
+                    <div class="p-3.5 bg-white border border-slate-300 rounded-xl shadow-xs space-y-2.5">
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                            <!-- Drug Name -->
+                            <div class="sm:col-span-4">
+                                <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Drug Name & Formulation</label>
+                                <input type="text" name="drug_name[]" x-model="item.name" placeholder="e.g. Amoxicillin 500mg" class="form-input text-xs font-bold" required>
+                            </div>
+
+                            <!-- Dosage -->
+                            <div class="sm:col-span-2">
+                                <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Dosage</label>
+                                <input type="text" name="drug_dosage[]" x-model="item.dosage" placeholder="500mg" class="form-input text-xs font-mono">
+                            </div>
+
+                            <!-- Frequency -->
+                            <div class="sm:col-span-3">
+                                <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Frequency</label>
+                                <select name="drug_frequency[]" x-model="item.frequency" class="form-select text-xs font-mono">
+                                    <option value="1 tab TID (8-hourly)">1 tab TID (8-hourly)</option>
+                                    <option value="1 tab BD (12-hourly)">1 tab BD (12-hourly)</option>
+                                    <option value="1 tab OD (Once daily)">1 tab OD (Once daily)</option>
+                                    <option value="2 tabs TID PRN pain">2 tabs TID PRN pain</option>
+                                    <option value="1 tab QID (6-hourly)">1 tab QID (6-hourly)</option>
+                                    <option value="1 tab STAT (Immediately)">1 tab STAT (Immediately)</option>
+                                </select>
+                            </div>
+
+                            <!-- Duration -->
+                            <div class="sm:col-span-2">
+                                <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Duration</label>
+                                <input type="text" name="drug_duration[]" x-model="item.duration" placeholder="5 days" class="form-input text-xs font-mono">
+                            </div>
+
+                            <!-- Delete button -->
+                            <div class="sm:col-span-1 text-right pt-4">
+                                <button type="button" @click="removePrescriptionRow(index)" class="p-1.5 text-rose-600 hover:text-rose-800 font-bold text-xs" title="Remove Drug">
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Instructions & Qty / Price -->
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center pt-1 border-t border-slate-100 text-xs">
+                            <div class="sm:col-span-6">
+                                <input type="text" name="drug_instructions[]" x-model="item.instructions" placeholder="Specific patient instructions (e.g. Take after food with plenty of water)..." class="form-input text-xs">
+                            </div>
+                            <div class="sm:col-span-3 flex items-center gap-1">
+                                <span class="text-slate-500 text-[11px] font-mono">Qty:</span>
+                                <input type="number" name="drug_quantity[]" x-model.number="item.quantity" min="1" class="form-input text-xs font-mono w-20">
+                            </div>
+                            <div class="sm:col-span-3 flex items-center justify-end gap-1 font-mono">
+                                <span class="text-slate-500 text-[11px]">Unit Price:</span>
+                                <input type="number" name="drug_price[]" x-model.number="item.price" min="0" class="form-input text-xs font-mono w-24">
+                            </div>
+                        </div>
+
+                    </div>
+                </template>
+
+                <div x-show="prescriptions.length === 0" class="text-center py-8 text-slate-400 text-xs">
+                    No medications added yet. Click "+ Add Medication Row" or choose a Quick Add preset above.
+                </div>
+            </div>
+
+            <!-- Pharmacy Notes -->
+            <div>
+                <label for="rx_notes" class="block text-xs font-bold text-slate-700 mb-1">Pharmacy Dispensing Instructions / Special Notes</label>
+                <input type="text" name="rx_notes" id="rx_notes" placeholder="Special pharmacist instructions, brand substitution allowance..." class="form-input text-xs">
+            </div>
+
+        </div>
+
+        <!-- =================== TAB 4: PATIENT 360° TIMELINE & PACS RADIOGRAPH VIEWER =================== -->
+        <div x-show="activeTab === 'timeline'" class="space-y-6">
+            
+            <!-- PACS Digital Radiograph Lightbox Viewer -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+                
+                <div class="flex items-center justify-between pb-2 border-b border-slate-200">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">PACS / Digital Radiograph Lightbox</h3>
+                        <p class="text-xs text-slate-500 font-mono">Medical Imaging & Diagnostics Viewer (X-Ray & MRI Scans)</p>
+                    </div>
+                    
+                    <!-- Radiograph Mode Toggles -->
+                    <div class="flex items-center gap-2">
+                        <button type="button" @click="activeImage = 'chest'" :class="activeImage === 'chest' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="px-2.5 py-1 text-xs font-mono font-bold rounded border border-slate-300 transition-colors">
+                            Chest X-Ray PA
+                        </button>
+                        <button type="button" @click="activeImage = 'brain'" :class="activeImage === 'brain' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'" class="px-2.5 py-1 text-xs font-mono font-bold rounded border border-slate-300 transition-colors">
+                            Axial Brain MRI
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lightbox Canvas -->
+                <div class="relative bg-black rounded-xl p-4 flex items-center justify-center overflow-hidden h-96 select-none shadow-2xl">
+                    <img 
+                        :src="activeImage === 'chest' ? '{{ url_for('static', filename='images/chest_xray.jpg') }}' : '{{ url_for('static', filename='images/brain_mri.jpg') }}'" 
+                        alt="Medical Radiograph"
+                        class="max-h-full max-w-full object-contain transition-all duration-150"
+                        :style="`transform: scale(${zoomLevel}); filter: invert(${isInverted ? 1 : 0}) contrast(${contrastLevel}%);`"
+                    >
+
+                    <!-- Viewer Controls Overlay Toolbar -->
+                    <div class="absolute bottom-3 left-1/2 transform -translate-x-1/2 bg-slate-900/90 backdrop-blur-xs text-white border border-slate-800 px-4 py-1.5 rounded-full flex items-center gap-3 text-xs font-mono shadow-xl">
+                        <button type="button" @click="zoomIn()" class="hover:text-amber-400 font-bold">🔍+ Zoom In</button>
+                        <span>&bull;</span>
+                        <button type="button" @click="zoomOut()" class="hover:text-amber-400 font-bold">🔍- Zoom Out</button>
+                        <span>&bull;</span>
+                        <button type="button" @click="toggleInvert()" class="hover:text-amber-400 font-bold" x-text="isInverted ? 'Positive View' : 'Negative Mode'"></button>
+                        <span>&bull;</span>
+                        <button type="button" @click="resetViewer()" class="hover:text-amber-400 font-bold">Reset</button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Historical Encounters & Vitals Multi-line Graphs -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                <!-- Past Consultations -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+                    <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider pb-2 border-b border-slate-200">
+                        Past Clinical Encounters ({{ past_encounters|length }})
+                    </h3>
+
+                    {% if past_encounters %}
+                        <div class="divide-y divide-slate-100 text-xs">
+                            {% for enc in past_encounters %}
+                                <div class="py-2.5 space-y-1">
+                                    <div class="flex items-center justify-between">
+                                        <span class="font-bold text-slate-900">{{ enc.formatted_diagnosis }}</span>
+                                        <span class="font-mono text-slate-500 text-[11px]">{{ enc.created_at.strftime('%d %b %Y') }}</span>
+                                    </div>
+                                    <div class="text-slate-600 line-clamp-2">{{ enc.subjective_notes or enc.assessment_notes or 'Routine consult' }}</div>
+                                    <div class="text-slate-400 font-mono text-[11px]">By {{ enc.doctor_name }}</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-6 text-slate-400 text-xs">No previous consultation notes recorded.</div>
+                    {% endif %}
+                </div>
+
+                <!-- Past Medications & Labs -->
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+                    <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider pb-2 border-b border-slate-200">
+                        Historical Prescriptions & Labs
+                    </h3>
+
+                    {% if past_rxs or past_labs %}
+                        <div class="divide-y divide-slate-100 text-xs">
+                            {% for rx in past_rxs[:3] %}
+                                <div class="py-2">
+                                    <div class="font-mono font-bold text-slate-900">{{ rx.rx_number }} &bull; {{ rx.created_at.strftime('%d %b %Y') }}</div>
+                                    <div class="text-slate-600 mt-0.5">
+                                        {% for m in rx.medication_list %}
+                                            <span class="inline-block mr-2">&bull; {{ m.drug }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-6 text-slate-400 text-xs">No previous prescriptions recorded.</div>
+                    {% endif %}
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- =================== ONE-CLICK DISPATCH & ORDER ROUTING BAR =================== -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-lg p-5 sticky bottom-4 z-20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-mono font-bold text-sm">
+                    Rx
+                </div>
+                <div>
+                    <div class="text-xs font-bold text-slate-900">Encounter Ready for Completion</div>
+                    <div class="text-xs text-slate-500 font-mono">
+                        Lab Tests: <strong class="text-slate-800" x-text="selectedLabs.length"></strong> &bull; Medications: <strong class="text-slate-800" x-text="prescriptions.length"></strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Route Actions -->
+            <div class="flex items-center gap-2 flex-wrap">
+                
+                <button 
+                    type="submit" 
+                    name="action_route" 
+                    value="pharmacy"
+                    class="btn-primary py-2.5 px-4 text-xs font-bold shadow-sm flex items-center gap-1.5"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    Send to Pharmacy & Finish
+                </button>
+
+                <button 
+                    type="submit" 
+                    name="action_route" 
+                    value="laboratory"
+                    class="px-4 py-2.5 rounded-lg border border-slate-300 hover:bg-slate-100 font-bold text-slate-800 text-xs shadow-xs flex items-center gap-1.5 transition-colors"
+                >
+                    Send to Lab Worklist
+                </button>
+
+                <button 
+                    type="submit" 
+                    name="action_route" 
+                    value="discharge"
+                    class="px-4 py-2.5 rounded-lg border border-slate-300 hover:bg-slate-100 font-bold text-slate-700 text-xs transition-colors"
+                >
+                    Complete & Discharge
+                </button>
+
+            </div>
+
+        </div>
+
+    </form>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function doctorConsultation() {
+        return {
+            activeTab: 'soap',
+            objectiveText: 'General: Well-nourished adult in no acute cardiopulmonary distress.\nHEENT: Normocephalic, no scleral icterus.\nCVS: S1, S2 present, regular rhythm.\nRespiratory: Good bilateral air entry, clear chest.',
+            taggedRegions: [],
+            icd10Query: '',
+            icd10Results: [],
+            selectedIcd10: { code: '{{ icd10_database[0].code }}', description: '{{ icd10_database[0].description }}' },
+            selectedLabs: [],
+            prescriptions: [
+                {
+                    name: 'Amoxicillin 500mg Capsules',
+                    dosage: '500mg',
+                    frequency: '1 tab TID (8-hourly)',
+                    duration: '5 days',
+                    quantity: 15,
+                    price: 30,
+                    instructions: 'Take after meals with plenty of water'
+                }
+            ],
+            
+            // PACS Lightbox controls
+            activeImage: 'chest',
+            zoomLevel: 1.0,
+            isInverted: false,
+            contrastLevel: 100,
+
+            toggleRegion(region) {
+                if (this.taggedRegions.includes(region)) {
+                    this.removeRegion(region);
+                } else {
+                    this.taggedRegions.push(region);
+                    this.objectiveText += `\n[Examined Zone: ${region} - Palpation & inspection noted]`;
+                }
+            },
+            hasRegion(region) {
+                return this.taggedRegions.includes(region);
+            },
+            removeRegion(region) {
+                this.taggedRegions = this.taggedRegions.filter(r => r !== region);
+            },
+
+            async searchIcd10() {
+                if (this.icd10Query.length < 2) {
+                    this.icd10Results = [];
+                    return;
+                }
+                try {
+                    const res = await fetch(`/doctor/api/icd10?q=${encodeURIComponent(this.icd10Query)}`);
+                    this.icd10Results = await res.json();
+                } catch (e) {
+                    console.error(e);
+                }
+            },
+            selectIcd10(item) {
+                this.selectedIcd10 = item;
+                this.icd10Query = '';
+                this.icd10Results = [];
+            },
+            clearIcd10() {
+                this.selectedIcd10 = { code: '', description: '' };
+            },
+
+            addPrescriptionRow() {
+                this.prescriptions.push({
+                    name: '',
+                    dosage: '',
+                    frequency: '1 tab TID (8-hourly)',
+                    duration: '5 days',
+                    quantity: 10,
+                    price: 20,
+                    instructions: 'Take as directed'
+                });
+            },
+            addPrescriptionPreset(drug) {
+                this.prescriptions.push(drug);
+            },
+            removePrescriptionRow(index) {
+                this.prescriptions.splice(index, 1);
+            },
+
+            calcLabTotal() {
+                const costs = {
+                    'FBC': 1200, 'BS_MALARIA': 650, 'URINALYSIS': 500, 'FBS': 400,
+                    'LIPID': 2200, 'LFT': 2800, 'UE_CREAT': 2400, 'HPYLORI': 1500,
+                    'CXR': 1800, 'ABD_US': 3000
+                };
+                let sum = 0;
+                this.selectedLabs.forEach(id => {
+                    if (costs[id]) sum += costs[id];
+                });
+                return sum;
+            },
+
+            // Lightbox functions
+            zoomIn() { this.zoomLevel = Math.min(this.zoomLevel + 0.25, 2.5); },
+            zoomOut() { this.zoomLevel = Math.max(this.zoomLevel - 0.25, 0.75); },
+            toggleInvert() { this.isInverted = !this.isInverted; },
+            resetViewer() {
+                this.zoomLevel = 1.0;
+                this.isInverted = false;
+                this.contrastLevel = 100;
+            }
+        };
+    }
+
+    // =================== THREE.JS REALISTIC ANATOMICAL HUMAN SKELETON ===================
+    document.addEventListener('DOMContentLoaded', () => {
+        const canvas = document.getElementById('threeBodyCanvas');
+        if (!canvas || typeof THREE === 'undefined') return;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x09090b); // Deep Slate Black background
+
+        const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+        camera.position.set(0, 0.5, 9.2);
+
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const keyLight = new THREE.DirectionalLight(0x38bdf8, 1.4); // Cool cyan medical surgical key light
+        keyLight.position.set(5, 8, 8);
+        scene.add(keyLight);
+
+        const rimLight = new THREE.DirectionalLight(0xf59e0b, 0.7); // Warm amber anatomical rim light
+        rimLight.position.set(-6, -4, -6);
+        scene.add(rimLight);
+
+        const fillLight = new THREE.PointLight(0xffffff, 0.8, 20);
+        fillLight.position.set(0, 0, 6);
+        scene.add(fillLight);
+
+        // Skeleton Group
+        const skeletonGroup = new THREE.Group();
+        scene.add(skeletonGroup);
+
+        // Anatomical Bone Materials
+        const boneMaterial = new THREE.MeshStandardMaterial({
+            color: 0xf1f5f9,
+            roughness: 0.35,
+            metalness: 0.15
+        });
+
+        const cartilageMaterial = new THREE.MeshStandardMaterial({
+            color: 0x94a3b8,
+            roughness: 0.5,
+            metalness: 0.1
+        });
+
+        const jointMaterial = new THREE.MeshStandardMaterial({
+            color: 0x38bdf8,
+            emissive: 0x0284c7,
+            emissiveIntensity: 0.3,
+            roughness: 0.2
+        });
+
+        // ----------------- 1. CRANIUM & SKULL -----------------
+        const skullGroup = new THREE.Group();
+        skullGroup.userData = { name: 'Cranial / Head' };
+
+        // Cranial Vault (Braincase)
+        const craniumGeo = new THREE.SphereGeometry(0.52, 24, 20);
+        craniumGeo.scale(1.0, 1.15, 1.1);
+        const craniumMesh = new THREE.Mesh(craniumGeo, boneMaterial);
+        craniumMesh.position.set(0, 2.7, 0);
+        craniumMesh.userData = { name: 'Cranial / Head' };
+        skullGroup.add(craniumMesh);
+
+        // Facial Maxilla & Nasal Bone
+        const faceGeo = new THREE.BoxGeometry(0.42, 0.38, 0.35);
+        const faceMesh = new THREE.Mesh(faceGeo, boneMaterial);
+        faceMesh.position.set(0, 2.38, 0.28);
+        faceMesh.userData = { name: 'Cranial / Head' };
+        skullGroup.add(faceMesh);
+
+        // Mandible (Lower Jaw)
+        const mandibleGeo = new THREE.TorusGeometry(0.24, 0.08, 8, 16, Math.PI);
+        const mandibleMesh = new THREE.Mesh(mandibleGeo, boneMaterial);
+        mandibleMesh.rotation.x = Math.PI / 2;
+        mandibleMesh.position.set(0, 2.15, 0.22);
+        mandibleMesh.userData = { name: 'Cranial / Head' };
+        skullGroup.add(mandibleMesh);
+
+        // Orbital Cavities (Eye sockets)
+        const orbitGeo = new THREE.SphereGeometry(0.11, 12, 12);
+        const orbitMat = new THREE.MeshBasicMaterial({ color: 0x09090b });
+        const leftOrbit = new THREE.Mesh(orbitGeo, orbitMat);
+        leftOrbit.position.set(-0.16, 2.52, 0.44);
+        skullGroup.add(leftOrbit);
+
+        const rightOrbit = new THREE.Mesh(orbitGeo, orbitMat);
+        rightOrbit.position.set(0.16, 2.52, 0.44);
+        skullGroup.add(rightOrbit);
+
+        skeletonGroup.add(skullGroup);
+
+        // ----------------- 2. VERTEBRAL COLUMN (SPINE) -----------------
+        const spineGroup = new THREE.Group();
+        spineGroup.userData = { name: 'Spine & Back' };
+
+        // Cervical (C1-C7), Thoracic (T1-T12), Lumbar (L1-L5) Stack
+        for (let i = 0; i < 18; i++) {
+            const vY = 2.05 - (i * 0.11);
+            const vRadius = 0.12 + (i * 0.005);
+            const vertGeo = new THREE.CylinderGeometry(vRadius, vRadius * 1.05, 0.07, 10);
+            const vertMesh = new THREE.Mesh(vertGeo, boneMaterial);
+            vertMesh.position.set(0, vY, -0.05 + (Math.sin(i * 0.3) * 0.04));
+            vertMesh.userData = { name: 'Spine & Back' };
+            spineGroup.add(vertMesh);
+
+            // Intervertebral disc
+            const discGeo = new THREE.CylinderGeometry(vRadius * 0.9, vRadius * 0.9, 0.03, 8);
+            const discMesh = new THREE.Mesh(discGeo, cartilageMaterial);
+            discMesh.position.set(0, vY - 0.04, -0.05 + (Math.sin(i * 0.3) * 0.04));
+            spineGroup.add(discMesh);
+        }
+        skeletonGroup.add(spineGroup);
+
+        // ----------------- 3. THORACIC RIBCAGE & STERNUM -----------------
+        const ribcageGroup = new THREE.Group();
+        ribcageGroup.userData = { name: 'Thorax / Chest' };
+
+        // Sternum (Chest Breastbone)
+        const sternumGeo = new THREE.BoxGeometry(0.16, 0.75, 0.06);
+        const sternumMesh = new THREE.Mesh(sternumGeo, boneMaterial);
+        sternumMesh.position.set(0, 1.42, 0.48);
+        sternumMesh.userData = { name: 'Thorax / Chest' };
+        ribcageGroup.add(sternumMesh);
+
+        // Clavicles (Collarbones)
+        const clavicleGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.85, 8);
+        const leftClavicle = new THREE.Mesh(clavicleGeo, boneMaterial);
+        leftClavicle.rotation.z = Math.PI / 2.3;
+        leftClavicle.position.set(-0.45, 1.88, 0.32);
+        leftClavicle.userData = { name: 'Thorax / Chest' };
+        ribcageGroup.add(leftClavicle);
+
+        const rightClavicle = new THREE.Mesh(clavicleGeo, boneMaterial);
+        rightClavicle.rotation.z = -Math.PI / 2.3;
+        rightClavicle.position.set(0.45, 1.88, 0.32);
+        rightClavicle.userData = { name: 'Thorax / Chest' };
+        ribcageGroup.add(rightClavicle);
+
+        // 7 Bilateral Anatomical Rib Arcs
+        for (let r = 0; r < 7; r++) {
+            const ribWidth = 0.55 + (r * 0.035);
+            const ribY = 1.72 - (r * 0.11);
+            const ribZ = 0.22 - (r * 0.02);
+
+            const ribCurve = new THREE.TorusGeometry(ribWidth, 0.03, 8, 20, Math.PI * 1.15);
+            
+            // Left Rib
+            const leftRib = new THREE.Mesh(ribCurve, boneMaterial);
+            leftRib.position.set(-0.1, ribY, 0.1);
+            leftRib.rotation.x = Math.PI / 2.4;
+            leftRib.rotation.z = -0.15;
+            leftRib.userData = { name: 'Thorax / Chest' };
+            ribcageGroup.add(leftRib);
+
+            // Right Rib
+            const rightRib = new THREE.Mesh(ribCurve, boneMaterial);
+            rightRib.position.set(0.1, ribY, 0.1);
+            rightRib.rotation.x = Math.PI / 2.4;
+            rightRib.rotation.z = Math.PI + 0.15;
+            rightRib.userData = { name: 'Thorax / Chest' };
+            ribcageGroup.add(rightRib);
+        }
+        skeletonGroup.add(ribcageGroup);
+
+        // ----------------- 4. PELVIS & SACRUM -----------------
+        const pelvisGroup = new THREE.Group();
+        pelvisGroup.userData = { name: 'Abdomen & Pelvis' };
+
+        // Left & Right Iliac Blades (Pelvic Wings)
+        const iliumGeo = new THREE.TorusGeometry(0.38, 0.1, 10, 16, Math.PI * 0.9);
+        
+        const leftIlium = new THREE.Mesh(iliumGeo, boneMaterial);
+        leftIlium.position.set(-0.35, 0.25, 0.05);
+        leftIlium.rotation.y = 0.4;
+        leftIlium.rotation.z = -0.3;
+        leftIlium.userData = { name: 'Abdomen & Pelvis' };
+        pelvisGroup.add(leftIlium);
+
+        const rightIlium = new THREE.Mesh(iliumGeo, boneMaterial);
+        rightIlium.position.set(0.35, 0.25, 0.05);
+        rightIlium.rotation.y = -0.4;
+        rightIlium.rotation.z = 0.3;
+        rightIlium.userData = { name: 'Abdomen & Pelvis' };
+        pelvisGroup.add(rightIlium);
+
+        // Sacrum (Central triangular base)
+        const sacrumGeo = new THREE.CylinderGeometry(0.18, 0.08, 0.45, 8);
+        const sacrumMesh = new THREE.Mesh(sacrumGeo, boneMaterial);
+        sacrumMesh.position.set(0, 0.15, -0.08);
+        sacrumMesh.userData = { name: 'Abdomen & Pelvis' };
+        pelvisGroup.add(sacrumMesh);
+
+        // Pubic Arch
+        const pubisGeo = new THREE.BoxGeometry(0.48, 0.12, 0.18);
+        const pubisMesh = new THREE.Mesh(pubisGeo, boneMaterial);
+        pubisMesh.position.set(0, -0.05, 0.18);
+        pubisMesh.userData = { name: 'Abdomen & Pelvis' };
+        pelvisGroup.add(pubisMesh);
+
+        skeletonGroup.add(pelvisGroup);
+
+        // ----------------- 5. UPPER LIMBS (ARMS & FOREARMS) -----------------
+        const armsGroup = new THREE.Group();
+        armsGroup.userData = { name: 'Upper Limbs' };
+
+        function createArm(side) {
+            const arm = new THREE.Group();
+            const sign = side === 'left' ? -1 : 1;
+
+            // Shoulder Joint
+            const shoulderGeo = new THREE.SphereGeometry(0.1, 10, 10);
+            const shoulderMesh = new THREE.Mesh(shoulderGeo, jointMaterial);
+            shoulderMesh.position.set(sign * 0.95, 1.82, 0.05);
+            arm.add(shoulderMesh);
+
+            // Humerus (Upper Arm Bone)
+            const humerusGeo = new THREE.CylinderGeometry(0.065, 0.06, 0.95, 10);
+            const humerusMesh = new THREE.Mesh(humerusGeo, boneMaterial);
+            humerusMesh.position.set(sign * 1.15, 1.35, 0.05);
+            humerusMesh.rotation.z = -sign * 0.22;
+            humerusMesh.userData = { name: 'Upper Limbs' };
+            arm.add(humerusMesh);
+
+            // Elbow Joint
+            const elbowGeo = new THREE.SphereGeometry(0.08, 10, 10);
+            const elbowMesh = new THREE.Mesh(elbowGeo, jointMaterial);
+            elbowMesh.position.set(sign * 1.32, 0.88, 0.05);
+            arm.add(elbowMesh);
+
+            // Radius & Ulna (Forearm Double Bones)
+            const radiusGeo = new THREE.CylinderGeometry(0.045, 0.04, 0.85, 8);
+            const radiusMesh = new THREE.Mesh(radiusGeo, boneMaterial);
+            radiusMesh.position.set(sign * 1.45, 0.45, 0.08);
+            radiusMesh.rotation.z = -sign * 0.18;
+            radiusMesh.userData = { name: 'Upper Limbs' };
+            arm.add(radiusMesh);
+
+            const ulnaGeo = new THREE.CylinderGeometry(0.04, 0.035, 0.85, 8);
+            const ulnaMesh = new THREE.Mesh(ulnaGeo, boneMaterial);
+            ulnaMesh.position.set(sign * 1.38, 0.45, -0.02);
+            ulnaMesh.rotation.z = -sign * 0.18;
+            ulnaMesh.userData = { name: 'Upper Limbs' };
+            arm.add(ulnaMesh);
+
+            // Hand & Phalanges
+            const handGeo = new THREE.BoxGeometry(0.12, 0.22, 0.05);
+            const handMesh = new THREE.Mesh(handGeo, boneMaterial);
+            handMesh.position.set(sign * 1.55, -0.05, 0.08);
+            handMesh.rotation.z = -sign * 0.2;
+            handMesh.userData = { name: 'Upper Limbs' };
+            arm.add(handMesh);
+
+            return arm;
+        }
+
+        armsGroup.add(createArm('left'));
+        armsGroup.add(createArm('right'));
+        skeletonGroup.add(armsGroup);
+
+        // ----------------- 6. LOWER LIMBS (LEGS, KNEES & FEET) -----------------
+        const legsGroup = new THREE.Group();
+        legsGroup.userData = { name: 'Lower Limbs' };
+
+        function createLeg(side) {
+            const leg = new THREE.Group();
+            const sign = side === 'left' ? -1 : 1;
+
+            // Femur (Thigh Bone)
+            const femurGeo = new THREE.CylinderGeometry(0.085, 0.075, 1.4, 12);
+            const femurMesh = new THREE.Mesh(femurGeo, boneMaterial);
+            femurMesh.position.set(sign * 0.38, -0.75, 0.05);
+            femurMesh.rotation.z = sign * 0.05;
+            femurMesh.userData = { name: 'Lower Limbs' };
+            leg.add(femurMesh);
+
+            // Patella (Kneecap)
+            const patellaGeo = new THREE.SphereGeometry(0.09, 10, 10);
+            const patellaMesh = new THREE.Mesh(patellaGeo, jointMaterial);
+            patellaMesh.position.set(sign * 0.42, -1.5, 0.14);
+            leg.add(patellaMesh);
+
+            // Tibia (Shinbone)
+            const tibiaGeo = new THREE.CylinderGeometry(0.075, 0.06, 1.35, 10);
+            const tibiaMesh = new THREE.Mesh(tibiaGeo, boneMaterial);
+            tibiaMesh.position.set(sign * 0.42, -2.2, 0.04);
+            tibiaMesh.userData = { name: 'Lower Limbs' };
+            leg.add(tibiaMesh);
+
+            // Fibula (Lateral strut)
+            const fibulaGeo = new THREE.CylinderGeometry(0.035, 0.03, 1.3, 8);
+            const fibulaMesh = new THREE.Mesh(fibulaGeo, boneMaterial);
+            fibulaMesh.position.set(sign * 0.54, -2.2, -0.02);
+            fibulaMesh.userData = { name: 'Lower Limbs' };
+            leg.add(fibulaMesh);
+
+            // Tarsals & Foot
+            const footGeo = new THREE.BoxGeometry(0.14, 0.1, 0.38);
+            const footMesh = new THREE.Mesh(footGeo, boneMaterial);
+            footMesh.position.set(sign * 0.42, -2.92, 0.16);
+            footMesh.userData = { name: 'Lower Limbs' };
+            leg.add(footMesh);
+
+            return leg;
+        }
+
+        legsGroup.add(createLeg('left'));
+        legsGroup.add(createLeg('right'));
+        skeletonGroup.add(legsGroup);
+
+        // Adjust Center of Gravity
+        skeletonGroup.position.y = 0.2;
+
+        // Interactive Drag Rotation & Mouse Tracking
+        let isDragging = false;
+        let prevMousePos = { x: 0, y: 0 };
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            prevMousePos = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('mouseup', () => { isDragging = false; });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const deltaX = e.clientX - prevMousePos.x;
+                const deltaY = e.clientY - prevMousePos.y;
+                skeletonGroup.rotation.y += deltaX * 0.01;
+                skeletonGroup.rotation.x += deltaY * 0.008;
+                prevMousePos = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        // Click Raycaster for anatomical tagging
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / canvas.clientWidth) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / canvas.clientHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(skeletonGroup.children, true);
+
+            if (intersects.length > 0) {
+                // Find first object with valid name
+                let foundName = null;
+                for (let hit of intersects) {
+                    if (hit.object.userData && hit.object.userData.name) {
+                        foundName = hit.object.userData.name;
+                        break;
+                    }
+                    if (hit.object.parent && hit.object.parent.userData && hit.object.parent.userData.name) {
+                        foundName = hit.object.parent.userData.name;
+                        break;
+                    }
+                }
+                if (foundName) {
+                    const alpineEl = document.querySelector('[x-data]');
+                    if (alpineEl && alpineEl._x_dataStack) {
+                        alpineEl._x_dataStack[0].toggleRegion(foundName);
+                    }
+                }
+            }
+        });
+
+        // Render Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!isDragging) {
+                skeletonGroup.rotation.y += 0.0035; // Ambient slow clinical scan rotation
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Responsive Resize
+        window.addEventListener('resize', () => {
+            if (!canvas.parentElement) return;
+            const w = canvas.parentElement.clientWidth;
+            const h = canvas.parentElement.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+    });
+</script>
+{% endblock %}

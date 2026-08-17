@@ -1,0 +1,84 @@
+<!-- Live Pharmacy Prescription Queue Table Partial -->
+{% if prescriptions %}
+    <div class="w-full overflow-hidden">
+        <table class="w-full text-left text-sm table-auto">
+            <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+                <tr>
+                    <th class="py-3.5 px-4 w-[16%]">Rx Number</th>
+                    <th class="py-3.5 px-4 w-[24%]">Patient Name</th>
+                    <th class="py-3.5 px-4 w-[34%]">Prescribed Drugs</th>
+                    <th class="py-3.5 px-4 w-[12%]">Doctor</th>
+                    <th class="py-3.5 px-4 text-right w-[14%]">Action</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 bg-white">
+                {% for rx in prescriptions %}
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        
+                        <!-- Rx # and Time -->
+                        <td class="py-3.5 px-4 whitespace-nowrap">
+                            <span class="font-mono font-bold text-slate-900 text-xs">{{ rx.rx_number }}</span>
+                            <div class="text-[11px] font-mono text-slate-500">{{ rx.created_at.strftime('%H:%M') }}</div>
+                        </td>
+
+                        <!-- Patient Info & Allergies Warning -->
+                        <td class="py-3.5 px-4 whitespace-nowrap">
+                            <a href="{{ url_for('reception.patient_detail', patient_id=rx.patient.id) }}" class="font-bold text-slate-900 hover:text-slate-700 text-sm hover:underline">
+                                {{ rx.patient.full_name }}
+                            </a>
+                            <div class="text-xs font-mono text-slate-500 flex items-center gap-1.5 mt-0.5">
+                                <span>{{ rx.patient.hospital_id }} &bull; {{ rx.patient.gender }}, {{ rx.patient.age }}y</span>
+                            </div>
+                            {% if rx.patient.allergies and rx.patient.allergies != 'None known' %}
+                                <div class="mt-1 inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                                    <span>⚠️ {{ rx.patient.allergies }}</span>
+                                </div>
+                            {% endif %}
+                        </td>
+
+                        <!-- Prescribed Drug Summary -->
+                        <td class="py-3.5 px-4 text-xs font-mono">
+                            <div class="space-y-1">
+                                {% for m in rx.medication_list %}
+                                    <div class="text-slate-800">
+                                        &bull; <strong class="text-slate-900">{{ m.drug }}</strong> ({{ m.frequency }}) &bull; Qty: <span class="font-bold text-slate-900">{{ m.quantity }}</span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </td>
+
+                        <!-- Doctor -->
+                        <td class="py-3.5 px-4 whitespace-nowrap text-xs text-slate-700 font-semibold truncate max-w-[130px]">
+                            {{ rx.doctor_name }}
+                        </td>
+
+                        <!-- Dispense Action -->
+                        <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                            {% if rx.status == 'dispensed' %}
+                                <span class="px-2.5 py-1 text-xs font-mono font-bold text-slate-600 bg-slate-100 rounded border border-slate-200">
+                                    ✓ Dispensed
+                                </span>
+                            {% else %}
+                                <a href="{{ url_for('pharmacy.dispense', prescription_id=rx.id) }}" class="btn-primary text-xs py-1.5 px-3.5 inline-flex items-center gap-1.5 shadow-xs">
+                                    <span>Verify & Dispense</span>
+                                    <span>&rarr;</span>
+                                </a>
+                            {% endif %}
+                        </td>
+
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <div class="text-center py-12 px-4">
+        <div class="w-10 h-10 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+        </div>
+        <h3 class="text-sm font-bold text-slate-800">No Prescriptions in Queue</h3>
+        <p class="text-xs text-slate-500 mt-1">All doctor prescriptions have been verified and dispensed.</p>
+    </div>
+{% endif %}

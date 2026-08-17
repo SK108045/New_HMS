@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}e-Prescription Registry & Dispense Tracking - Doctor Portal{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header & Filter -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
+                <a href="{{ url_for('doctor.dashboard') }}" class="hover:text-slate-900">Doctor Room</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">e-Prescriptions</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Electronic Prescriptions Registry (e-Rx)</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Audit trail of medications prescribed and pharmacy dispensing fulfillment</p>
+        </div>
+
+        <div class="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-slate-300">
+            <a href="{{ url_for('doctor.prescriptions', status='all') }}" class="px-3 py-1 text-xs font-bold rounded {% if status_filter == 'all' or not status_filter %}bg-slate-900 text-white{% else %}text-slate-700 hover:bg-slate-100{% endif %}">
+                All ({{ prescriptions|length }})
+            </a>
+            <a href="{{ url_for('doctor.prescriptions', status='pending_dispense') }}" class="px-3 py-1 text-xs font-bold rounded {% if status_filter == 'pending_dispense' %}bg-amber-600 text-white{% else %}text-slate-700 hover:bg-slate-100{% endif %}">
+                Pending Dispense
+            </a>
+            <a href="{{ url_for('doctor.prescriptions', status='dispensed') }}" class="px-3 py-1 text-xs font-bold rounded {% if status_filter == 'dispensed' %}bg-slate-900 text-white{% else %}text-slate-700 hover:bg-slate-100{% endif %}">
+                Dispensed
+            </a>
+        </div>
+    </div>
+
+    <!-- Prescriptions Table (No Horizontal Scroll) -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-900">
+                Prescription Registry Log
+            </h2>
+            <span class="text-xs font-mono font-bold text-slate-700 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+                {{ prescriptions|length }} Records
+            </span>
+        </div>
+
+        {% if prescriptions %}
+            <div class="w-full overflow-hidden">
+                <table class="w-full text-left text-sm table-auto">
+                    <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+                        <tr>
+                            <th class="py-3.5 px-4 w-[16%]">Rx # & Date</th>
+                            <th class="py-3.5 px-4 w-[24%]">Patient Name</th>
+                            <th class="py-3.5 px-4 w-[34%]">Medications Prescribed</th>
+                            <th class="py-3.5 px-4 w-[14%]">Pharmacy Status</th>
+                            <th class="py-3.5 px-4 text-right w-[12%]">Cost</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 bg-white">
+                        {% for rx in prescriptions %}
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <span class="font-mono font-bold text-slate-900 text-xs">{{ rx.rx_number }}</span>
+                                    <div class="text-[11px] text-slate-500 font-mono">{{ rx.created_at.strftime('%d %b %Y, %H:%M') }}</div>
+                                </td>
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <a href="{{ url_for('reception.patient_detail', patient_id=rx.patient.id) }}" class="font-bold text-slate-900 hover:text-slate-700 text-sm hover:underline">
+                                        {{ rx.patient.full_name }}
+                                    </a>
+                                    <div class="text-xs font-mono text-slate-500">
+                                        {{ rx.patient.hospital_id }} &bull; {{ rx.patient.gender }}, {{ rx.patient.age }}y
+                                    </div>
+                                </td>
+                                <td class="py-3.5 px-4 text-xs font-mono">
+                                    <div class="space-y-0.5">
+                                        {% for m in rx.medication_list %}
+                                            <div class="text-slate-800">
+                                                &bull; <strong class="text-slate-900">{{ m.drug }}</strong> ({{ m.frequency }}) &bull; Qty: {{ m.quantity }}
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <span class="px-2.5 py-0.5 rounded text-xs font-mono font-bold 
+                                        {% if rx.status == 'pending_dispense' %}bg-amber-100 text-amber-800 border border-amber-300
+                                        {% elif rx.status == 'dispensed' %}bg-slate-100 text-slate-800 border border-slate-300
+                                        {% else %}bg-slate-100 text-slate-600{% endif %}">
+                                        {{ rx.status|replace('_', ' ')|capitalize }}
+                                    </span>
+                                </td>
+                                <td class="py-3.5 px-4 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                                    KES {{ "%.2f"|format(rx.total_cost) }}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-12 px-4">
+                <div class="w-10 h-10 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                </div>
+                <h3 class="text-sm font-bold text-slate-800">No Prescriptions Found</h3>
+                <p class="text-xs text-slate-500 mt-1">No electronic prescriptions recorded for the selected filter.</p>
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

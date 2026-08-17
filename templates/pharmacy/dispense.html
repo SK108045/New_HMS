@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}Dispensation Desk - Rx {{ prescription.rx_number }} - Pharmacy Portal{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Top Breadcrumb & Actions -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
+                <a href="{{ url_for('pharmacy.dashboard') }}" class="hover:text-slate-900">Pharmacy Station</a>
+                <span>/</span>
+                <a href="{{ url_for('pharmacy.queue') }}" class="hover:text-slate-900">Prescription Queue</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold font-mono">{{ prescription.rx_number }}</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Prescription Verification & Dispensation Desk</h1>
+            <p class="text-xs text-slate-500 mt-0.5 font-mono">Verify prescribed drugs, allocate FEFO inventory batches, and counsel patient</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <span class="px-3 py-1 bg-slate-100 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800">
+                Prescribed by {{ prescription.doctor_name }}
+            </span>
+        </div>
+    </div>
+
+    <!-- 1. Patient Demographics & Allergy Safety Alert Strip -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-slate-900 text-white font-mono font-bold text-lg flex items-center justify-center shadow-xs">
+                    {{ patient.first_name[0] }}{{ patient.last_name[0] }}
+                </div>
+                <div>
+                    <h2 class="text-base font-bold text-slate-900">{{ patient.full_name }}</h2>
+                    <div class="text-xs font-mono text-slate-500 flex items-center gap-2 mt-0.5">
+                        <span>{{ patient.hospital_id }}</span>
+                        <span>&bull;</span>
+                        <span>{{ patient.gender }}, {{ patient.age }} yrs</span>
+                        <span>&bull;</span>
+                        <span>Blood: {{ patient.blood_group or 'N/A' }}</span>
+                        <span>&bull;</span>
+                        <span>Payer: {{ patient.primary_payer }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Drug Allergies Warning Box -->
+            <div class="p-3 rounded-lg border {% if patient.allergies and patient.allergies != 'None known' %}bg-rose-50 border-rose-200 text-rose-900{% else %}bg-slate-50 border-slate-200 text-slate-700{% endif %} text-xs max-w-sm">
+                <div class="font-bold flex items-center gap-1.5 uppercase tracking-wider text-[11px] {% if patient.allergies and patient.allergies != 'None known' %}text-rose-800{% else %}text-slate-500{% endif %}">
+                    <span>⚠️ Documented Drug Allergies:</span>
+                </div>
+                <div class="font-mono font-bold mt-1">
+                    {{ patient.allergies or 'No documented drug allergies.' }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Main Dispensation Verification Form -->
+    <form method="POST" action="{{ url_for('pharmacy.dispense', prescription_id=prescription.id) }}" class="space-y-6">
+        
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-900">Prescription Line Items & Batch Allocation (FEFO)</h3>
+                    <p class="text-xs text-slate-500 font-mono">Verify drug strength, quantity, shelf location, and active expiry batch</p>
+                </div>
+                <div class="text-right">
+                    <span class="text-xs text-slate-500 font-mono">Prescription Total:</span>
+                    <span class="font-mono font-bold text-sm text-slate-900 ml-1">KES {{ "%.2f"|format(prescription.total_cost) }}</span>
+                </div>
+            </div>
+
+            <!-- Line Items Table -->
+            <div class="divide-y divide-slate-200">
+                {% for item_data in med_stock_info %}
+                    {% set m = item_data.item %}
+                    {% set med = item_data.med_item %}
+                    {% set idx = loop.index0 %}
+                    <div class="p-5 space-y-3 hover:bg-slate-50/40 transition-colors">
+                        
+                        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                            
+                            <!-- Left: Drug Details & Instructions -->
+                            <div class="space-y-1 flex-1">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h4 class="text-sm font-bold text-slate-900">{{ m.drug }}</h4>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                                        {{ m.dosage or 'Standard' }} &bull; {{ m.frequency }} &bull; {{ m.duration }}
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-600 font-mono">
+                                    <strong>Patient Instructions:</strong> {{ m.instructions or 'Take as directed by doctor' }}
+                                </p>
+                            </div>
+
+                            <!-- Middle: Stock Level & Location -->
+                            <div class="flex items-center gap-4 text-xs font-mono shrink-0">
+                                <div class="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                                    <div class="text-[10px] text-slate-400">Shelf Location</div>
+                                    <div class="font-bold text-slate-900">{{ item_data.shelf }}</div>
+                                </div>
+
+                                <div class="p-2 rounded-lg border {% if item_data.is_sufficient %}bg-slate-50 border-slate-200 text-slate-900{% else %}bg-rose-50 border-rose-200 text-rose-900{% endif %}">
+                                    <div class="text-[10px] {% if item_data.is_sufficient %}text-slate-400{% else %}text-rose-600{% endif %}">Current Stock</div>
+                                    <div class="font-bold {% if item_data.is_sufficient %}text-slate-900{% else %}text-rose-700{% endif %}">
+                                        {{ item_data.in_stock }} units
+                                        {% if not item_data.is_sufficient %}(Insufficient!){% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right: Dispense Qty & Batch Selection (FEFO) -->
+                            <div class="flex items-center gap-3 shrink-0">
+                                <div>
+                                    <label class="block text-[10px] font-mono text-slate-500 mb-0.5">Dispense Qty</label>
+                                    <input 
+                                        type="number" 
+                                        name="qty_dispensed_{{ idx }}" 
+                                        value="{{ m.quantity }}" 
+                                        min="1" 
+                                        max="{{ item_data.in_stock if item_data.in_stock > 0 else 999 }}" 
+                                        class="form-input text-xs font-mono font-bold w-20 py-1.5"
+                                        required
+                                    >
+                                </div>
+
+                                <div>
+                                    <label class="block text-[10px] font-mono text-slate-500 mb-0.5">FEFO Batch & Expiry</label>
+                                    <select name="batch_id_{{ idx }}" class="form-select text-xs font-mono py-1.5 font-bold">
+                                        {% if item_data.batches %}
+                                            {% for b in item_data.batches %}
+                                                <option value="{{ b.id }}">
+                                                    {{ b.batch_number }} &bull; Exp: {{ b.expiry_date.strftime('%b %Y') }} (Rem: {{ b.quantity_remaining }})
+                                                </option>
+                                            {% endfor %}
+                                        {% else %}
+                                            <option value="">GEN-STOCK (Shelf {{ item_data.shelf }})</option>
+                                        {% endif %}
+                                    </select>
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- 3. Pharmacist Counseling Notes & Verification Footer -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Pharmacist Verification & Patient Counseling</h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                <div class="md:col-span-8">
+                    <label for="counseling_notes" class="block text-xs font-bold text-slate-700 mb-1">Clinical Counseling Notes / Food & Alcohol Warnings</label>
+                    <textarea 
+                        name="counseling_notes" 
+                        id="counseling_notes" 
+                        rows="2" 
+                        placeholder="e.g. Advised patient to complete the 5-day antibiotic course even if symptoms subside. Take medication after meals..."
+                        class="form-input text-xs"
+                    ></textarea>
+                </div>
+
+                <div class="md:col-span-4">
+                    <label for="pharmacist_name" class="block text-xs font-bold text-slate-700 mb-1">Attending Pharmacist</label>
+                    <select name="pharmacist_name" id="pharmacist_name" class="form-select text-xs font-bold">
+                        {% for pharm in pharmacists_list %}
+                            <option value="{{ pharm }}">{{ pharm }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Confirmation Action Buttons -->
+            <div class="flex items-center justify-between pt-4 border-t border-slate-200">
+                <a href="{{ url_for('pharmacy.queue') }}" class="btn-secondary text-xs py-2 px-4">
+                    &larr; Return to Queue
+                </a>
+
+                <div class="flex items-center gap-3">
+                    <button type="submit" class="btn-primary text-xs py-2.5 px-6 shadow-sm font-bold flex items-center gap-2">
+                        <span>✓ Confirm Dispensation & Deduct Stock</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </form>
+
+</div>
+{% endblock %}

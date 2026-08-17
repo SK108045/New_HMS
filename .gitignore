@@ -1,0 +1,32 @@
+# Virtual Environment
+venv/
+env/
+ENV/
+.env
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+
+# Node dependencies & logs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Database & SQLite files
+*.db
+*.db-journal
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# Static compiled artifacts that can be generated (or keep dist)
+# uploads/
+uploads/

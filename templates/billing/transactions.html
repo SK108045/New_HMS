@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Payment Transaction Audit Ledger - Billing Portal{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header & Date Navigation -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-0.5">
+                <a href="{{ url_for('billing.dashboard') }}" class="hover:text-slate-900">Billing Station</a>
+                <span>/</span>
+                <span class="text-slate-900 font-bold">Transaction Ledger</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Payment Settlement Transaction Audit Ledger</h1>
+            <p class="text-xs text-slate-500 font-mono">Master immutable cash register, mobile money, and claim audit trail</p>
+        </div>
+
+        <div class="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-300 shadow-xs">
+            <form method="GET" action="{{ url_for('billing.transactions') }}" class="flex items-center gap-2">
+                <input 
+                    type="date" 
+                    name="date" 
+                    value="{{ filter_date.strftime('%Y-%m-%d') }}" 
+                    onchange="this.form.submit()"
+                    class="py-1 px-2.5 text-xs font-mono font-bold border-slate-300 rounded focus:ring-slate-900 focus:border-slate-900"
+                >
+                {% if method_filter != 'all' %}<input type="hidden" name="method" value="{{ method_filter }}">{% endif %}
+                {% if search_q %}<input type="hidden" name="q" value="{{ search_q }}">{% endif %}
+            </form>
+
+            {% if filter_date != today %}
+                <a href="{{ url_for('billing.transactions', date=today.strftime('%Y-%m-%d')) }}" class="px-2.5 py-1 text-xs font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300">
+                    Today
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Filter & Search Strip -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <form method="GET" action="{{ url_for('billing.transactions') }}" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+            <input type="hidden" name="date" value="{{ filter_date.strftime('%Y-%m-%d') }}">
+
+            <div class="sm:col-span-8 relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </div>
+                <input 
+                    type="text" 
+                    name="q" 
+                    value="{{ search_q }}" 
+                    placeholder="Search by Receipt Number, M-Pesa Code, or Patient Name..."
+                    class="form-input pl-9 text-xs py-2 rounded-lg"
+                >
+            </div>
+
+            <div class="sm:col-span-2">
+                <select name="method" onchange="this.form.submit()" class="form-select text-xs py-2 rounded-lg font-bold">
+                    <option value="all" {% if method_filter == 'all' %}selected{% endif %}>All Tender Types</option>
+                    <option value="mpesa" {% if method_filter == 'mpesa' %}selected{% endif %}>M-Pesa Mobile</option>
+                    <option value="cash" {% if method_filter == 'cash' %}selected{% endif %}>Physical Cash</option>
+                    <option value="insurance" {% if method_filter == 'insurance' %}selected{% endif %}>Insurance Claims</option>
+                    <option value="card" {% if method_filter == 'card' %}selected{% endif %}>Bank Card</option>
+                </select>
+            </div>
+
+            <div class="sm:col-span-2">
+                <button type="submit" class="btn-primary text-xs w-full py-2 font-bold">
+                    Search Ledger
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Transactions Table (No Horizontal Scroll) -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-900">
+                Payment Transactions for {{ filter_date.strftime('%d %B %Y') }}
+            </h2>
+            <span class="text-xs font-mono font-bold text-slate-700 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+                {{ payments|length }} Transactions
+            </span>
+        </div>
+
+        {% if payments %}
+            <div class="w-full overflow-hidden">
+                <table class="w-full text-left text-sm table-auto font-mono text-xs">
+                    <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+                        <tr>
+                            <th class="py-3.5 px-4 w-[16%]">Receipt # & Time</th>
+                            <th class="py-3.5 px-4 w-[24%]">Patient Name</th>
+                            <th class="py-3.5 px-4 w-[32%]">Tender Split Details</th>
+                            <th class="py-3.5 px-4 w-[16%] text-right">Amount Settled</th>
+                            <th class="py-3.5 px-4 text-right w-[12%]">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 bg-white">
+                        {% for p in payments %}
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <span class="font-bold text-slate-900">{{ p.receipt_number }}</span>
+                                    <div class="text-[11px] text-slate-500">{{ p.created_at.strftime('%H:%M') }} &bull; {{ p.cashier_name.split(' ')[0] }}</div>
+                                </td>
+
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <a href="{{ url_for('reception.patient_detail', patient_id=p.patient.id) }}" class="font-sans font-bold text-slate-900 hover:text-slate-700 text-sm hover:underline">
+                                        {{ p.patient.full_name }}
+                                    </a>
+                                    <div class="text-[11px] text-slate-500">{{ p.patient.hospital_id }} &bull; {{ p.patient.primary_payer }}</div>
+                                </td>
+
+                                <td class="py-3.5 px-4 text-slate-700">
+                                    {{ p.payment_method_summary }}
+                                </td>
+
+                                <td class="py-3.5 px-4 text-right whitespace-nowrap font-bold text-slate-900 text-sm">
+                                    KES {{ "%.2f"|format(p.total_amount_paid) }}
+                                </td>
+
+                                <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                                    <a href="{{ url_for('billing.receipt', payment_id=p.id) }}" class="btn-primary text-xs py-1.5 px-3">
+                                        Receipt &rarr;
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="p-12 text-center text-xs text-slate-400 font-mono">
+                No payment transactions recorded for the selected date and filters.
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

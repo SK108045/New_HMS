@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+
+{% block title %}Payment Receipt {{ payment.receipt_number }} - Billing Portal{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ format: '{{ format_type }}' }">
+
+    <!-- Top Format Switcher & Action Bar (Hidden on Print) -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4 no-print">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-0.5">
+                <a href="{{ url_for('billing.dashboard') }}" class="hover:text-slate-900">Billing Station</a>
+                <span>/</span>
+                <a href="{{ url_for('billing.pos') }}" class="hover:text-slate-900">POS Terminal</a>
+                <span>/</span>
+                <span class="text-slate-900 font-bold font-mono">{{ payment.receipt_number }}</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Payment Settlement Receipt & Tax Invoice</h1>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <!-- Format Switcher Buttons -->
+            <div class="flex items-center bg-white p-1 rounded-lg border border-slate-300 shadow-xs">
+                <button 
+                    type="button" 
+                    @click="format = 'thermal'" 
+                    class="px-3 py-1.5 text-xs font-mono font-bold rounded-md transition-all"
+                    :class="format === 'thermal' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'"
+                >
+                    🧾 80mm Thermal Slip
+                </button>
+                <button 
+                    type="button" 
+                    @click="format = 'a4'" 
+                    class="px-3 py-1.5 text-xs font-mono font-bold rounded-md transition-all"
+                    :class="format === 'a4' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'"
+                >
+                    📄 Standard A4 Tax Invoice
+                </button>
+            </div>
+
+            <!-- Print Action -->
+            <button onclick="window.print()" class="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-xs font-bold">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                </svg>
+                <span>Print Document</span>
+            </button>
+
+            <a href="{{ url_for('billing.pos') }}" class="btn-secondary text-xs py-2 px-3">
+                Done &rarr;
+            </a>
+        </div>
+    </div>
+
+    <!-- =================== FORMAT 1: 80MM THERMAL RECEIPT SLIP =================== -->
+    <div x-show="format === 'thermal'" class="flex justify-center">
+        <div class="w-[340px] bg-white p-6 rounded-xl border border-slate-300 shadow-sm font-mono text-xs text-slate-900 space-y-3 leading-tight print-thermal">
+            
+            <!-- Thermal Header -->
+            <div class="text-center space-y-1 border-b border-dashed border-slate-400 pb-3">
+                <div class="font-bold text-sm uppercase tracking-wider">{{ facility_name }}</div>
+                <div class="text-[11px] text-slate-600">Official Health Services</div>
+                <div class="text-[10px] text-slate-500">Tax PIN: P051829104K &bull; Station POS-01</div>
+                <div class="text-[10px] text-slate-500">Tel: +254 20 790 000 &bull; Nairobi, Kenya</div>
+            </div>
+
+            <!-- Receipt Meta -->
+            <div class="space-y-0.5 text-[11px] border-b border-dashed border-slate-400 pb-2">
+                <div class="flex justify-between">
+                    <span>Receipt No:</span>
+                    <strong class="font-bold">{{ payment.receipt_number }}</strong>
+                </div>
+                <div class="flex justify-between">
+                    <span>Invoice Ref:</span>
+                    <span>{{ invoice.invoice_number }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Date / Time:</span>
+                    <span>{{ payment.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Cashier:</span>
+                    <span class="truncate max-w-[170px]">{{ payment.cashier_name }}</span>
+                </div>
+            </div>
+
+            <!-- Patient Details -->
+            <div class="space-y-0.5 text-[11px] border-b border-dashed border-slate-400 pb-2">
+                <div class="flex justify-between">
+                    <span>Patient:</span>
+                    <strong class="font-bold">{{ patient.full_name }}</strong>
+                </div>
+                <div class="flex justify-between">
+                    <span>Hospital ID:</span>
+                    <span>{{ patient.hospital_id }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Payer Scheme:</span>
+                    <span>{{ patient.primary_payer }}</span>
+                </div>
+            </div>
+
+            <!-- Itemized Line Items -->
+            <div class="space-y-1 border-b border-dashed border-slate-400 pb-2 text-[11px]">
+                <div class="flex justify-between font-bold pb-1 border-b border-slate-200">
+                    <span>ITEM</span>
+                    <span>QTY &bull; AMT (KES)</span>
+                </div>
+
+                {% for item in invoice.billing_items %}
+                    <div class="flex justify-between items-start gap-1">
+                        <div class="min-w-0">
+                            <div class="truncate font-medium">{{ item.item_description }}</div>
+                            <div class="text-[9px] text-slate-500 uppercase">{{ item.service_type }}</div>
+                        </div>
+                        <div class="text-right shrink-0">
+                            {{ item.quantity }}x {{ "%.2f"|format(item.total_amount) }}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <!-- Financial Totals -->
+            <div class="space-y-1 text-[11px] border-b border-dashed border-slate-400 pb-2">
+                <div class="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span>KES {{ "%.2f"|format(invoice.subtotal) }}</span>
+                </div>
+                {% if invoice.discount_amount > 0 %}
+                    <div class="flex justify-between text-slate-600">
+                        <span>Discount / Waiver:</span>
+                        <span>- KES {{ "%.2f"|format(invoice.discount_amount) }}</span>
+                    </div>
+                {% endif %}
+                <div class="flex justify-between font-bold text-xs pt-1 border-t border-slate-200">
+                    <span>TOTAL DUE:</span>
+                    <span>KES {{ "%.2f"|format(invoice.total_due) }}</span>
+                </div>
+            </div>
+
+            <!-- Split Tender Breakdown -->
+            <div class="space-y-1 text-[11px] border-b border-dashed border-slate-400 pb-2 bg-slate-50 p-2 rounded">
+                <div class="font-bold uppercase text-[10px] text-slate-700">Tender Settlement Details:</div>
+                
+                {% if payment.cash_amount > 0 %}
+                    <div class="flex justify-between">
+                        <span>&bull; Cash Allocation:</span>
+                        <span>KES {{ "%.2f"|format(payment.cash_amount) }}</span>
+                    </div>
+                    {% if payment.cash_tendered > 0 %}
+                        <div class="flex justify-between text-slate-500 text-[10px]">
+                            <span>&nbsp;&nbsp;Tendered: KES {{ "%.2f"|format(payment.cash_tendered) }}</span>
+                            <span>Change: KES {{ "%.2f"|format(payment.change_returned) }}</span>
+                        </div>
+                    {% endif %}
+                {% endif %}
+
+                {% if payment.mpesa_amount > 0 %}
+                    <div class="flex justify-between">
+                        <span>&bull; M-Pesa Mobile:</span>
+                        <span>KES {{ "%.2f"|format(payment.mpesa_amount) }}</span>
+                    </div>
+                    <div class="text-[10px] text-slate-500">
+                        &nbsp;&nbsp;Ref: <strong class="text-slate-900">{{ payment.mpesa_reference or 'N/A' }}</strong> &bull; Tel: {{ payment.mpesa_phone or patient.phone }}
+                    </div>
+                {% endif %}
+
+                {% if payment.insurance_amount > 0 %}
+                    <div class="flex justify-between">
+                        <span>&bull; Insurance Claim:</span>
+                        <span>KES {{ "%.2f"|format(payment.insurance_amount) }}</span>
+                    </div>
+                    <div class="text-[10px] text-slate-500">
+                        &nbsp;&nbsp;Insurer: {{ payment.insurance_company }}
+                        {% if payment.insurance_claim_number %}&bull; Auth: {{ payment.insurance_claim_number }}{% endif %}
+                    </div>
+                {% endif %}
+
+                {% if payment.card_amount > 0 %}
+                    <div class="flex justify-between">
+                        <span>&bull; Bank Card:</span>
+                        <span>KES {{ "%.2f"|format(payment.card_amount) }}</span>
+                    </div>
+                    {% if payment.card_auth_code %}
+                        <div class="text-[10px] text-slate-500">&nbsp;&nbsp;Auth: {{ payment.card_auth_code }}</div>
+                    {% endif %}
+                {% endif %}
+
+                <div class="flex justify-between font-bold pt-1 border-t border-slate-200 text-slate-900">
+                    <span>PAID IN FULL:</span>
+                    <span>KES {{ "%.2f"|format(payment.total_amount_paid) }}</span>
+                </div>
+            </div>
+
+            <!-- Footer & Barcode Mockup -->
+            <div class="text-center pt-2 space-y-2">
+                <div class="text-[10px] text-slate-500">
+                    Thank you for choosing {{ facility_name }}.<br>
+                    Keep this receipt for clinical & claims verification.
+                </div>
+
+                <!-- Barcode Simulation -->
+                <div class="py-1">
+                    <div class="tracking-[4px] font-bold text-xs">||| | |||| || ||| |||| | |||</div>
+                    <div class="text-[9px] text-slate-400 font-mono mt-0.5">{{ payment.receipt_number }}</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- =================== FORMAT 2: STANDARD A4 OFFICIAL TAX INVOICE =================== -->
+    <div x-show="format === 'a4'" class="max-w-4xl mx-auto">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-8 sm:p-10 space-y-8 print-a4">
+            
+            <!-- Hospital Branding Header -->
+            <div class="flex items-start justify-between border-b-2 border-slate-900 pb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-900 tracking-tight">{{ facility_name }}</h2>
+                    <div class="text-xs text-slate-600 font-mono mt-1">Department of Finance & Revenue Operations &bull; Counter POS-01</div>
+                    <div class="text-xs text-slate-500 font-mono">Hospital KRA Tax PIN: <strong>P051829104K</strong> &bull; Facility Code: {{ facility_code }}</div>
+                    <div class="text-xs text-slate-500 font-mono">P.O. Box 40820-00100, Nairobi, Kenya &bull; Tel: +254 20 790 000</div>
+                </div>
+
+                <div class="text-right font-mono">
+                    <span class="inline-block px-3 py-1 bg-slate-900 text-white text-xs font-bold rounded">
+                        OFFICIAL TAX RECEIPT
+                    </span>
+                    <div class="text-xs font-bold text-slate-900 mt-2">Receipt: {{ payment.receipt_number }}</div>
+                    <div class="text-xs text-slate-600">Invoice: {{ invoice.invoice_number }}</div>
+                    <div class="text-xs text-slate-500 mt-1">Date: {{ payment.created_at.strftime('%d %B %Y, %H:%M') }}</div>
+                </div>
+            </div>
+
+            <!-- Patient Demographics & Payer Details -->
+            <div class="grid grid-cols-2 gap-6 p-5 bg-slate-50 rounded-xl border border-slate-200 text-xs font-mono">
+                <div class="space-y-1">
+                    <span class="text-slate-400 block text-[10px] uppercase font-bold">Patient Details:</span>
+                    <div class="text-sm font-bold text-slate-900 font-sans">{{ patient.full_name }}</div>
+                    <div class="text-slate-600">Hospital ID: <strong>{{ patient.hospital_id }}</strong></div>
+                    <div class="text-slate-600">Gender / Age: {{ patient.gender }}, {{ patient.age }} yrs</div>
+                    <div class="text-slate-600">Telephone: {{ patient.phone }}</div>
+                </div>
+
+                <div class="space-y-1 text-right">
+                    <span class="text-slate-400 block text-[10px] uppercase font-bold">Billing & Payer Information:</span>
+                    <div class="text-sm font-bold text-slate-900">Payer: {{ patient.primary_payer }}</div>
+                    {% if patient.insurance_company %}
+                        <div class="text-slate-600">Company: {{ patient.insurance_company }}</div>
+                        <div class="text-slate-600">Policy No: {{ patient.insurance_policy_number or 'N/A' }}</div>
+                    {% endif %}
+                    <div class="text-slate-600">Attending Cashier: <strong>{{ payment.cashier_name }}</strong></div>
+                </div>
+            </div>
+
+            <!-- Detailed Itemized Charges Table -->
+            <div class="space-y-3">
+                <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Itemized Clinical Charges & Services Rendered</h3>
+
+                <div class="border border-slate-200 rounded-xl overflow-hidden">
+                    <table class="w-full text-left text-xs font-mono">
+                        <thead class="bg-slate-100 text-slate-800 font-bold border-b border-slate-200 uppercase tracking-wider">
+                            <tr>
+                                <th class="py-3 px-4 w-[45%]">Description of Service / Medication / Test</th>
+                                <th class="py-3 px-4 w-[20%]">Department</th>
+                                <th class="py-3 px-4 w-[10%] text-center">Qty</th>
+                                <th class="py-3 px-4 w-[12%] text-right">Unit Price</th>
+                                <th class="py-3 px-4 w-[13%] text-right">Total (KES)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200 bg-white">
+                            {% for item in invoice.billing_items %}
+                                <tr>
+                                    <td class="py-3 px-4 font-sans font-bold text-slate-900">{{ item.item_description }}</td>
+                                    <td class="py-3 px-4 uppercase text-slate-600">{{ item.service_type }}</td>
+                                    <td class="py-3 px-4 text-center">{{ item.quantity }}</td>
+                                    <td class="py-3 px-4 text-right">KES {{ "%.2f"|format(item.unit_price) }}</td>
+                                    <td class="py-3 px-4 text-right font-bold text-slate-900">KES {{ "%.2f"|format(item.total_amount) }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Financial Settlement Summary -->
+            <div class="grid grid-cols-2 gap-6 pt-4 border-t border-slate-200 text-xs font-mono items-start">
+                
+                <!-- Left: Multi-Tender Payment Method Breakdown -->
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <span class="font-bold text-slate-900 uppercase text-[10px] block">Payment Tender Breakdown:</span>
+                    <div class="text-slate-800">{{ payment.payment_method_summary }}</div>
+                    {% if payment.mpesa_reference %}
+                        <div class="text-[11px] text-slate-600">M-Pesa Transaction Ref: <strong class="text-slate-900">{{ payment.mpesa_reference }}</strong></div>
+                    {% endif %}
+                    {% if payment.insurance_claim_number %}
+                        <div class="text-[11px] text-slate-600">Insurance Pre-Auth Number: <strong class="text-slate-900">{{ payment.insurance_claim_number }}</strong></div>
+                    {% endif %}
+                </div>
+
+                <!-- Right: Totals Statement -->
+                <div class="space-y-1.5 text-right">
+                    <div class="flex justify-between py-1 border-b border-slate-100">
+                        <span class="text-slate-500">Gross Incurred Subtotal:</span>
+                        <strong class="text-slate-900">KES {{ "%.2f"|format(invoice.subtotal) }}</strong>
+                    </div>
+                    {% if invoice.discount_amount > 0 %}
+                        <div class="flex justify-between py-1 border-b border-slate-100 text-slate-600">
+                            <span>Authorised Discount / Waiver:</span>
+                            <span>- KES {{ "%.2f"|format(invoice.discount_amount) }}</span>
+                        </div>
+                    {% endif %}
+                    <div class="flex justify-between py-1 border-b border-slate-100">
+                        <span class="text-slate-500">Net Taxable Total:</span>
+                        <strong class="text-slate-900">KES {{ "%.2f"|format(invoice.total_due) }}</strong>
+                    </div>
+                    <div class="flex justify-between py-2 text-base font-extrabold text-slate-900 border-b-2 border-slate-900">
+                        <span>TOTAL AMOUNT SETTLED:</span>
+                        <span>KES {{ "%.2f"|format(payment.total_amount_paid) }}</span>
+                    </div>
+                    <div class="text-[10px] text-slate-500 pt-1">
+                        Outstanding Folio Balance: KES {{ "%.2f"|format(invoice.balance_due) }}
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Signatures & Official Stamp Box -->
+            <div class="grid grid-cols-2 gap-8 pt-8 border-t border-slate-200 text-xs font-mono">
+                <div>
+                    <div class="text-slate-500 mb-6">Patient / Representative Signature</div>
+                    <div class="border-b border-slate-300 w-48"></div>
+                </div>
+                <div class="text-right">
+                    <div class="text-slate-500 mb-6">Authorised Cashier Signature & Stamp</div>
+                    <div class="font-bold text-slate-900">{{ payment.cashier_name }}</div>
+                    <div class="text-[10px] text-slate-400">Station POS-01 &bull; {{ payment.created_at.strftime('%d/%m/%Y') }}</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}

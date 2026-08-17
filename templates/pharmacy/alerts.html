@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}Stock & Expiry Alert Center - Pharmacy Portal{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
+                <a href="{{ url_for('pharmacy.dashboard') }}" class="hover:text-slate-900">Pharmacy Station</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">Alert Center</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Stock & Expiry Alert Center</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Automated surveillance for inventory depletion, low reorder thresholds, and FEFO expiry risk</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <a href="{{ url_for('pharmacy.inventory') }}" class="btn-primary text-xs py-2 px-4 shadow-xs">
+                + Restock Products &rarr;
+            </a>
+        </div>
+    </div>
+
+    <!-- Alert KPI Summary Counters -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+        
+        <div class="bg-rose-50 border border-rose-200 rounded-xl p-4 text-center">
+            <div class="text-xs font-bold uppercase tracking-wider text-rose-800">Critical Expiry (&lt;30d)</div>
+            <div class="text-3xl font-extrabold font-mono text-rose-700 mt-1">{{ critical_batches|length }}</div>
+        </div>
+
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+            <div class="text-xs font-bold uppercase tracking-wider text-amber-800">Warning Expiry (&lt;60d)</div>
+            <div class="text-3xl font-extrabold font-mono text-amber-700 mt-1">{{ warning_batches|length }}</div>
+        </div>
+
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-600">Caution Expiry (&lt;90d)</div>
+            <div class="text-3xl font-extrabold font-mono text-slate-900 mt-1">{{ caution_batches|length }}</div>
+        </div>
+
+        <div class="bg-rose-50 border border-rose-200 rounded-xl p-4 text-center">
+            <div class="text-xs font-bold uppercase tracking-wider text-rose-800">Low Stock Products</div>
+            <div class="text-3xl font-extrabold font-mono text-rose-700 mt-1">{{ low_stock_items|length }}</div>
+        </div>
+
+    </div>
+
+    <!-- Section 1: Low Stock & Reorder Alerts -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
+                <h2 class="text-sm font-bold text-slate-900">Low Stock & Depleted Inventory Warnings</h2>
+            </div>
+            <span class="text-xs font-mono font-bold text-rose-800 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-full">
+                {{ low_stock_items|length }} Alerts
+            </span>
+        </div>
+
+        {% if low_stock_items %}
+            <div class="w-full overflow-hidden">
+                <table class="w-full text-left text-sm table-auto">
+                    <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+                        <tr>
+                            <th class="py-3 px-4 w-[34%]">Medication</th>
+                            <th class="py-3 px-4 w-[18%]">Current Stock</th>
+                            <th class="py-3 px-4 w-[16%]">Reorder Level</th>
+                            <th class="py-3 px-4 w-[16%]">Shelf</th>
+                            <th class="py-3 px-4 text-right w-[16%]">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 bg-white">
+                        {% for med in low_stock_items %}
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="py-3 px-4">
+                                    <div class="font-bold text-slate-900 text-xs">{{ med.name }}</div>
+                                    <div class="text-[11px] font-mono text-slate-500">{{ med.category }}</div>
+                                </td>
+                                <td class="py-3 px-4 whitespace-nowrap font-mono text-xs">
+                                    <span class="font-bold {% if med.current_stock <= 0 %}text-rose-700{% else %}text-amber-700{% endif %}">
+                                        {{ med.current_stock }} units
+                                    </span>
+                                </td>
+                                <td class="py-3 px-4 whitespace-nowrap font-mono text-xs text-slate-600">
+                                    {{ med.reorder_level }} units
+                                </td>
+                                <td class="py-3 px-4 whitespace-nowrap font-mono text-xs font-bold text-slate-800">
+                                    {{ med.location_shelf }}
+                                </td>
+                                <td class="py-3 px-4 text-right whitespace-nowrap">
+                                    <a href="{{ url_for('pharmacy.inventory', q=med.name) }}" class="btn-primary text-xs py-1 px-2.5">
+                                        + Restock
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-8 text-slate-400 text-xs font-mono">
+                ✓ All inventory items are currently above their reorder thresholds.
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Section 2: FEFO Expiry Risk Batches (<90 Days) -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                <h2 class="text-sm font-bold text-slate-900">Batches Approaching Expiry (FEFO Surveillance)</h2>
+            </div>
+            <span class="text-xs font-mono font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full">
+                {{ critical_batches|length + warning_batches|length + caution_batches|length }} Batches
+            </span>
+        </div>
+
+        {% set all_exp_batches = critical_batches + warning_batches + caution_batches %}
+        {% if all_exp_batches %}
+            <div class="w-full overflow-hidden">
+                <table class="w-full text-left text-sm table-auto">
+                    <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+                        <tr>
+                            <th class="py-3 px-4 w-[20%]">Batch Number</th>
+                            <th class="py-3 px-4 w-[30%]">Medication Name</th>
+                            <th class="py-3 px-4 w-[16%]">Units Remaining</th>
+                            <th class="py-3 px-4 w-[18%]">Expiry Date</th>
+                            <th class="py-3 px-4 text-right w-[16%]">Expiry Risk Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 bg-white">
+                        {% for b in all_exp_batches %}
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="py-3 px-4 whitespace-nowrap font-mono font-bold text-xs text-slate-900">
+                                    {{ b.batch_number }}
+                                </td>
+                                <td class="py-3 px-4">
+                                    <div class="font-bold text-slate-900 text-xs">{{ b.medication.name }}</div>
+                                    <div class="text-[11px] font-mono text-slate-500">Supplier: {{ b.supplier }}</div>
+                                </td>
+                                <td class="py-3 px-4 whitespace-nowrap font-mono text-xs font-bold text-slate-800">
+                                    {{ b.quantity_remaining }} / {{ b.quantity_received }}
+                                </td>
+                                <td class="py-3 px-4 whitespace-nowrap font-mono text-xs text-slate-800">
+                                    {{ b.expiry_date.strftime('%d %b %Y') }} ({{ b.days_to_expiry }} days)
+                                </td>
+                                <td class="py-3 px-4 text-right whitespace-nowrap">
+                                    {% if b.expiry_status == 'critical_30d' or b.expiry_status == 'expired' %}
+                                        <span class="px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                                            🚨 Critical &lt;30 Days
+                                        </span>
+                                    {% elif b.expiry_status == 'warning_60d' %}
+                                        <span class="px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                            ⚠️ Warning &lt;60 Days
+                                        </span>
+                                    {% else %}
+                                        <span class="px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                            Caution &lt;90 Days
+                                        </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-8 text-slate-400 text-xs font-mono">
+                ✓ No active batches are expiring within 90 days.
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

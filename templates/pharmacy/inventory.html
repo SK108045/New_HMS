@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}Pharmacy Drug Inventory & Stock Management - Pharmacy Portal{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ showAddModal: false, showRestockModal: false, selectedMed: null }">
+
+    <!-- Header & Action Buttons -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
+                <a href="{{ url_for('pharmacy.dashboard') }}" class="hover:text-slate-900">Pharmacy Station</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">Inventory Management</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Pharmacy Drug Inventory & Stock Levels</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Formulary catalog, live stock balance, shelf locations, and batch replenishment</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button @click="showAddModal = true" class="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-xs">
+                <span>+ Register New Drug</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <form method="GET" action="{{ url_for('pharmacy.inventory') }}" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+            
+            <div class="sm:col-span-6 relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </div>
+                <input 
+                    type="text" 
+                    name="q" 
+                    value="{{ search_q }}" 
+                    placeholder="Search medication name, generic, barcode, or shelf..."
+                    class="form-input pl-9 text-xs py-2 rounded-lg"
+                >
+            </div>
+
+            <div class="sm:col-span-3">
+                <select name="category" onchange="this.form.submit()" class="form-select text-xs py-2 rounded-lg font-bold">
+                    <option value="all" {% if category_filter == 'all' %}selected{% endif %}>All Categories</option>
+                    {% for cat in categories_list %}
+                        <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="sm:col-span-3">
+                <select name="stock_status" onchange="this.form.submit()" class="form-select text-xs py-2 rounded-lg font-bold">
+                    <option value="all" {% if stock_status_filter == 'all' %}selected{% endif %}>All Stock Levels</option>
+                    <option value="adequate" {% if stock_status_filter == 'adequate' %}selected{% endif %}>Adequate Stock</option>
+                    <option value="low" {% if stock_status_filter == 'low' %}selected{% endif %}>Low Stock Alerts</option>
+                    <option value="out" {% if stock_status_filter == 'out' %}selected{% endif %}>Out of Stock</option>
+                </select>
+            </div>
+
+        </form>
+    </div>
+
+    <!-- Inventory Table (No Horizontal Scroll) -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-900">
+                Formulary Inventory Products
+            </h2>
+            <span class="text-xs font-mono font-bold text-slate-700 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+                {{ medications|length }} Products
+            </span>
+        </div>
+
+        {% if medications %}
+            <div class="w-full overflow-hidden">
+                <table class="w-full text-left text-sm table-auto">
+                    <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+                        <tr>
+                            <th class="py-3.5 px-4 w-[28%]">Medication Name & Strength</th>
+                            <th class="py-3.5 px-4 w-[16%]">Category & Form</th>
+                            <th class="py-3.5 px-4 w-[14%]">Stock Level</th>
+                            <th class="py-3.5 px-4 w-[12%]">Shelf</th>
+                            <th class="py-3.5 px-4 w-[14%]">Unit Price</th>
+                            <th class="py-3.5 px-4 text-right w-[16%]">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 bg-white">
+                        {% for med in medications %}
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                
+                                <!-- Medication Name -->
+                                <td class="py-3.5 px-4">
+                                    <div class="font-bold text-slate-900 text-sm">{{ med.name }}</div>
+                                    <div class="text-xs font-mono text-slate-500">{{ med.generic_name or med.name }}</div>
+                                </td>
+
+                                <!-- Category & Form -->
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <span class="px-2 py-0.5 rounded text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                                        {{ med.category }}
+                                    </span>
+                                    <div class="text-[11px] text-slate-500 font-mono mt-0.5">{{ med.form }}</div>
+                                </td>
+
+                                <!-- Current Stock Level -->
+                                <td class="py-3.5 px-4 whitespace-nowrap font-mono text-xs">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="font-bold text-sm {% if med.stock_status == 'out_of_stock' %}text-rose-700{% elif med.stock_status in ['critical', 'low'] %}text-amber-700{% else %}text-slate-900{% endif %}">
+                                            {{ med.current_stock }}
+                                        </span>
+                                        <span class="text-slate-500">units</span>
+                                    </div>
+                                    {% if med.stock_status == 'out_of_stock' %}
+                                        <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">Out of Stock</span>
+                                    {% elif med.stock_status in ['critical', 'low'] %}
+                                        <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Low Stock (≤{{ med.reorder_level }})</span>
+                                    {% else %}
+                                        <span class="text-[10px] text-slate-400">Reorder at {{ med.reorder_level }}</span>
+                                    {% endif %}
+                                </td>
+
+                                <!-- Location Shelf -->
+                                <td class="py-3.5 px-4 whitespace-nowrap font-mono text-xs font-bold text-slate-800">
+                                    {{ med.location_shelf }}
+                                </td>
+
+                                <!-- Unit Price -->
+                                <td class="py-3.5 px-4 whitespace-nowrap font-mono text-xs text-slate-900 font-bold">
+                                    KES {{ "%.2f"|format(med.unit_price) }}
+                                </td>
+
+                                <!-- Restock Action -->
+                                <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                                    <button 
+                                        type="button" 
+                                        @click="selectedMed = { id: {{ med.id }}, name: '{{ med.name }}' }; showRestockModal = true" 
+                                        class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300 text-xs font-mono font-bold text-slate-800"
+                                    >
+                                        + Receive Stock
+                                    </button>
+                                </td>
+
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-12 px-4">
+                <div class="w-10 h-10 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                    </svg>
+                </div>
+                <h3 class="text-sm font-bold text-slate-800">No Medications Found</h3>
+                <p class="text-xs text-slate-500 mt-1">No products match your search query or filter.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Restock Modal -->
+    <div x-show="showRestockModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+        <div @click.away="showRestockModal = false" class="bg-white rounded-xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="font-bold text-sm text-slate-900">Receive Inventory Stock</h3>
+                <button @click="showRestockModal = false" class="text-slate-400 hover:text-slate-900 font-bold">✕</button>
+            </div>
+
+            <form :action="`/pharmacy/inventory/${selectedMed ? selectedMed.id : 0}/restock`" method="POST" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Medication Product</label>
+                    <input type="text" :value="selectedMed ? selectedMed.name : ''" readonly class="form-input text-xs bg-slate-50 font-bold">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Quantity Received</label>
+                        <input type="number" name="quantity" min="1" value="50" class="form-input text-xs font-mono font-bold" required>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Batch Number</label>
+                        <input type="text" name="batch_number" value="BAT-2026-{{ today.strftime('%m%d') }}" class="form-input text-xs font-mono" required>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Expiry Date (FEFO)</label>
+                    <input type="date" name="expiry_date" class="form-input text-xs font-mono font-bold" required>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Supplier</label>
+                    <input type="text" name="supplier" value="Apex Central Medical Supplies" class="form-input text-xs">
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+                    <button type="button" @click="showRestockModal = false" class="btn-secondary text-xs py-2 px-3">Cancel</button>
+                    <button type="submit" class="btn-primary text-xs py-2 px-4">✓ Confirm Intake</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Register New Medication Modal -->
+    <div x-show="showAddModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4">
+        <div @click.away="showAddModal = false" class="bg-white rounded-xl border border-slate-200 shadow-xl max-w-lg w-full p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="font-bold text-sm text-slate-900">Register New Medication Item</h3>
+                <button @click="showAddModal = false" class="text-slate-400 hover:text-slate-900 font-bold">✕</button>
+            </div>
+
+            <form action="{{ url_for('pharmacy.add_medication') }}" method="POST" class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Brand / Commercial Name</label>
+                    <input type="text" name="name" placeholder="e.g. Ciprofloxacin 500mg Tablets" class="form-input text-xs font-bold" required>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Generic Name</label>
+                        <input type="text" name="generic_name" placeholder="Ciprofloxacin" class="form-input text-xs">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Category</label>
+                        <select name="category" class="form-select text-xs font-bold">
+                            <option value="Antibiotic">Antibiotic</option>
+                            <option value="Analgesic & Antipyretic">Analgesic & Antipyretic</option>
+                            <option value="Antihypertensive">Antihypertensive</option>
+                            <option value="Antidiabetic">Antidiabetic</option>
+                            <option value="Antihistamine">Antihistamine</option>
+                            <option value="GI / Antacid">GI / Antacid</option>
+                            <option value="Respiratory / Bronchodilator">Respiratory / Bronchodilator</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Form</label>
+                        <select name="form" class="form-select text-xs">
+                            <option value="Tablet">Tablet</option>
+                            <option value="Capsule">Capsule</option>
+                            <option value="Syrup">Syrup</option>
+                            <option value="Injection">Injection</option>
+                            <option value="Ointment">Ointment</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Strength</label>
+                        <input type="text" name="strength" placeholder="500mg" class="form-input text-xs font-mono">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Shelf Location</label>
+                        <input type="text" name="location_shelf" value="A-01" class="form-input text-xs font-mono">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Initial Stock</label>
+                        <input type="number" name="initial_stock" value="50" min="0" class="form-input text-xs font-mono font-bold">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Reorder Level</label>
+                        <input type="number" name="reorder_level" value="20" min="1" class="form-input text-xs font-mono">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Unit Price (KES)</label>
+                        <input type="number" step="0.5" name="unit_price" value="30.0" class="form-input text-xs font-mono font-bold">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Initial Batch Number</label>
+                        <input type="text" name="batch_number" value="BAT-2026-0801" class="form-input text-xs font-mono">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Batch Expiry Date</label>
+                        <input type="date" name="expiry_date" class="form-input text-xs font-mono">
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+                    <button type="button" @click="showAddModal = false" class="btn-secondary text-xs py-2 px-3">Cancel</button>
+                    <button type="submit" class="btn-primary text-xs py-2 px-4">✓ Register Medication</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

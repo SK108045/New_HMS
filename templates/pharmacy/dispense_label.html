@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Dispensation Label & Receipt - {{ dispense.dispensation_number }} - Pharmacy Portal{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+
+    <!-- Header Actions (Hidden on Print) -->
+    <div class="flex items-center justify-between border-b border-slate-200 pb-4 no-print">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
+                <a href="{{ url_for('pharmacy.dashboard') }}" class="hover:text-slate-900">Pharmacy Station</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold font-mono">{{ dispense.dispensation_number }}</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Medication Dispensation Receipt & Labels</h1>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button onclick="window.print()" class="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-xs">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                </svg>
+                <span>Print Medication Labels</span>
+            </button>
+            <a href="{{ url_for('pharmacy.dashboard') }}" class="btn-secondary text-xs py-2 px-3">
+                Done &rarr;
+            </a>
+        </div>
+    </div>
+
+    <!-- Printable Official Hospital Medication Dispensation Receipt -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-8 space-y-6">
+        
+        <!-- Hospital Branding Strip -->
+        <div class="flex items-start justify-between border-b border-slate-200 pb-4">
+            <div>
+                <h2 class="text-lg font-bold text-slate-900 tracking-tight">{{ facility_name }}</h2>
+                <div class="text-xs text-slate-500 font-mono">Pharmacy & Dispensary Services &bull; Station PHARM-01</div>
+                <div class="text-xs text-slate-500 font-mono">Hospital Code: {{ facility_code }}</div>
+            </div>
+            <div class="text-right font-mono">
+                <div class="text-xs font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded border border-slate-300 inline-block">
+                    {{ dispense.dispensation_number }}
+                </div>
+                <div class="text-[11px] text-slate-500 mt-1">Date: {{ dispense.created_at.strftime('%d %B %Y, %H:%M') }}</div>
+            </div>
+        </div>
+
+        <!-- Patient & Prescription Details -->
+        <div class="grid grid-cols-2 gap-4 text-xs font-mono p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <div>
+                <span class="text-slate-500 block text-[10px] uppercase font-bold">Patient Details:</span>
+                <span class="font-bold text-slate-900 text-sm">{{ dispense.patient.full_name }}</span>
+                <div class="text-slate-600 text-xs">{{ dispense.patient.hospital_id }} &bull; {{ dispense.patient.gender }}, {{ dispense.patient.age }}y</div>
+                <div class="text-slate-600 text-xs">Payer: {{ dispense.patient.primary_payer }}</div>
+            </div>
+            <div class="text-right">
+                <span class="text-slate-500 block text-[10px] uppercase font-bold">Prescription & Pharmacist:</span>
+                <span class="font-bold text-slate-900">{{ dispense.prescription.rx_number }}</span>
+                <div class="text-slate-600 text-xs">Doctor: {{ dispense.prescription.doctor_name }}</div>
+                <div class="text-slate-600 text-xs">Pharmacist: {{ dispense.pharmacist_name }}</div>
+            </div>
+        </div>
+
+        <!-- Medication Bottles / Pouches Printable Labels -->
+        <div class="space-y-4">
+            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Medication Dosing Labels & Verification</h3>
+
+            <div class="space-y-3">
+                {% for item in dispense.dispensed_items %}
+                    <div class="p-4 rounded-xl border-2 border-slate-300 bg-white space-y-2">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <span class="font-bold text-slate-900 text-sm">{{ item.drug }}</span>
+                                <span class="font-mono text-xs text-slate-500 ml-2">Qty: <strong class="text-slate-900">{{ item.quantity }}</strong></span>
+                            </div>
+                            <span class="font-mono text-[11px] bg-slate-100 px-2 py-0.5 rounded border border-slate-300 text-slate-700 font-bold">
+                                Batch: {{ item.batch_number }} &bull; Exp: {{ item.expiry_date }}
+                            </span>
+                        </div>
+
+                        <div class="p-2.5 rounded bg-slate-50 border border-slate-200 text-xs font-mono">
+                            <span class="text-slate-500 font-bold uppercase text-[10px] block">Direction for Use:</span>
+                            <span class="font-bold text-slate-900">{{ item.frequency }}</span>
+                            <span class="text-slate-700 ml-2">&bull; {{ item.instructions }}</span>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Pharmacist Counseling Notes -->
+        {% if dispense.counseling_notes %}
+            <div class="p-4 bg-amber-50/70 border border-amber-200 rounded-xl text-xs space-y-1">
+                <span class="font-bold text-amber-900 uppercase tracking-wider text-[10px] block">Pharmacist Patient Counseling:</span>
+                <p class="text-amber-800 font-mono">{{ dispense.counseling_notes }}</p>
+            </div>
+        {% endif %}
+
+        <!-- Total & Pharmacist Signature -->
+        <div class="flex items-end justify-between pt-4 border-t border-slate-200">
+            <div>
+                <div class="text-xs font-mono text-slate-500">Authorized Pharmacist Signature</div>
+                <div class="text-sm font-bold text-slate-900 font-mono mt-1">{{ dispense.pharmacist_name }}</div>
+            </div>
+            <div class="text-right font-mono">
+                <div class="text-xs text-slate-500">Total Medication Amount</div>
+                <div class="text-lg font-bold text-slate-900">KES {{ "%.2f"|format(dispense.total_amount) }}</div>
+                <div class="text-[10px] text-slate-400">Staged to Hospital Cashier / Billing</div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}

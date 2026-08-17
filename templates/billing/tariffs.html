@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Hospital Tariffs & Fee Schedule - Billing Portal{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-0.5">
+                <a href="{{ url_for('billing.dashboard') }}" class="hover:text-slate-900">Billing Station</a>
+                <span>/</span>
+                <span class="text-slate-900 font-bold">Tariffs & Pricing</span>
+            </div>
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Hospital Tariffs & Standard Fee Schedule</h1>
+            <p class="text-xs text-slate-500 font-mono">Master pricing guide for consultations, laboratory tests, medical imaging, and clinical procedures</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <a href="{{ url_for('billing.pos') }}" class="btn-primary text-xs py-2 px-4 shadow-xs font-bold">
+                Go to POS Terminal &rarr;
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter & Search Strip -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <form method="GET" action="{{ url_for('billing.tariffs') }}" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+            
+            <div class="sm:col-span-8 relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </div>
+                <input 
+                    type="text" 
+                    name="q" 
+                    value="{{ search_q }}" 
+                    placeholder="Search tariff code, test name, or procedure description..."
+                    class="form-input pl-9 text-xs py-2 rounded-lg"
+                >
+            </div>
+
+            <div class="sm:col-span-4">
+                <select name="category" onchange="this.form.submit()" class="form-select text-xs py-2 rounded-lg font-bold">
+                    <option value="all" {% if category_filter == 'all' %}selected{% endif %}>All Departments & Categories</option>
+                    {% for cat in categories %}
+                        <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+        </form>
+    </div>
+
+    <!-- Tariffs Table (No Horizontal Scroll) -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-900">
+                Hospital Fee Schedule Directory
+            </h2>
+            <span class="text-xs font-mono font-bold text-slate-700 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+                {{ tariffs|length }} Services
+            </span>
+        </div>
+
+        {% if tariffs %}
+            <div class="w-full overflow-hidden">
+                <table class="w-full text-left text-sm table-auto font-mono text-xs">
+                    <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+                        <tr>
+                            <th class="py-3.5 px-4 w-[18%]">Tariff Code</th>
+                            <th class="py-3.5 px-4 w-[46%]">Service Description</th>
+                            <th class="py-3.5 px-4 w-[20%]">Department</th>
+                            <th class="py-3.5 px-4 text-right w-[16%]">Standard Fee</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 bg-white">
+                        {% for t in tariffs %}
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="py-3.5 px-4 whitespace-nowrap font-bold text-slate-900">
+                                    {{ t.code }}
+                                </td>
+                                <td class="py-3.5 px-4 font-sans font-bold text-slate-900 text-sm">
+                                    {{ t.name }}
+                                </td>
+                                <td class="py-3.5 px-4 whitespace-nowrap">
+                                    <span class="px-2 py-0.5 rounded font-bold bg-slate-100 text-slate-800 border border-slate-300 uppercase text-[10px]">
+                                        {{ t.category }}
+                                    </span>
+                                </td>
+                                <td class="py-3.5 px-4 text-right whitespace-nowrap font-bold text-slate-900 text-sm">
+                                    KES {{ "%.2f"|format(t.price) }}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="p-12 text-center text-xs text-slate-400 font-mono">
+                No tariff items found matching your search.
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

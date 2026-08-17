@@ -1,0 +1,85 @@
+{% if queue_entries %}
+<div class="w-full overflow-hidden">
+    <table class="w-full text-left text-sm table-auto">
+        <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+            <tr>
+                <th class="py-3.5 px-4 w-[22%]">Ticket #</th>
+                <th class="py-3.5 px-4 w-[32%]">Patient Name</th>
+                <th class="py-3.5 px-4 w-[20%]">Wait Time</th>
+                <th class="py-3.5 px-4 text-right w-[26%]">Triage Intake</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 bg-white">
+            {% for entry in queue_entries %}
+                <tr class="hover:bg-slate-50/90 transition-colors {% if entry.priority == 'emergency' %}bg-rose-50/40{% elif entry.priority == 'urgent' %}bg-amber-50/30{% endif %}">
+                    
+                    <!-- Ticket & Urgency -->
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                        <div class="flex items-center gap-2">
+                            <span class="font-mono font-bold text-sm {% if entry.priority == 'emergency' %}text-rose-700{% elif entry.priority == 'urgent' %}text-amber-700{% else %}text-slate-900{% endif %}">
+                                {{ entry.ticket_number }}
+                            </span>
+                            {% if entry.priority == 'emergency' %}
+                                <span class="badge-emergency text-[11px] uppercase font-bold tracking-wider">ER Critical</span>
+                            {% elif entry.priority == 'urgent' %}
+                                <span class="badge-urgent text-[11px] uppercase font-bold tracking-wider">Urgent</span>
+                            {% else %}
+                                <span class="badge-normal text-[11px]">Routine</span>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    <!-- Patient Name (Clickable) -->
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                        <div class="flex items-center gap-1.5">
+                            <a href="{{ url_for('reception.patient_detail', patient_id=entry.patient.id) }}" class="font-bold text-slate-900 hover:text-slate-700 text-sm hover:underline">
+                                {{ entry.patient.full_name }}
+                            </a>
+                            {% if entry.patient.allergies %}
+                                <span class="text-[10px] font-bold px-1.5 py-0.2 bg-rose-50 text-rose-700 border border-rose-200 rounded" title="Allergies: {{ entry.patient.allergies }}">
+                                    Allergy
+                                </span>
+                            {% endif %}
+                        </div>
+                        <div class="text-xs text-slate-500 font-mono">
+                            {{ entry.patient.hospital_id }} &bull; {{ entry.patient.gender }}, {{ entry.patient.age }}y
+                        </div>
+                    </td>
+
+                    <!-- Wait Time -->
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                        <div class="font-mono text-sm font-semibold {% if entry.wait_time_minutes > 30 and entry.priority != 'normal' %}text-rose-600{% elif entry.wait_time_minutes > 20 %}text-amber-700{% else %}text-slate-800{% endif %}">
+                            {{ entry.wait_time_minutes }} min{% if entry.wait_time_minutes != 1 %}s{% endif %}
+                        </div>
+                        <div class="text-[11px] text-slate-400 font-mono">In: {{ entry.checked_in_at.strftime('%H:%M') }}</div>
+                    </td>
+
+                    <!-- Triage Action -->
+                    <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                        <a 
+                            href="{{ url_for('triage.vitals_intake', queue_id=entry.id) }}" 
+                            class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg shadow-xs inline-flex items-center gap-1.5 transition-all"
+                        >
+                            <span>Capture Vitals</span>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </a>
+                    </td>
+
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center py-12 px-4">
+    <div class="w-10 h-10 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+    </div>
+    <div class="text-sm font-bold text-slate-800">No Patients Waiting at Triage</div>
+    <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">All checked-in patients have completed vitals or queue is clear.</p>
+</div>
+{% endif %}

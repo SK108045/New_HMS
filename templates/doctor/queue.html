@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Doctor Consultation Queue - Active Waiting Room{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header & Live Indicators -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
+                <a href="{{ url_for('doctor.dashboard') }}" class="hover:text-slate-900">Doctor Room</a>
+                <span>/</span>
+                <span class="text-slate-800 font-semibold">Active Queue</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <h1 class="text-xl font-bold text-slate-900 tracking-tight">Active Doctor's Consultation Queue</h1>
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                    <span class="w-2 h-2 rounded-full bg-slate-800 animate-pulse"></span>
+                    Live Room Feed
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">Triaged patients queued for clinical examination and EMR consultation</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button 
+                hx-get="{{ url_for('doctor.waiting_queue', priority=filter_priority, doctor=doctor_filter) }}"
+                hx-target="#doctor-waiting-container"
+                class="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Refresh Queue
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Tabs Strip -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-3 flex items-center justify-between gap-3 flex-wrap">
+        <div class="flex items-center gap-1.5 flex-wrap">
+            <a href="{{ url_for('doctor.waiting_queue', priority='all', doctor=doctor_filter) }}" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all {% if filter_priority == 'all' or not filter_priority %}bg-slate-900 text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100{% endif %}">
+                All Waiting ({{ queue_entries|length }})
+            </a>
+            <a href="{{ url_for('doctor.waiting_queue', priority='emergency', doctor=doctor_filter) }}" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all {% if filter_priority == 'emergency' %}bg-rose-700 text-white shadow-xs{% else %}text-slate-700 hover:bg-rose-50 text-rose-700{% endif %}">
+                Emergency First
+            </a>
+            <a href="{{ url_for('doctor.waiting_queue', priority='urgent', doctor=doctor_filter) }}" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all {% if filter_priority == 'urgent' %}bg-amber-600 text-white shadow-xs{% else %}text-slate-700 hover:bg-amber-50 text-amber-700{% endif %}">
+                Urgent Priority
+            </a>
+            <a href="{{ url_for('doctor.waiting_queue', priority='normal', doctor=doctor_filter) }}" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all {% if filter_priority == 'normal' %}bg-slate-900 text-white shadow-xs{% else %}text-slate-700 hover:bg-slate-100{% endif %}">
+                Routine
+            </a>
+        </div>
+
+        <div class="text-xs text-slate-500 font-mono">
+            Auto-refreshes every 15s
+        </div>
+    </div>
+
+    <!-- Queue Table Container -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div 
+            id="doctor-waiting-container"
+            hx-get="{{ url_for('doctor.waiting_queue', priority=filter_priority, doctor=doctor_filter) }}"
+            hx-trigger="queueUpdated from:body, every 15s"
+        >
+            {% include "doctor/partials/waiting_room_table.html" %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

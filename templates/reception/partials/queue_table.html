@@ -1,0 +1,95 @@
+{% if queue_entries %}
+<div class="w-full overflow-hidden">
+    <table class="w-full text-left text-sm table-auto">
+        <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+            <tr>
+                <th class="py-3.5 px-4 w-[22%]">Ticket #</th>
+                <th class="py-3.5 px-4 w-[28%]">Patient Name</th>
+                <th class="py-3.5 px-4 w-[22%]">Routing / Dept</th>
+                <th class="py-3.5 px-4 w-[14%]">Wait Time</th>
+                <th class="py-3.5 px-4 text-right w-[14%]">Status & Action</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 bg-white">
+            {% for entry in queue_entries %}
+                <tr class="hover:bg-slate-50/90 transition-colors {% if entry.priority == 'emergency' %}bg-rose-50/40{% elif entry.priority == 'urgent' %}bg-amber-50/30{% endif %}">
+                    
+                    <!-- Ticket & Urgency -->
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                        <div class="flex items-center gap-2">
+                            <span class="font-mono font-bold text-sm {% if entry.priority == 'emergency' %}text-rose-700{% elif entry.priority == 'urgent' %}text-amber-700{% else %}text-slate-900{% endif %}">
+                                {{ entry.ticket_number }}
+                            </span>
+                            {% if entry.priority == 'emergency' %}
+                                <span class="badge-emergency text-[11px] uppercase font-bold tracking-wider">ER</span>
+                            {% elif entry.priority == 'urgent' %}
+                                <span class="badge-urgent text-[11px] uppercase font-bold tracking-wider">Urgent</span>
+                            {% else %}
+                                <span class="badge-normal text-[11px]">Normal</span>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    <!-- Patient Name ONLY (Clean, single-line, clickable) -->
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                        <a href="{{ url_for('reception.patient_detail', patient_id=entry.patient.id) }}" class="font-bold text-slate-900 hover:text-slate-700 text-sm hover:underline">
+                            {{ entry.patient.full_name }}
+                        </a>
+                    </td>
+
+                    <!-- Department / Doctor -->
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                        <div class="font-semibold text-slate-900 text-sm">{{ entry.destination_department }}</div>
+                    </td>
+
+                    <!-- Wait Time Counter -->
+                    <td class="py-3.5 px-4 whitespace-nowrap">
+                        <div class="font-mono text-sm font-semibold {% if entry.wait_time_minutes > 30 and entry.priority != 'normal' %}text-rose-600{% elif entry.wait_time_minutes > 20 %}text-amber-700{% else %}text-slate-800{% endif %}">
+                            {{ entry.wait_time_minutes }} min{% if entry.wait_time_minutes != 1 %}s{% endif %}
+                        </div>
+                    </td>
+
+                    <!-- Status & Quick Actions -->
+                    <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                        <div class="flex items-center justify-end gap-2">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold 
+                                {% if entry.status == 'waiting' %}bg-slate-100 text-slate-800 border border-slate-300
+                                {% elif entry.status == 'in_progress' %}bg-slate-800 text-white
+                                {% elif entry.status == 'completed' %}bg-slate-100 text-slate-600 border border-slate-200
+                                {% else %}bg-rose-50 text-rose-700 border border-rose-200{% endif %}">
+                                {{ entry.status|capitalize }}
+                            </span>
+
+                            <a href="{{ url_for('reception.patient_detail', patient_id=entry.patient.id) }}" class="p-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded border border-slate-300 transition-colors" title="View Patient Chart">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </a>
+                            
+                            {% if entry.status in ['waiting', 'in_progress'] %}
+                                <form method="POST" action="{{ url_for('reception.cancel_queue', queue_id=entry.id) }}" hx-post="{{ url_for('reception.cancel_queue', queue_id=entry.id) }}" hx-target="#queue-table-container" hx-confirm="Remove ticket {{ entry.ticket_number }} from the triage queue?" class="inline">
+                                    <button type="submit" class="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded border border-rose-200 transition-colors" title="Cancel Queue Ticket">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center py-12 px-4">
+    <div class="w-10 h-10 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+    </div>
+    <div class="text-sm font-bold text-slate-800">Triage Queue is Currently Clear</div>
+    <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">No patients are currently waiting for triage intake. Use the search bar above to look up and check in arriving patients.</p>
+</div>
+{% endif %}
