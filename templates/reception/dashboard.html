@@ -161,7 +161,7 @@
                                 <div>
                                     {% if app.status == 'scheduled' %}
                                         <form method="POST" action="{{ url_for('reception.checkin_from_appointment', appointment_id=app.id) }}">
-                                            <button type="submit" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-md shadow-xs transition-colors">
+                                            <button type="submit" class="btn-primary text-xs py-1.5 px-3 shadow-xs">
                                                 Check In
                                             </button>
                                         </form>

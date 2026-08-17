@@ -15,7 +15,7 @@
             </div>
             <div class="flex items-center gap-3">
                 <h1 class="text-xl font-bold text-slate-900 tracking-tight">Clinical Consultation & Order Entry</h1>
-                <span class="font-mono text-xs font-bold px-2.5 py-1 bg-slate-900 text-white rounded-md">
+                <span class="font-mono text-xs font-bold px-2.5 py-1 accent-surface rounded-md">
                     Ticket: {{ queue_entry.ticket_number }}
                 </span>
             </div>
@@ -211,7 +211,7 @@
                     <!-- S: Subjective -->
                     <div>
                         <label for="subjective_notes" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                            <span class="w-4 h-4 rounded bg-slate-900 text-white inline-flex items-center justify-center text-[10px] mr-1">S</span>
+                            <span class="w-4 h-4 rounded accent-surface inline-flex items-center justify-center text-[10px] mr-1">S</span>
                             Subjective (Chief Complaint & History of Presenting Illness)
                         </label>
                         <textarea 
@@ -227,7 +227,7 @@
                     <div>
                         <div class="flex items-center justify-between mb-1">
                             <label for="objective_notes" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                <span class="w-4 h-4 rounded bg-slate-900 text-white inline-flex items-center justify-center text-[10px] mr-1">O</span>
+                                <span class="w-4 h-4 rounded accent-surface inline-flex items-center justify-center text-[10px] mr-1">O</span>
                                 Objective (Physical Examination & Clinical Observations)
                             </label>
                             <span class="text-[11px] text-slate-400 font-mono">Tip: Click 3D body zones to tag</span>
@@ -245,7 +245,7 @@
                         <div class="mt-2 flex items-center gap-1.5 flex-wrap" x-show="taggedRegions.length > 0">
                             <span class="text-[10px] font-bold uppercase text-slate-500">Examined Regions:</span>
                             <template x-for="r in taggedRegions" :key="r">
-                                <span class="px-2 py-0.5 rounded-md bg-slate-900 text-white text-[11px] font-mono flex items-center gap-1">
+                                <span class="px-2 py-0.5 rounded-md accent-surface text-[11px] font-mono flex items-center gap-1">
                                     <span x-text="r"></span>
                                     <button type="button" @click="removeRegion(r)" class="text-slate-400 hover:text-white font-bold ml-1">&times;</button>
                                 </span>
@@ -257,13 +257,13 @@
                     <!-- A: Assessment & Searchable ICD-10 Diagnosis -->
                     <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                         <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                            <span class="w-4 h-4 rounded bg-slate-900 text-white inline-flex items-center justify-center text-[10px] mr-1">A</span>
+                            <span class="w-4 h-4 rounded accent-surface inline-flex items-center justify-center text-[10px] mr-1">A</span>
                             Assessment & ICD-10 Primary Diagnosis <span class="text-rose-600">*</span>
                         </label>
 
                         <!-- Selected ICD-10 Badge Display -->
                         <div class="flex items-center gap-2" x-show="selectedIcd10.code">
-                            <span class="px-2.5 py-1 bg-slate-900 text-white font-mono font-bold text-xs rounded-md" x-text="selectedIcd10.code"></span>
+                            <span class="px-2.5 py-1 accent-surface font-mono font-bold text-xs rounded-md" x-text="selectedIcd10.code"></span>
                             <span class="font-bold text-xs text-slate-900" x-text="selectedIcd10.description"></span>
                             <button type="button" @click="clearIcd10()" class="text-xs text-slate-400 hover:text-slate-700 ml-2">Change</button>
                         </div>
@@ -328,7 +328,7 @@
                     <!-- P: Plan -->
                     <div>
                         <label for="plan_notes" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                            <span class="w-4 h-4 rounded bg-slate-900 text-white inline-flex items-center justify-center text-[10px] mr-1">P</span>
+                            <span class="w-4 h-4 rounded accent-surface inline-flex items-center justify-center text-[10px] mr-1">P</span>
                             Plan & Patient Advice
                         </label>
                         <textarea 
@@ -703,7 +703,7 @@
         <div class="bg-white rounded-xl border border-slate-200 shadow-lg p-5 sticky bottom-4 z-20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-mono font-bold text-sm">
+                <div class="w-10 h-10 rounded-xl accent-surface flex items-center justify-center font-mono font-bold text-sm">
                     Rx
                 </div>
                 <div>

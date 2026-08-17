@@ -122,7 +122,7 @@
                 <!-- Patient Profile Card Banner -->
                 <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-xl bg-slate-900 text-white font-mono font-bold text-lg flex items-center justify-center shadow-xs">
+                        <div class="w-12 h-12 rounded-xl accent-surface font-mono font-bold text-lg flex items-center justify-center shadow-xs">
                             {{ selected_patient.first_name[0] }}{{ selected_patient.last_name[0] }}
                         </div>
                         <div>
@@ -245,7 +245,7 @@
                                 <p class="text-xs text-slate-500 font-mono">Accept single tender or combination of Cash, M-Pesa, Insurance Co-pay, and Card</p>
                             </div>
 
-                            <span class="text-xs font-mono font-bold bg-slate-900 text-white px-3 py-1 rounded-md">
+                            <span class="text-xs font-mono font-bold accent-surface px-3 py-1 rounded-md">
                                 Bill Due: KES <span x-text="formatMoney(netDue)"></span>
                             </span>
                         </div>

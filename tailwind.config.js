@@ -3,7 +3,30 @@ module.exports = {
   content: [
     "./templates/**/*.html",
     "./reception/**/*.py",
-    "./static/js/**/*.js"
+    "./triage/**/*.py",
+    "./doctor/**/*.py",
+    "./pharmacy/**/*.py",
+    "./billing/**/*.py",
+    "./static/js/**/*.js",
+    "./static/src/**/*.css"
+  ],
+  safelist: [
+    'portal-reception',
+    'portal-triage',
+    'portal-doctor',
+    'portal-pharmacy',
+    'portal-billing',
+    'nav-active',
+    'accent-dot',
+    'accent-badge',
+    'accent-surface',
+    'accent-surface-light',
+    'brand-logo',
+    'operator-avatar',
+    'status-dot',
+    'queue-badge',
+    'header-accent',
+    'sidebar-accent-bg',
   ],
   theme: {
     extend: {
