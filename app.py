@@ -130,85 +130,94 @@ def seed_initial_data():
     """
     today_start = datetime.combine(date.today(), datetime.min.time())
 
-    # 0. Seed Clinical Staff User Accounts
-    if User.query.count() == 0:
-        users_seed = [
-            {
-                "username": "reception",
-                "password": "Reception@2026",
-                "full_name": "Mary Wanjiku",
-                "staff_id": "STF-REC-01",
-                "role": "receptionist",
-                "portal": "reception",
-                "department": "Patient Registration & Intake Unit",
-                "email": "reception@apexmedical.org",
-                "phone": "+254 711 000 001"
-            },
-            {
-                "username": "nurse",
-                "password": "Triage@2026",
-                "full_name": "Nurse Mercy Akinyi",
-                "staff_id": "STF-TRG-01",
-                "role": "nurse",
-                "portal": "triage",
-                "department": "Clinical Triage & Emergency Assessment",
-                "email": "nurse.mercy@apexmedical.org",
-                "phone": "+254 722 000 002"
-            },
-            {
-                "username": "doctor",
-                "password": "Doctor@2026",
-                "full_name": "Dr. Sarah Kamau",
-                "staff_id": "STF-DOC-01",
-                "role": "doctor",
-                "portal": "doctor",
-                "department": "General Outpatient & Clinical EMR",
-                "email": "dr.kamau@apexmedical.org",
-                "phone": "+254 733 000 003"
-            },
-            {
-                "username": "pharmacy",
-                "password": "Pharm@2026",
-                "full_name": "Pharm. Evans Omondi",
-                "staff_id": "STF-PHM-01",
-                "role": "pharmacist",
-                "portal": "pharmacy",
-                "department": "Central Pharmacy & Dispensation",
-                "email": "pharm.evans@apexmedical.org",
-                "phone": "+254 744 000 004"
-            },
-            {
-                "username": "cashier",
-                "password": "Billing@2026",
-                "full_name": "Cashier Joyce Wambui",
-                "staff_id": "STF-BIL-01",
-                "role": "cashier",
-                "portal": "billing",
-                "department": "Revenue Operations & POS Settlement",
-                "email": "cashier.joyce@apexmedical.org",
-                "phone": "+254 755 000 005"
-            },
-            {
-                "username": "admin",
-                "password": "Admin@2026",
-                "full_name": "Dr. Robert Odhiambo",
-                "staff_id": "STF-ADM-00",
-                "role": "admin",
-                "portal": "all",
-                "department": "Hospital Directorate & Executive",
-                "email": "admin@apexmedical.org",
-                "phone": "+254 700 000 000"
-            }
-        ]
+    # 0. Seed or Sync Clinical Staff User Accounts
+    users_seed = [
+        {
+            "username": "reception",
+            "password": "Reception@2026",
+            "full_name": "Mary Wanjiku",
+            "staff_id": "STF-REC-01",
+            "role": "receptionist",
+            "portal": "reception",
+            "department": "Patient Registration & Intake Unit",
+            "email": "reception@apexmedical.org",
+            "phone": "+254 711 000 001"
+        },
+        {
+            "username": "nurse",
+            "password": "Triage@2026",
+            "full_name": "Nurse Mercy Akinyi",
+            "staff_id": "STF-TRG-01",
+            "role": "nurse",
+            "portal": "triage",
+            "department": "Clinical Triage & Emergency Assessment",
+            "email": "nurse.mercy@apexmedical.org",
+            "phone": "+254 722 000 002"
+        },
+        {
+            "username": "doctor",
+            "password": "Doctor@2026",
+            "full_name": "Dr. Sarah Kamau",
+            "staff_id": "STF-DOC-01",
+            "role": "doctor",
+            "portal": "doctor",
+            "department": "General Outpatient & Clinical EMR",
+            "email": "dr.kamau@apexmedical.org",
+            "phone": "+254 733 000 003"
+        },
+        {
+            "username": "pharmacy",
+            "password": "Pharm@2026",
+            "full_name": "Pharm. Evans Omondi",
+            "staff_id": "STF-PHM-01",
+            "role": "pharmacist",
+            "portal": "pharmacy",
+            "department": "Central Pharmacy & Dispensation",
+            "email": "pharm.evans@apexmedical.org",
+            "phone": "+254 744 000 004"
+        },
+        {
+            "username": "cashier",
+            "password": "Billing@2026",
+            "full_name": "Cashier Joyce Wambui",
+            "staff_id": "STF-BIL-01",
+            "role": "cashier",
+            "portal": "billing",
+            "department": "Revenue Operations & POS Settlement",
+            "email": "cashier.joyce@apexmedical.org",
+            "phone": "+254 755 000 005"
+        },
+        {
+            "username": "admin",
+            "password": "Admin@2026",
+            "full_name": "Dr. Robert Odhiambo",
+            "staff_id": "STF-ADM-00",
+            "role": "admin",
+            "portal": "all",
+            "department": "Hospital Directorate & Executive",
+            "email": "admin@apexmedical.org",
+            "phone": "+254 700 000 000"
+        }
+    ]
 
-        for u_data in users_seed:
-            raw_password = u_data.pop("password")
+    for u_data in users_seed:
+        raw_password = u_data.pop("password")
+        existing_user = User.query.filter_by(username=u_data["username"]).first()
+        if not existing_user:
             user = User(**u_data)
             user.set_password(raw_password)
             db.session.add(user)
+        else:
+            existing_user.full_name = u_data["full_name"]
+            existing_user.staff_id = u_data["staff_id"]
+            existing_user.role = u_data["role"]
+            existing_user.portal = u_data["portal"]
+            existing_user.department = u_data["department"]
+            existing_user.status = 'active'
+            existing_user.set_password(raw_password)
 
-        db.session.commit()
-        print("Initial clinical staff user accounts created successfully.")
+    db.session.commit()
+    print("Clinical staff user accounts verified and synchronized successfully.")
 
     # 1. Seed Pharmacy Inventory if empty
     if MedicationItem.query.count() == 0:

@@ -141,22 +141,20 @@ def handle_portal_login(portal_key):
             flash('Your account has been suspended or deactivated. Contact HMS Hospital Administrator.', 'error')
             return render_template('auth/login.html', meta=meta, portals=PORTAL_META, next_url=next_url, current_portal=portal_key)
 
-        # Check portal permission
-        if not user.can_access_portal(portal_key):
-            flash(f'Access restricted: Your account role ({user.role.title()}) does not have permission for the {meta["name"]}.', 'error')
-            return render_template('auth/login.html', meta=meta, portals=PORTAL_META, next_url=next_url, current_portal=portal_key)
-
         # Successful login
         login_user(user)
         user.last_login = datetime.utcnow()
         db.session.commit()
 
-        flash(f'Welcome back, {user.full_name}! Signed in to {meta["name"]}.', 'info')
-
-        if next_url and next_url.startswith('/') and not next_url.startswith('/login') and not next_url.startswith('/logout'):
-            return redirect(next_url)
-
-        return redirect(url_for(meta['home_endpoint']))
+        if user.can_access_portal(portal_key):
+            flash(f'Welcome back, {user.full_name}! Signed in to {meta["name"]}.', 'info')
+            if next_url and next_url.startswith('/') and not next_url.startswith('/login') and not next_url.startswith('/logout'):
+                return redirect(next_url)
+            return redirect(url_for(meta['home_endpoint']))
+        else:
+            user_meta = PORTAL_META.get(user.portal, PORTAL_META['reception'])
+            flash(f'Welcome, {user.full_name}! Signed in and routed to your assigned station: {user_meta["name"]}.', 'info')
+            return redirect(url_for(user_meta['home_endpoint']))
 
     return render_template(
         'auth/login.html',
