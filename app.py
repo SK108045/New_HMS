@@ -1,14 +1,15 @@
 import os
 import json
 from datetime import datetime, date, timedelta
-from flask import Flask, redirect, url_for
+from flask import Flask, redirect, url_for, session
 from config import Config
 from models import (
     db, Patient, QueueEntry, Appointment, VitalsRecord,
     ConsultationNote, LabOrder, Prescription, BillingItem,
     MedicationItem, DrugBatch, DispensationRecord, StockTransaction,
-    Invoice, Payment, ShiftRegister
+    Invoice, Payment, ShiftRegister, User
 )
+from auth import auth_bp
 from reception import reception_bp
 from triage import triage_bp
 from doctor import doctor_bp
@@ -29,6 +30,7 @@ def create_app(config_class=Config):
     db.init_app(app)
 
     # Register blueprints
+    app.register_blueprint(auth_bp)
     app.register_blueprint(reception_bp)
     app.register_blueprint(triage_bp)
     app.register_blueprint(doctor_bp)
@@ -37,7 +39,21 @@ def create_app(config_class=Config):
 
     @app.route('/')
     def index():
-        return redirect(url_for('reception.dashboard'))
+        from auth.decorators import is_authenticated, get_current_user
+        if is_authenticated():
+            user = get_current_user()
+            if user:
+                if user.portal == 'doctor':
+                    return redirect(url_for('doctor.dashboard'))
+                elif user.portal == 'triage':
+                    return redirect(url_for('triage.dashboard'))
+                elif user.portal == 'pharmacy':
+                    return redirect(url_for('pharmacy.dashboard'))
+                elif user.portal == 'billing':
+                    return redirect(url_for('billing.pos'))
+                else:
+                    return redirect(url_for('reception.dashboard'))
+        return redirect(url_for('auth.login', portal='reception'))
 
     # Context processors for global template helpers
     @app.context_processor
@@ -109,10 +125,90 @@ def create_app(config_class=Config):
 
 def seed_initial_data():
     """
-    Seeds initial realistic patient records, queue entries, historical vitals, EMR encounters,
-    Pharmacy inventory with FEFO batches, and Billing staged folios, split payments & shift registers.
+    Seeds initial realistic clinical staff user accounts, patient records, queue entries,
+    historical vitals, EMR encounters, Pharmacy inventory with FEFO batches, and Billing folios.
     """
     today_start = datetime.combine(date.today(), datetime.min.time())
+
+    # 0. Seed Clinical Staff User Accounts
+    if User.query.count() == 0:
+        users_seed = [
+            {
+                "username": "reception",
+                "password": "Reception@2026",
+                "full_name": "Mary Wanjiku",
+                "staff_id": "STF-REC-01",
+                "role": "receptionist",
+                "portal": "reception",
+                "department": "Patient Registration & Intake Unit",
+                "email": "reception@apexmedical.org",
+                "phone": "+254 711 000 001"
+            },
+            {
+                "username": "nurse",
+                "password": "Triage@2026",
+                "full_name": "Nurse Mercy Akinyi",
+                "staff_id": "STF-TRG-01",
+                "role": "nurse",
+                "portal": "triage",
+                "department": "Clinical Triage & Emergency Assessment",
+                "email": "nurse.mercy@apexmedical.org",
+                "phone": "+254 722 000 002"
+            },
+            {
+                "username": "doctor",
+                "password": "Doctor@2026",
+                "full_name": "Dr. Sarah Kamau",
+                "staff_id": "STF-DOC-01",
+                "role": "doctor",
+                "portal": "doctor",
+                "department": "General Outpatient & Clinical EMR",
+                "email": "dr.kamau@apexmedical.org",
+                "phone": "+254 733 000 003"
+            },
+            {
+                "username": "pharmacy",
+                "password": "Pharm@2026",
+                "full_name": "Pharm. Evans Omondi",
+                "staff_id": "STF-PHM-01",
+                "role": "pharmacist",
+                "portal": "pharmacy",
+                "department": "Central Pharmacy & Dispensation",
+                "email": "pharm.evans@apexmedical.org",
+                "phone": "+254 744 000 004"
+            },
+            {
+                "username": "cashier",
+                "password": "Billing@2026",
+                "full_name": "Cashier Joyce Wambui",
+                "staff_id": "STF-BIL-01",
+                "role": "cashier",
+                "portal": "billing",
+                "department": "Revenue Operations & POS Settlement",
+                "email": "cashier.joyce@apexmedical.org",
+                "phone": "+254 755 000 005"
+            },
+            {
+                "username": "admin",
+                "password": "Admin@2026",
+                "full_name": "Dr. Robert Odhiambo",
+                "staff_id": "STF-ADM-00",
+                "role": "admin",
+                "portal": "all",
+                "department": "Hospital Directorate & Executive",
+                "email": "admin@apexmedical.org",
+                "phone": "+254 700 000 000"
+            }
+        ]
+
+        for u_data in users_seed:
+            raw_password = u_data.pop("password")
+            user = User(**u_data)
+            user.set_password(raw_password)
+            db.session.add(user)
+
+        db.session.commit()
+        print("Initial clinical staff user accounts created successfully.")
 
     # 1. Seed Pharmacy Inventory if empty
     if MedicationItem.query.count() == 0:

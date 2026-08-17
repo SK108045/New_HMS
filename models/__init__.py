@@ -6,6 +6,7 @@ from .vitals import VitalsRecord
 from .emr import ConsultationNote, LabOrder, Prescription, BillingItem
 from .pharmacy import MedicationItem, DrugBatch, DispensationRecord, StockTransaction
 from .billing import Invoice, Payment, ShiftRegister
+from .user import User
 
 __all__ = [
     'db',
@@ -23,5 +24,6 @@ __all__ = [
     'StockTransaction',
     'Invoice',
     'Payment',
-    'ShiftRegister'
+    'ShiftRegister',
+    'User'
 ]

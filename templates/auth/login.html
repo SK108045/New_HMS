@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Sign In &bull; {{ meta.name }} - {{ facility_name }}</title>
+    
+    <!-- Compiled Clinical Stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='dist/styles.css') }}">
+    
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
+</head>
+<body 
+    class="min-h-full flex flex-col justify-between font-sans antialiased text-slate-900 {{ meta.theme_class }}"
+    x-data="{ 
+        username: '{{ meta.sample_username }}',
+        password: '{{ meta.sample_password }}',
+        showPassword: false,
+        autofill(u, p) {
+            this.username = u;
+            this.password = p;
+        }
+    }"
+>
+
+    <!-- Top Station Header Bar -->
+    <header class="bg-white/80 backdrop-blur-xs border-b border-slate-200 sticky top-0 z-30 shadow-xs header-accent">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+            
+            <!-- Brand & Station Identity -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg brand-logo flex items-center justify-center font-mono font-bold text-xl shadow-xs shrink-0">
+                    +
+                </div>
+                <div>
+                    <div class="font-bold text-sm text-slate-900 leading-tight">
+                        {{ facility_name }}
+                    </div>
+                    <div class="text-xs text-slate-500 font-mono flex items-center gap-1.5 mt-0.5">
+                        <span class="font-bold text-slate-700 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200 text-[10px]">
+                            {{ facility_code }}
+                        </span>
+                        <span>&bull; {{ meta.dept }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Station Badge & Status -->
+            <div class="flex items-center gap-2.5">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold accent-badge shadow-xs">
+                    <span class="w-2 h-2 rounded-full accent-dot animate-pulse"></span>
+                    <span>{{ meta.station }}</span>
+                </span>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- Main Authentication Area -->
+    <main class="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
+        <div class="w-full max-w-md space-y-6">
+
+            <!-- Flash Notifications -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="space-y-2">
+                        {% for category, message in messages %}
+                            <div class="p-3.5 rounded-xl border text-xs sm:text-sm flex items-start justify-between shadow-xs transition-all
+                                {% if category == 'error' %}bg-rose-50 border-rose-200 text-rose-800
+                                {% elif category == 'warning' %}bg-amber-50 border-amber-200 text-amber-800
+                                {% elif category == 'info' %}accent-surface-light
+                                {% else %}bg-slate-50 border-slate-300 text-slate-900 font-medium{% endif %}">
+                                <div class="flex items-center gap-2 font-medium">
+                                    <span>{{ message }}</span>
+                                </div>
+                                <button onclick="this.parentElement.remove()" class="text-xs font-mono font-bold opacity-60 hover:opacity-100 ml-4">✕</button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <!-- Login Card -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-lg p-6 sm:p-8 space-y-6">
+                
+                <!-- Card Header -->
+                <div class="text-center space-y-1.5 border-b border-slate-100 pb-5">
+                    <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl accent-surface shadow-xs mb-1">
+                        {% if meta.key == 'reception' %}
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                            </svg>
+                        {% elif meta.key == 'triage' %}
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                            </svg>
+                        {% elif meta.key == 'doctor' %}
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                            </svg>
+                        {% elif meta.key == 'pharmacy' %}
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
+                            </svg>
+                        {% elif meta.key == 'billing' %}
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                            </svg>
+                        {% else %}
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                            </svg>
+                        {% endif %}
+                    </div>
+                    <h1 class="text-xl font-bold text-slate-900 tracking-tight">{{ meta.name }}</h1>
+                    <p class="text-xs text-slate-500 font-mono">Sign in with authorized staff credentials to begin clinical session</p>
+                </div>
+
+                <!-- One-Click Sample Credentials Banner -->
+                <div class="accent-surface-light rounded-xl p-3.5 space-y-2 text-xs font-mono">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold uppercase tracking-wider text-[10px]">Sample Staff Credentials</span>
+                        <span class="text-[10px] opacity-75">{{ meta.badge_label }}</span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-slate-200/60">
+                        <div>
+                            <span class="text-slate-500 block text-[10px]">Username:</span>
+                            <code class="font-bold text-slate-900 select-all">{{ meta.sample_username }}</code>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block text-[10px]">Password:</span>
+                            <code class="font-bold text-slate-900 select-all">{{ meta.sample_password }}</code>
+                        </div>
+                    </div>
+
+                    <div class="text-[10px] text-slate-600 flex items-center justify-between pt-1">
+                        <span>Staff: <strong>{{ meta.sample_name }}</strong></span>
+                    </div>
+
+                    <div class="pt-1">
+                        <a 
+                            href="{{ url_for('auth.demo_login', portal_name=meta.key) }}" 
+                            class="w-full py-1.5 px-3 bg-white hover:bg-slate-50 text-slate-900 border border-slate-300 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+                        >
+                            <span>⚡ One-Click Instant Sign In &rarr;</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Sign In Form -->
+                <form method="POST" action="{{ url_for('auth.login', portal=meta.key) }}" class="space-y-4">
+                    {% if next_url %}
+                        <input type="hidden" name="next" value="{{ next_url }}">
+                    {% endif %}
+
+                    <!-- Username Field -->
+                    <div>
+                        <label for="username" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 font-mono">
+                            Staff Username
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                </svg>
+                            </div>
+                            <input 
+                                type="text" 
+                                id="username" 
+                                name="username" 
+                                x-model="username" 
+                                required 
+                                autofocus
+                                placeholder="Enter staff username..."
+                                class="form-input pl-9 text-sm font-mono"
+                            >
+                        </div>
+                    </div>
+
+                    <!-- Password Field -->
+                    <div>
+                        <label for="password" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 font-mono">
+                            Clinical Password
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                </svg>
+                            </div>
+                            <input 
+                                :type="showPassword ? 'text' : 'password'" 
+                                id="password" 
+                                name="password" 
+                                x-model="password" 
+                                required 
+                                placeholder="Enter staff password..."
+                                class="form-input pl-9 pr-10 text-sm font-mono"
+                            >
+                            <button 
+                                type="button" 
+                                @click="showPassword = !showPassword"
+                                class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 text-xs font-mono"
+                            >
+                                <span x-text="showPassword ? 'Hide' : 'Show'"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="pt-2">
+                        <button 
+                            type="submit" 
+                            class="btn-primary w-full py-2.5 text-sm font-bold shadow-md flex items-center justify-center gap-2 tracking-wide"
+                        >
+                            <span>Sign In to {{ meta.badge_label }}</span>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                </form>
+
+            </div>
+
+            <!-- Portal Switcher Links -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+                <div class="text-xs font-bold text-slate-700 uppercase tracking-wider text-center font-mono">
+                    Switch to Another Portal Station
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {% for p_key, p_val in portals.items() %}
+                        {% if p_key != meta.key and p_key != 'admin' %}
+                            <a 
+                                href="{{ url_for('auth.login', portal=p_key) }}" 
+                                class="p-2 rounded-lg border border-slate-200 hover:border-slate-400 bg-slate-50 hover:bg-white text-center transition-all text-xs font-semibold text-slate-800 flex flex-col items-center justify-center gap-1"
+                            >
+                                <span class="font-mono text-[10px] text-slate-500 font-bold">{{ p_val.badge_label }}</span>
+                                <span class="truncate w-full text-center text-[11px]">{{ p_val.name.split(' ')[0] }}</span>
+                            </a>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white text-slate-500 text-xs py-3 border-t border-slate-200 text-center font-mono">
+        {{ facility_name }} &bull; Clinical Access Gateway &bull; Session Secured
+    </footer>
+
+</body>
+</html>
