@@ -562,32 +562,33 @@
             </div>
 
             <!-- Bottom Section: Station Operator Details -->
-            <div class="p-4 border-t border-slate-200 sidebar-accent-bg">
-                <div class="flex items-center justify-between gap-2">
+            <div class="p-3.5 border-t-2 border-slate-300 sidebar-accent-bg shadow-inner">
+                <div class="flex items-center justify-between gap-3">
                     <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div class="w-8 h-8 rounded-lg operator-avatar flex items-center justify-center font-mono font-bold text-xs shadow-xs shrink-0">
+                        <div class="w-10 h-10 rounded-xl operator-avatar flex items-center justify-center font-mono font-extrabold text-sm shadow-xs shrink-0 border-2 border-slate-300">
                             {% if session.get('username') %}{{ session.get('username')[:2]|upper }}{% elif request.blueprint == 'billing' %}POS{% elif request.blueprint == 'pharmacy' %}PH{% elif request.blueprint == 'doctor' %}DR{% elif request.blueprint == 'triage' %}TR{% else %}RC{% endif %}
                         </div>
                         <div class="min-w-0 flex-1">
-                            <div class="text-xs font-bold text-slate-900 truncate">
+                            <div class="text-sm font-extrabold text-slate-950 truncate leading-snug">
                                 {{ session.get('full_name') or ( 'Cashier Joyce Wambui' if request.blueprint == 'billing' else ('Pharm. Evans Omondi' if request.blueprint == 'pharmacy' else ('Dr. Sarah Kamau' if request.blueprint == 'doctor' else ('Duty Triage Nurse' if request.blueprint == 'triage' else 'Mary Wanjiku'))) ) }}
                             </div>
-                            <div class="text-[10px] text-slate-500 font-mono flex items-center gap-1.5 mt-0.5">
-                                <span class="w-1.5 h-1.5 rounded-full status-dot"></span>
-                                <span class="truncate">{{ session.get('staff_id') or 'Active Session' }}</span>
+                            <div class="text-xs font-mono font-bold text-slate-700 flex items-center gap-1.5 mt-0.5">
+                                <span class="w-2 h-2 rounded-full status-dot shrink-0"></span>
+                                <span class="truncate font-semibold">{{ session.get('staff_id') or 'Active Session' }}</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Sign Out Button -->
+                    <!-- Prominent High-Contrast Sign Out Button -->
                     <a 
                         href="{{ url_for('auth.logout', portal=request.blueprint or 'reception') }}" 
-                        class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-200 hover:border-rose-200 transition-colors shrink-0" 
+                        class="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-xs rounded-lg shadow-sm transition-all shrink-0 border border-rose-700" 
                         title="Sign Out of Station"
                     >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                        <svg class="w-4 h-4 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
                         </svg>
+                        <span>Logout</span>
                     </a>
                 </div>
             </div>

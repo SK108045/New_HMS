@@ -31,36 +31,36 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Pure neutral Light Black & Light Grey system (ZERO blue tint)
+        // High-contrast, crisp dark typography palette (NO washed-out dull greys)
         slate: {
           50: '#fafafa',
           100: '#f4f4f5',
           200: '#e4e4e7',
-          300: '#d4d4d8',
-          400: '#a1a1aa',
-          500: '#71717a',
-          600: '#52525b',
-          700: '#3f3f46',
-          800: '#27272a',  // Light Black / Charcoal
-          850: '#202023',  // Refined Light Black
-          900: '#18181b',  // Pure Neutral Light Black
-          950: '#09090b',  // Dark Black
+          300: '#cbd5e1',
+          400: '#64748b',  // Readable medium slate
+          500: '#475569',  // Deep readable slate
+          600: '#334155',  // High contrast slate
+          700: '#1e293b',  // Bold dark slate
+          800: '#0f172a',  // Rich dark navy-black
+          850: '#0b1120',
+          900: '#020617',  // Deepest black-slate
+          950: '#000000',
         },
         neutral: {
           50: '#fafafa',
           100: '#f5f5f5',
           200: '#e5e5e5',
           300: '#d4d4d4',
-          400: '#a3a3a3',
-          500: '#737373',
-          600: '#525252',
-          700: '#404040',
-          800: '#262626',
-          900: '#171717',
-          950: '#0a0a0a',
+          400: '#737373',
+          500: '#525252',
+          600: '#404040',
+          700: '#262626',
+          800: '#171717',
+          900: '#0a0a0a',
+          950: '#000000',
         },
         urgency: {
-          normal: '#71717a',
+          normal: '#475569',
           urgent: '#d97706',
           emergency: '#dc2626'
         }
