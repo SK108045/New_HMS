@@ -207,10 +207,6 @@ def handle_portal_login(portal_key):
             return render_template('auth/login.html', meta=meta, portals=PORTAL_META, next_url=next_url, current_portal=portal_key)
 
         # Determine 2FA Requirement (Google Authenticator)
-        is_2fa_mandated = settings.require_2fa_for_all or (
-            settings.require_2fa_for_admin_doctor and user.role in ['admin', 'doctor']
-        )
-
         if user.is_2fa_enabled:
             # Stage 2FA challenge
             session['pending_2fa_user_id'] = user.id
@@ -218,21 +214,13 @@ def handle_portal_login(portal_key):
             session['pending_next_url'] = next_url
             return redirect(url_for('auth.verify_2fa'))
 
-        elif is_2fa_mandated:
-            # Force 2FA setup wizard
-            session['pending_2fa_user_id'] = user.id
-            session['pending_target_portal'] = portal_key
-            session['pending_next_url'] = next_url
-            flash('Hospital Security Policy requires Google Authenticator 2FA setup for your clinical role.', 'info')
-            return redirect(url_for('auth.setup_2fa'))
-
-        # Standard authentication without 2FA
+        # Standard direct authentication without 2FA
         login_user(user, is_2fa_verified=True)
         AuditLog.log_event(
             'login_success',
             'user',
             user.id,
-            f"User {user.username} successfully signed in to {portal_key} portal (2FA not enabled).",
+            f"User {user.username} successfully signed in to {portal_key} portal (2FA not active).",
             actor=user,
             severity='info'
         )
@@ -333,15 +321,25 @@ def verify_2fa():
 
 # ==================== 2FA SETUP WIZARD WITH QR CODE ====================
 @auth_bp.route('/setup-2fa', methods=['GET', 'POST'])
-def setup_2fa():
-    # Allow setup for logged-in user OR pending 2FA setup user
-    user = get_current_user()
-    is_pending = False
-    if not user:
-        pending_uid = session.get('pending_2fa_user_id')
-        if pending_uid:
-            user = db.session.get(User, pending_uid)
-            is_pending = True
+@auth_bp.route('/setup-2fa/<int:user_id>', methods=['GET', 'POST'])
+def setup_2fa(user_id=None):
+    current_u = get_current_user()
+    
+    if user_id is not None:
+        # Admin or the user themselves can view/setup
+        if not current_u or (current_u.role != 'admin' and current_u.id != user_id):
+            flash('Administrator access required to configure 2FA for other staff members.', 'error')
+            return redirect(url_for('auth.login'))
+        user = db.session.get(User, user_id)
+        if not user:
+            flash('Staff user not found.', 'error')
+            return redirect(url_for('admin.staff'))
+    else:
+        user = current_u
+        if not user:
+            pending_uid = session.get('pending_2fa_user_id')
+            if pending_uid:
+                user = db.session.get(User, pending_uid)
 
     if not user:
         flash('Please sign in to configure Two-Factor Authentication.', 'warning')
@@ -385,16 +383,18 @@ def setup_2fa():
                 severity='info'
             )
 
-            # Establish full authenticated session
-            session.pop('pending_2fa_user_id', None)
-            target_portal = session.pop('pending_target_portal', user.portal or 'reception')
-            login_user(user, is_2fa_verified=True)
+            # Establish authenticated session if user was signing in
+            if session.get('pending_2fa_user_id') == user.id:
+                session.pop('pending_2fa_user_id', None)
+                target_portal = session.pop('pending_target_portal', user.portal or 'reception')
+                login_user(user, is_2fa_verified=True)
 
+            flash(f"Google Authenticator 2FA activated successfully for {user.full_name}!", "success")
             return render_template(
                 'auth/backup_codes.html',
                 user=user,
                 backup_codes=backup_codes,
-                target_portal=target_portal
+                target_portal=user.portal or 'reception'
             )
         else:
             flash('Invalid 6-digit code. Make sure you scanned the QR code with Google Authenticator and enter the live 6-digit token.', 'error')
@@ -403,9 +403,14 @@ def setup_2fa():
         'auth/setup_2fa.html',
         user=user,
         secret=secret,
-        qr_data_url=qr_data_url,
-        is_pending=is_pending
+        qr_data_url=qr_data_url
     )
+
+
+@auth_bp.route('/setup-2fa-user/<int:user_id>', methods=['GET', 'POST'])
+def setup_2fa_user(user_id):
+    return setup_2fa(user_id=user_id)
+
 
 
 # ==================== DISABLE 2FA ====================

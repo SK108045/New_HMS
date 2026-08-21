@@ -201,8 +201,9 @@
                         <th class="p-3.5">Staff Identity</th>
                         <th class="p-3.5">Role & Station</th>
                         <th class="p-3.5">Department</th>
+                        <th class="p-3.5">2FA Security</th>
                         <th class="p-3.5">Account Status</th>
-                        <th class="p-3.5 text-right">Administrative Actions & Password Reset</th>
+                        <th class="p-3.5 text-right">Actions & Password Reset</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200">
@@ -244,6 +245,28 @@
                             <!-- Department -->
                             <td class="p-3.5 font-semibold text-slate-800">
                                 {{ user.department }}
+                            </td>
+
+                            <!-- 2FA Security Column -->
+                            <td class="p-3.5">
+                                {% if user.is_2fa_enabled %}
+                                    <div class="flex items-center gap-2">
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-black bg-emerald-100 text-emerald-950 border border-emerald-300 uppercase">
+                                            ✓ Active
+                                        </span>
+                                        <a href="{{ url_for('auth.setup_2fa_user', user_id=user.id) }}" class="text-[11px] font-bold text-blue-700 hover:underline" title="View QR / Reconfigure">
+                                            QR &rarr;
+                                        </a>
+                                    </div>
+                                {% else %}
+                                    <a 
+                                        href="{{ url_for('auth.setup_2fa_user', user_id=user.id) }}" 
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono font-black bg-blue-50 text-blue-900 border border-blue-300 hover:bg-blue-100 transition-colors"
+                                        title="Generate & View QR Code for this staff member"
+                                    >
+                                        <span>+ Setup 2FA QR</span>
+                                    </a>
+                                {% endif %}
                             </td>
 
                             <!-- Status -->
