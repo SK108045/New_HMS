@@ -319,13 +319,22 @@ def verify_2fa():
     )
 
 
-# ==================== 2FA SETUP WIZARD WITH QR CODE ====================
+# ==================== 2FA SETUP WIZARD WITH QR CODE & ONBOARDING LINKS ====================
 @auth_bp.route('/setup-2fa', methods=['GET', 'POST'])
 @auth_bp.route('/setup-2fa/<int:user_id>', methods=['GET', 'POST'])
-def setup_2fa(user_id=None):
+@auth_bp.route('/onboard-2fa/<token>', methods=['GET', 'POST'])
+def setup_2fa(user_id=None, token=None):
+    token = token or request.args.get('token')
     current_u = get_current_user()
-    
-    if user_id is not None:
+    user = None
+
+    if token:
+        # Secure token-based access (No admin login needed for employee)
+        user = User.verify_2fa_onboarding_token(token, current_app.config['SECRET_KEY'])
+        if not user:
+            flash('This 2FA onboarding link has expired or is invalid. Please request a new link from your hospital administrator.', 'error')
+            return redirect(url_for('auth.login'))
+    elif user_id is not None:
         # Admin or the user themselves can view/setup
         if not current_u or (current_u.role != 'admin' and current_u.id != user_id):
             flash('Administrator access required to configure 2FA for other staff members.', 'error')
@@ -342,7 +351,7 @@ def setup_2fa(user_id=None):
                 user = db.session.get(User, pending_uid)
 
     if not user:
-        flash('Please sign in to configure Two-Factor Authentication.', 'warning')
+        flash('Please sign in or use a valid employee 2FA setup link.', 'warning')
         return redirect(url_for('auth.login'))
 
     # Generate or retrieve Base32 secret key
@@ -364,6 +373,10 @@ def setup_2fa(user_id=None):
     buf = io.BytesIO()
     img.save(buf, format='PNG')
     qr_data_url = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
+
+    # Generate Shareable Token Link for this employee
+    onboarding_token = user.get_2fa_onboarding_token(current_app.config['SECRET_KEY'])
+    shareable_link = url_for('auth.setup_2fa', token=onboarding_token, _external=True)
 
     if request.method == 'POST':
         verification_code = request.form.get('verification_code', '').strip().replace(' ', '').replace('-', '')
@@ -403,13 +416,22 @@ def setup_2fa(user_id=None):
         'auth/setup_2fa.html',
         user=user,
         secret=secret,
-        qr_data_url=qr_data_url
+        qr_data_url=qr_data_url,
+        shareable_link=shareable_link,
+        token=token
     )
 
 
 @auth_bp.route('/setup-2fa-user/<int:user_id>', methods=['GET', 'POST'])
 def setup_2fa_user(user_id):
     return setup_2fa(user_id=user_id)
+
+
+@auth_bp.route('/onboard-2fa', methods=['GET', 'POST'])
+def onboard_2fa():
+    token = request.args.get('token')
+    return setup_2fa(token=token)
+
 
 
 

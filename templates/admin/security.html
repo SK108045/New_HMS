@@ -382,10 +382,22 @@
                                 </td>
 
                                 <td class="p-3.5 text-right">
-                                    <div class="flex items-center justify-end gap-2 flex-wrap">
+                                    {% set u_token = u.get_2fa_onboarding_token(config.SECRET_KEY) %}
+                                    {% set u_link = url_for('auth.setup_2fa', token=u_token, _external=True) %}
+                                    <div class="flex items-center justify-end gap-2 flex-wrap" x-data="{ linkCopied: false }">
                                         <a href="{{ url_for('auth.setup_2fa_user', user_id=u.id) }}" class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 font-extrabold text-[11px] rounded-lg" title="View or generate QR code setup for this staff member">
                                             <span>🔐 Setup / QR</span>
                                         </a>
+
+                                        <button 
+                                            type="button" 
+                                            @click="navigator.clipboard.writeText('{{ u_link }}'); linkCopied = true; setTimeout(() => linkCopied = false, 2500)"
+                                            class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-extrabold text-[11px] rounded-lg"
+                                            title="Copy secure onboarding link to send to employee"
+                                        >
+                                            <span x-show="!linkCopied">📋 Copy Link</span>
+                                            <span x-show="linkCopied" class="text-emerald-700 font-black" x-cloak>✓ Copied!</span>
+                                        </button>
 
                                         {% if u.is_locked() %}
                                             <form method="POST" action="{{ url_for('admin.unlock_user', user_id=u.id) }}">

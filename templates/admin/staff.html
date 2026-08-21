@@ -249,24 +249,35 @@
 
                             <!-- 2FA Security Column -->
                             <td class="p-3.5">
-                                {% if user.is_2fa_enabled %}
-                                    <div class="flex items-center gap-2">
+                                {% set u_token = user.get_2fa_onboarding_token(config.SECRET_KEY) %}
+                                {% set u_link = url_for('auth.setup_2fa', token=u_token, _external=True) %}
+                                <div class="flex items-center gap-1.5 flex-wrap" x-data="{ copied: false }">
+                                    {% if user.is_2fa_enabled %}
                                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-black bg-emerald-100 text-emerald-950 border border-emerald-300 uppercase">
                                             ✓ Active
                                         </span>
-                                        <a href="{{ url_for('auth.setup_2fa_user', user_id=user.id) }}" class="text-[11px] font-bold text-blue-700 hover:underline" title="View QR / Reconfigure">
+                                        <a href="{{ url_for('auth.setup_2fa_user', user_id=user.id) }}" class="text-[11px] font-bold text-blue-700 hover:underline" title="View QR Code">
                                             QR &rarr;
                                         </a>
-                                    </div>
-                                {% else %}
-                                    <a 
-                                        href="{{ url_for('auth.setup_2fa_user', user_id=user.id) }}" 
-                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono font-black bg-blue-50 text-blue-900 border border-blue-300 hover:bg-blue-100 transition-colors"
-                                        title="Generate & View QR Code for this staff member"
-                                    >
-                                        <span>+ Setup 2FA QR</span>
-                                    </a>
-                                {% endif %}
+                                    {% else %}
+                                        <a 
+                                            href="{{ url_for('auth.setup_2fa_user', user_id=user.id) }}" 
+                                            class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-mono font-bold bg-blue-50 text-blue-900 border border-blue-300 hover:bg-blue-100 transition-colors"
+                                            title="View QR Code"
+                                        >
+                                            <span>QR Setup</span>
+                                        </a>
+                                        <button 
+                                            type="button" 
+                                            @click="navigator.clipboard.writeText('{{ u_link }}'); copied = true; setTimeout(() => copied = false, 2500)"
+                                            class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-mono font-bold"
+                                            title="Copy secure onboarding link to send to employee"
+                                        >
+                                            <span x-show="!copied">📋 Link</span>
+                                            <span x-show="copied" class="text-emerald-700 font-extrabold" x-cloak>✓ Copied!</span>
+                                        </button>
+                                    {% endif %}
+                                </div>
                             </td>
 
                             <!-- Status -->

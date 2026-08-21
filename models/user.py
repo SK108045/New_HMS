@@ -84,6 +84,24 @@ class User(db.Model):
         self.backup_codes_json = json.dumps(hashed_codes)
         return raw_codes
 
+    def get_2fa_onboarding_token(self, secret_key: str) -> str:
+        """Generate a cryptographically signed timed token for employee 2FA onboarding."""
+        from itsdangerous import URLSafeTimedSerializer
+        serializer = URLSafeTimedSerializer(secret_key)
+        return serializer.dumps({'user_id': self.id, 'username': self.username}, salt='2fa-onboarding-token')
+
+    @classmethod
+    def verify_2fa_onboarding_token(cls, token: str, secret_key: str, max_age: int = 172800):
+        """Verify an onboarding token and return the matching User instance (valid for 48 hours)."""
+        from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+        serializer = URLSafeTimedSerializer(secret_key)
+        try:
+            data = serializer.loads(token, salt='2fa-onboarding-token', max_age=max_age)
+            user_id = data.get('user_id')
+            return cls.query.get(user_id)
+        except (SignatureExpired, BadSignature, Exception):
+            return None
+
     def verify_backup_code(self, code: str) -> bool:
         """Verify and consume a one-time emergency backup recovery code."""
         if not self.backup_codes_json or not code:

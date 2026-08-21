@@ -104,7 +104,7 @@
                 </div>
 
                 <!-- Activation Form -->
-                <form method="POST" action="{{ url_for('auth.setup_2fa_user', user_id=user.id) }}" class="space-y-3 pt-1">
+                <form method="POST" action="{% if token %}{{ url_for('auth.setup_2fa', token=token) }}{% else %}{{ url_for('auth.setup_2fa_user', user_id=user.id) }}{% endif %}" class="space-y-3 pt-1">
                     <div>
                         <input 
                             type="text" 
@@ -123,9 +123,37 @@
                         type="submit" 
                         class="w-full py-2.5 bg-blue-900 hover:bg-blue-950 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
                     >
-                        <span>Activate 2FA for this Employee &rarr;</span>
+                        <span>Activate 2FA &rarr;</span>
                     </button>
                 </form>
+
+                <!-- Shareable Link Section (For Admin to send to employee) -->
+                {% if shareable_link %}
+                <div class="pt-2 border-t border-slate-200" x-data="{ linkCopied: false }">
+                    <div class="flex items-center justify-between text-[11px] font-bold text-slate-600 mb-1">
+                        <span>📲 Share Onboarding Link with Employee:</span>
+                        <span x-show="linkCopied" class="text-emerald-600 font-extrabold" x-cloak>✓ Link Copied to Clipboard!</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <input 
+                            type="text" 
+                            readonly 
+                            value="{{ shareable_link }}" 
+                            class="form-input text-[10px] font-mono text-slate-700 bg-slate-50 py-1 px-2 border-slate-300 rounded-lg w-full select-all"
+                        >
+                        <button 
+                            type="button" 
+                            @click="navigator.clipboard.writeText('{{ shareable_link }}'); linkCopied = true; setTimeout(() => linkCopied = false, 2500)"
+                            class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white font-mono font-bold text-[10px] rounded-lg shrink-0 flex items-center gap-1 shadow-xs"
+                        >
+                            <span>📋 Copy Link</span>
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-slate-500 mt-1">
+                        Send this secure link to the employee via WhatsApp, SMS, or Email. They can configure 2FA without needing admin access.
+                    </p>
+                </div>
+                {% endif %}
 
                 <div class="pt-1 flex items-center justify-between text-xs">
                     <a 
