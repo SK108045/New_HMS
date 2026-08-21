@@ -1,0 +1,312 @@
+{% extends 'base.html' %}
+
+{% block title %}Patient Admission Intake Desk - Ward Services{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6 pb-12" x-data="{ selectedWard: '{{ wards[0].id if wards else '' }}' }">
+
+    <!-- Top Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-200 pb-5">
+        <div>
+            <div class="flex items-center gap-2 font-mono text-xs font-extrabold tracking-wider text-blue-700 uppercase mb-1">
+                <span>Inpatient Intake & Bed Allocation</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
+                Inpatient Admission Desk
+            </h1>
+            <p class="text-sm font-semibold text-slate-700 mt-1">
+                Register a patient into inpatient care, assign an available ward bed, and initiate the clinical nursing chart.
+            </p>
+        </div>
+
+        <a 
+            href="{{ url_for('inpatient.dashboard') }}" 
+            class="btn-secondary py-2 px-3.5 text-xs font-extrabold flex items-center gap-2"
+        >
+            <span>&larr; Back to Ward Telemetry</span>
+        </a>
+    </div>
+
+    <!-- Main Admission Form Card -->
+    <form method="POST" action="{{ url_for('inpatient.admit') }}" class="bg-white rounded-2xl border-2 border-slate-200 shadow-md p-6 sm:p-8 space-y-6">
+        
+        <!-- SECTION 1: PATIENT IDENTIFICATION -->
+        <div class="space-y-4">
+            <div class="flex items-center gap-2 border-b border-slate-200 pb-2">
+                <span class="w-6 h-6 rounded-lg bg-blue-900 text-white font-mono font-black text-xs flex items-center justify-center">1</span>
+                <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">Patient Selection & Verification</h2>
+            </div>
+
+            {% if selected_patient %}
+                <input type="hidden" name="patient_id" value="{{ selected_patient.id }}">
+                <div class="p-4 rounded-xl bg-blue-50 border-2 border-blue-200 flex items-center justify-between">
+                    <div class="flex items-center gap-3.5">
+                        <div class="w-12 h-12 rounded-xl bg-blue-900 text-white flex items-center justify-center font-mono font-black text-base shrink-0 shadow-xs">
+                            {{ selected_patient.full_name[:2]|upper }}
+                        </div>
+                        <div>
+                            <div class="font-black text-base text-slate-950">{{ selected_patient.full_name }}</div>
+                            <div class="text-xs text-slate-600 font-mono flex items-center gap-2 mt-0.5">
+                                <span class="font-bold text-slate-800">{{ selected_patient.hospital_id }}</span>
+                                <span>&bull;</span>
+                                <span>{{ selected_patient.gender }}, {{ selected_patient.age }} yrs</span>
+                                <span>&bull;</span>
+                                <span>{{ selected_patient.phone }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <span class="px-2.5 py-1 rounded-md text-xs font-black bg-blue-200 text-blue-900">
+                        Selected Patient
+                    </span>
+                </div>
+            {% else %}
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Choose Registered Patient *
+                    </label>
+                    <select name="patient_id" required class="form-select text-xs font-bold w-full">
+                        <option value="">-- Search & Select Patient from Master Directory --</option>
+                        {% for p in recent_patients %}
+                            <option value="{{ p.id }}">
+                                {{ p.full_name }} &bull; {{ p.hospital_id }} &bull; {{ p.gender }} ({{ p.age }}y) &bull; {{ p.phone }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- SECTION 2: WARD & BED ASSIGNMENT -->
+        <div class="space-y-4 pt-2">
+            <div class="flex items-center gap-2 border-b border-slate-200 pb-2">
+                <span class="w-6 h-6 rounded-lg bg-blue-900 text-white font-mono font-black text-xs flex items-center justify-center">2</span>
+                <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">Ward & Bed Allocation</h2>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                <!-- Ward Select -->
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Destination Inpatient Ward *
+                    </label>
+                    <select 
+                        name="ward_id" 
+                        required 
+                        class="form-select text-xs font-bold w-full"
+                        hx-get="{{ url_for('inpatient.api_available_beds', ward_id=0) }}".replace('0', this.value)
+                        hx-target="#bed-select-container"
+                        @change="fetch('/inpatient/api/available-beds/' + $event.target.value).then(r => r.text()).then(html => document.getElementById('bed-select').innerHTML = html)"
+                    >
+                        {% for w in wards %}
+                            <option value="{{ w.id }}">
+                                {{ w.name }} ({{ w.code }} &bull; {{ w.available_beds_count }} Beds Free)
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Bed Select -->
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Select Available Bed *
+                    </label>
+                    <select id="bed-select" name="bed_id" required class="form-select text-xs font-bold w-full">
+                        <option value="">-- Select Free Bed --</option>
+                        {% for b in available_beds %}
+                            <option value="{{ b.id }}">
+                                {{ b.ward.code }} - {{ b.bed_number }} ({{ b.bed_type }} &bull; KES {{ "{:,.0f}".format(b.daily_rate) }}/d)
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- SECTION 3: CLINICAL ADMISSION DETAILS -->
+        <div class="space-y-4 pt-2">
+            <div class="flex items-center gap-2 border-b border-slate-200 pb-2">
+                <span class="w-6 h-6 rounded-lg bg-blue-900 text-white font-mono font-black text-xs flex items-center justify-center">3</span>
+                <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">Clinical Care & Physician Orders</h2>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                <!-- Admitting Doctor -->
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Admitting Doctor / Consultant *
+                    </label>
+                    <select name="admitting_doctor" required class="form-select text-xs font-bold w-full">
+                        {% for doc in doctors %}
+                            <option value="{{ doc }}">{{ doc }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Admission Type -->
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Admission Admission Type
+                    </label>
+                    <select name="admission_type" class="form-select text-xs font-bold w-full">
+                        <option value="Emergency Admission">Emergency Admission</option>
+                        <option value="Elective / Planned Surgical">Elective / Planned Surgical</option>
+                        <option value="Transfer from ICU / Facility">Transfer from Other Facility</option>
+                        <option value="Maternal & Obstetric Care">Maternal & Obstetric Care</option>
+                    </select>
+                </div>
+
+                <!-- Admitting Diagnosis -->
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Admitting Clinical Diagnosis *
+                    </label>
+                    <input 
+                        type="text" 
+                        name="admitting_diagnosis" 
+                        required 
+                        placeholder="e.g. Acute Lobar Pneumonia with Moderate Respiratory Distress" 
+                        class="form-input text-xs font-semibold"
+                    >
+                </div>
+
+                <!-- ICD-10 Code Preset -->
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        ICD-10 Primary Code Preset
+                    </label>
+                    <select name="icd10_code" class="form-select text-xs font-mono font-bold w-full">
+                        <option value="">-- Choose ICD-10 Code --</option>
+                        {% for icd in icd10_presets %}
+                            <option value="{{ icd.code }}">{{ icd.code }} - {{ icd.desc }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Expected Discharge Date -->
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Expected Discharge Target Date
+                    </label>
+                    <input 
+                        type="date" 
+                        name="expected_discharge_date" 
+                        class="form-input text-xs font-mono"
+                    >
+                </div>
+
+                <!-- Dietary Plan -->
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Dietary Specifications
+                    </label>
+                    <select name="dietary_plan" class="form-select text-xs font-bold w-full">
+                        <option value="Normal Hospital Diet">Normal Hospital Diet</option>
+                        <option value="Diabetic Low-Sugar Diet">Diabetic Low-Sugar Diet</option>
+                        <option value="Low Salt / Renal Diet">Low Salt / Renal Diet</option>
+                        <option value="Soft / Pureed Diet">Soft / Pureed Diet</option>
+                        <option value="NPO (Nil Per Os - Fasting)">NPO (Nil Per Os - Fasting)</option>
+                    </select>
+                </div>
+
+                <!-- Nursing Acuity Level -->
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Nursing Acuity Level
+                    </label>
+                    <select name="nursing_acuity" class="form-select text-xs font-bold w-full">
+                        <option value="Moderate Care (Level 2)">Moderate Care (Level 2)</option>
+                        <option value="Routine Ward Care (Level 1)">Routine Ward Care (Level 1)</option>
+                        <option value="High Dependency / Continuous (Level 3)">High Dependency / Continuous (Level 3)</option>
+                        <option value="Intensive Care / Ventilated (Level 4)">Intensive Care / Ventilated (Level 4)</option>
+                    </select>
+                </div>
+
+            </div>
+
+            <!-- Isolation Precaution Checkbox -->
+            <div class="p-3.5 rounded-xl bg-slate-50 border-2 border-slate-200 flex items-center justify-between">
+                <div>
+                    <div class="font-black text-xs text-slate-950">Infection Control: Isolation Precaution Required?</div>
+                    <div class="text-[11px] text-slate-600 font-semibold">Flag patient chart with contact, droplet, or airborne isolation protocols.</div>
+                </div>
+                <input 
+                    type="checkbox" 
+                    name="isolation_required" 
+                    class="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                >
+            </div>
+
+        </div>
+
+        <!-- SECTION 4: EMERGENCY CONTACT & FINANCIALS -->
+        <div class="space-y-4 pt-2">
+            <div class="flex items-center gap-2 border-b border-slate-200 pb-2">
+                <span class="w-6 h-6 rounded-lg bg-blue-900 text-white font-mono font-black text-xs flex items-center justify-center">4</span>
+                <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">Emergency Next-of-Kin & Deposit</h2>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Next-of-Kin Name
+                    </label>
+                    <input 
+                        type="text" 
+                        name="emergency_contact_name" 
+                        placeholder="e.g. David Mwangi" 
+                        class="form-input text-xs"
+                    >
+                </div>
+
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Contact Phone
+                    </label>
+                    <input 
+                        type="text" 
+                        name="emergency_contact_phone" 
+                        placeholder="+254 700 000 000" 
+                        class="form-input text-xs font-mono"
+                    >
+                </div>
+
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Relationship
+                    </label>
+                    <input 
+                        type="text" 
+                        name="emergency_contact_relation" 
+                        placeholder="Spouse / Parent / Sibling" 
+                        class="form-input text-xs"
+                    >
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="pt-4 border-t-2 border-slate-200 flex items-center justify-between">
+            <a 
+                href="{{ url_for('inpatient.dashboard') }}" 
+                class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black rounded-xl border border-slate-300"
+            >
+                Cancel
+            </a>
+            
+            <button 
+                type="submit" 
+                class="btn-primary py-3 px-6 text-sm font-black tracking-wider flex items-center gap-2 shadow-md"
+            >
+                <span>Authorize Admission & Occupy Bed &rarr;</span>
+            </button>
+        </div>
+
+    </form>
+
+</div>
+{% endblock %}

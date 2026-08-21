@@ -80,6 +80,21 @@ PORTAL_META = {
         'home_endpoint': 'billing.pos',
         'icon': 'cash'
     },
+    'inpatient': {
+        'key': 'inpatient',
+        'name': 'Inpatient Care & Ward Station',
+        'station': 'STATION WARD-01',
+        'dept': 'Inpatient Admissions & Ward Services',
+        'role_title': 'Ward Charge Nurse',
+        'sample_username': 'nurse_ward',
+        'sample_password': 'Ward@2026',
+        'sample_name': 'Nurse Joyce Chebet (Ward Lead)',
+        'staff_id': 'STF-WRD-01',
+        'theme_class': 'portal-inpatient',
+        'badge_label': 'WARD-01',
+        'home_endpoint': 'inpatient.dashboard',
+        'icon': 'bed'
+    },
     'admin': {
         'key': 'admin',
         'name': 'Hospital Command & Superuser Gateway',
@@ -90,7 +105,7 @@ PORTAL_META = {
         'sample_password': 'Admin@2026',
         'sample_name': 'Dr. Robert Odhiambo (Director)',
         'staff_id': 'STF-ADM-00',
-        'theme_class': 'portal-doctor',
+        'theme_class': 'portal-admin',
         'badge_label': 'HQ-00',
         'home_endpoint': 'admin.dashboard',
         'icon': 'shield'

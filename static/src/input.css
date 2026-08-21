@@ -110,6 +110,21 @@
     --status-dot: 168 85 247;
   }
 
+  body.portal-inpatient {
+    --accent-50:  239 246 255;
+    --accent-100: 219 234 254;
+    --accent-200: 191 219 254;
+    --accent-500: 59 130 246;
+    --accent-600: 37 99 235;
+    --accent-700: 29 78 216;
+    --accent-800: 30 64 175;
+    --accent-900: 30 58 138;
+    --accent-950: 23 37 84;
+    --page-bg: 248 250 252;
+    --sidebar-accent-bg: 239 246 255;
+    --status-dot: 37 99 235;
+  }
+
   body {
     @apply font-sans text-slate-950 text-sm antialiased;
     background-color: rgb(var(--page-bg));

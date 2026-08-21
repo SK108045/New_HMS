@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+
+{% block title %}Ward & Bed Management Matrix - Inpatient Services{% endblock %}
+
+{% block content %}
+<div class="space-y-6 pb-12" x-data="{ selectedWard: 'all' }">
+
+    <!-- Top Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-200 pb-5">
+        <div>
+            <div class="flex items-center gap-2 font-mono text-xs font-extrabold tracking-wider text-blue-700 uppercase mb-1">
+                <span>Facility Infrastructure & Asset Control</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
+                Ward & Bed Management
+            </h1>
+            <p class="text-sm font-semibold text-slate-700 mt-1">
+                Monitor room availability, manage housekeeping / sanitization turnarounds, and set bed operational states.
+            </p>
+        </div>
+
+        <a 
+            href="{{ url_for('inpatient.dashboard') }}" 
+            class="btn-secondary py-2 px-3.5 text-xs font-extrabold flex items-center gap-2"
+        >
+            <span>&larr; Back to Bed Rack</span>
+        </a>
+    </div>
+
+    <!-- Ward Summary Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        {% for ward in wards %}
+            <div class="bg-white rounded-2xl border-2 border-slate-200 p-4 shadow-xs flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <span class="font-mono font-black text-xs px-2 py-0.5 rounded bg-blue-900 text-white">{{ ward.code }}</span>
+                        <span class="text-xs font-mono font-bold text-slate-600">{{ ward.gender_category }}</span>
+                    </div>
+                    <h3 class="font-black text-sm text-slate-950 mt-2">{{ ward.name }}</h3>
+                    <p class="text-[11px] text-slate-600 font-semibold mt-0.5">{{ ward.floor }} &bull; {{ ward.wing }}</p>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
+                    <span class="font-bold text-slate-700">{{ ward.available_beds_count }} / {{ ward.total_beds_count }} Free</span>
+                    <span class="font-black font-mono {% if ward.occupancy_rate >= 80 %}text-rose-700{% else %}text-emerald-700{% endif %}">
+                        {{ ward.occupancy_rate }}% Full
+                    </span>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- Full Bed Matrix Table -->
+    <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+        <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-blue-700"></span>
+                <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">
+                    All Facility Hospital Beds ({{ all_beds|length }} Beds)
+                </h2>
+            </div>
+            <span class="text-xs font-mono font-bold text-slate-600">Real-time Asset State</span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs min-w-[850px]">
+                <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                    <tr>
+                        <th class="p-3.5">Bed Code & Type</th>
+                        <th class="p-3.5">Ward Location</th>
+                        <th class="p-3.5 text-right">Daily Tariff</th>
+                        <th class="p-3.5">Current Occupant / Note</th>
+                        <th class="p-3.5 text-center">Status</th>
+                        <th class="p-3.5 text-right">Manage Bed Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for bed in all_beds %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="p-3.5">
+                                <div class="font-mono font-black text-sm text-slate-950">{{ bed.bed_number }}</div>
+                                <div class="text-[11px] text-slate-600 font-semibold">{{ bed.bed_type }}</div>
+                            </td>
+                            <td class="p-3.5 font-bold text-slate-900">
+                                {{ bed.ward.name }} ({{ bed.ward.code }})
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-black text-slate-950 text-sm">
+                                KES {{ "{:,.0f}".format(bed.daily_rate) }}/d
+                            </td>
+                            <td class="p-3.5">
+                                {% if bed.status == 'occupied' and bed.current_admission %}
+                                    <div class="font-extrabold text-blue-900">{{ bed.current_admission.patient.full_name }}</div>
+                                    <div class="text-[10px] text-slate-600 font-mono">{{ bed.current_admission.admission_number }} &bull; Day {{ bed.current_admission.length_of_stay_days }}</div>
+                                {% elif bed.status == 'cleaning' %}
+                                    <span class="text-amber-800 font-bold">Housekeeping / Disinfection in progress</span>
+                                {% elif bed.status == 'maintenance' %}
+                                    <span class="text-rose-800 font-bold">Biomedical Maintenance</span>
+                                {% else %}
+                                    <span class="text-emerald-800 font-bold">Vacant & Sanitized</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-3.5 text-center">
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black border
+                                    {% if bed.status == 'available' %}bg-emerald-100 text-emerald-900 border-emerald-300
+                                    {% elif bed.status == 'occupied' %}bg-blue-100 text-blue-900 border-blue-300
+                                    {% elif bed.status == 'cleaning' %}bg-amber-100 text-amber-900 border-amber-300
+                                    {% else %}bg-rose-100 text-rose-900 border-rose-300{% endif %}">
+                                    {{ bed.status.upper() }}
+                                </span>
+                            </td>
+                            <td class="p-3.5 text-right">
+                                {% if bed.status != 'occupied' %}
+                                    <form method="POST" action="{{ url_for('inpatient.beds') }}" class="inline-flex items-center gap-2 justify-end">
+                                        <input type="hidden" name="bed_id" value="{{ bed.id }}">
+                                        <select name="status" class="form-select py-1 px-2 text-xs font-bold w-32">
+                                            <option value="available" {% if bed.status == 'available' %}selected{% endif %}>Available</option>
+                                            <option value="cleaning" {% if bed.status == 'cleaning' %}selected{% endif %}>Cleaning</option>
+                                            <option value="maintenance" {% if bed.status == 'maintenance' %}selected{% endif %}>Maintenance</option>
+                                            <option value="reserved" {% if bed.status == 'reserved' %}selected{% endif %}>Reserved</option>
+                                        </select>
+                                        <button type="submit" class="btn-primary py-1 px-2.5 text-xs font-extrabold shadow-xs">
+                                            Set
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <a 
+                                        href="{{ url_for('inpatient.patient_chart', admission_id=bed.current_admission.id) }}"
+                                        class="px-3 py-1 bg-blue-900 hover:bg-blue-800 text-white text-xs font-extrabold rounded-lg shadow-xs"
+                                    >
+                                        View Chart
+                                    </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

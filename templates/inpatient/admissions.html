@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+
+{% block title %}Admitted Inpatients Directory - Ward Care{% endblock %}
+
+{% block content %}
+<div class="space-y-6 pb-12" x-data="{ searchLocal: '{{ search_q or '' }}' }">
+
+    <!-- Top Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-200 pb-5">
+        <div>
+            <div class="flex items-center gap-2 font-mono text-xs font-extrabold tracking-wider text-blue-700 uppercase mb-1">
+                <span>Inpatient Department (IPD) Roster</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
+                Admitted Patients Census
+            </h1>
+            <p class="text-sm font-semibold text-slate-700 mt-1">
+                Complete roster of patients currently occupying ward beds across Apex Regional Medical Center.
+            </p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a 
+                href="{{ url_for('inpatient.admit') }}" 
+                class="btn-primary py-2.5 px-4 text-xs font-extrabold flex items-center gap-2 shadow-sm"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
+                </svg>
+                <span>+ New Admission Intake</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Ward Filter Pills & Search Bar -->
+    <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs p-4 space-y-4">
+        
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            
+            <!-- Ward Filter Pills -->
+            <div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar flex-wrap">
+                <a 
+                    href="{{ url_for('inpatient.admissions') }}" 
+                    class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if not selected_ward %}bg-blue-900 text-white shadow-xs{% else %}bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-300{% endif %}"
+                >
+                    All Wards ({{ admissions|length }})
+                </a>
+                {% for w in wards %}
+                    <a 
+                        href="{{ url_for('inpatient.admissions', ward_id=w.id) }}" 
+                        class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all {% if selected_ward == w.id %}bg-blue-900 text-white shadow-xs{% else %}bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-300{% endif %}"
+                    >
+                        {{ w.name }}
+                    </a>
+                {% endfor %}
+            </div>
+
+            <!-- Search Form -->
+            <form method="GET" action="{{ url_for('inpatient.admissions') }}" class="flex items-center gap-2">
+                {% if selected_ward %}
+                    <input type="hidden" name="ward_id" value="{{ selected_ward }}">
+                {% endif %}
+                <div class="relative w-full sm:w-64">
+                    <input 
+                        type="text" 
+                        name="q" 
+                        value="{{ search_q or '' }}" 
+                        placeholder="Search patient, ID, diagnosis..." 
+                        class="form-input text-xs py-1.5 pl-3 pr-8 w-full"
+                    >
+                </div>
+                <button type="submit" class="btn-primary py-1.5 px-3 text-xs font-extrabold">
+                    Filter
+                </button>
+                {% if search_q or selected_ward %}
+                    <a href="{{ url_for('inpatient.admissions') }}" class="p-1.5 text-slate-500 hover:text-slate-800 text-xs font-bold" title="Clear Filters">
+                        ✕
+                    </a>
+                {% endif %}
+            </form>
+
+        </div>
+
+        <!-- Census Metric Summary -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-200 text-xs">
+            <div class="flex items-center gap-2">
+                <span class="font-bold text-slate-600">Total Inpatients:</span>
+                <span class="font-mono font-black text-slate-950">{{ admissions|length }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="font-bold text-slate-600">Average Stay (LOS):</span>
+                <span class="font-mono font-black text-blue-800">{{ avg_los }} Days</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="font-bold text-slate-600">Isolation Precaution Cases:</span>
+                <span class="font-mono font-black text-rose-700">{{ isolation_count }}</span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Admitted Inpatients Full Master Table -->
+    <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+        
+        <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-blue-700"></span>
+                <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">
+                    Inpatient Roster & Nursing Station Directory
+                </h2>
+            </div>
+            <span class="text-xs font-mono font-bold text-slate-600">Sorted by Admission Date</span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs min-w-[950px]">
+                <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                    <tr>
+                        <th class="p-3.5">Admission Ref & Patient</th>
+                        <th class="p-3.5">Ward & Assigned Bed</th>
+                        <th class="p-3.5">Clinical Diagnosis</th>
+                        <th class="p-3.5">Admitting Physician</th>
+                        <th class="p-3.5">Diet & Acuity</th>
+                        <th class="p-3.5 text-center">Length of Stay</th>
+                        <th class="p-3.5 text-right">Clinical Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for adm in admissions %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            
+                            <!-- Ref & Patient -->
+                            <td class="p-3.5">
+                                <div class="font-mono font-black text-xs text-blue-900">{{ adm.admission_number }}</div>
+                                <div class="font-extrabold text-sm text-slate-950 leading-snug">{{ adm.patient.full_name }}</div>
+                                <div class="text-[11px] text-slate-600 font-mono flex items-center gap-1.5 mt-0.5">
+                                    <span class="font-bold text-slate-800">{{ adm.patient.hospital_id }}</span>
+                                    <span>&bull;</span>
+                                    <span>{{ adm.patient.gender }} ({{ adm.patient.age }}y)</span>
+                                </div>
+                            </td>
+
+                            <!-- Ward & Bed -->
+                            <td class="p-3.5">
+                                <div class="font-black text-slate-900 text-xs">{{ adm.ward.name }}</div>
+                                <div class="font-mono font-black text-xs text-blue-800 flex items-center gap-1.5 mt-0.5">
+                                    <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+                                    <span>Bed {{ adm.bed.bed_number }}</span>
+                                </div>
+                                <div class="text-[10px] text-slate-500 font-mono mt-0.5">{{ adm.bed.bed_type }}</div>
+                            </td>
+
+                            <!-- Diagnosis -->
+                            <td class="p-3.5 max-w-xs">
+                                <div class="font-semibold text-slate-950">{{ adm.admitting_diagnosis }}</div>
+                                {% if adm.icd10_code %}
+                                    <span class="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                        {{ adm.icd10_code }}
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Doctor -->
+                            <td class="p-3.5 font-bold text-slate-800">
+                                {{ adm.admitting_doctor }}
+                            </td>
+
+                            <!-- Diet & Acuity -->
+                            <td class="p-3.5">
+                                <div class="text-[11px] font-semibold text-slate-800">{{ adm.dietary_plan }}</div>
+                                {% if adm.isolation_required %}
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-900 border border-rose-300 mt-1">
+                                        ⚠️ ISOLATION PRECAUTION
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Length of Stay -->
+                            <td class="p-3.5 text-center">
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-mono font-black bg-blue-100 text-blue-900 border border-blue-300">
+                                    {{ adm.length_of_stay_days }} Day{{ 's' if adm.length_of_stay_days != 1 else '' }}
+                                </span>
+                                <div class="text-[10px] font-mono text-slate-500 mt-1">
+                                    Admitted {{ adm.admitted_at.strftime('%d/%m/%Y') }}
+                                </div>
+                            </td>
+
+                            <!-- Actions -->
+                            <td class="p-3.5 text-right">
+                                <div class="flex items-center justify-end gap-2 flex-wrap">
+                                    <a 
+                                        href="{{ url_for('inpatient.patient_chart', admission_id=adm.id) }}" 
+                                        class="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs rounded-lg shadow-xs"
+                                    >
+                                        Chart &rarr;
+                                    </a>
+                                    <a 
+                                        href="{{ url_for('inpatient.discharge', admission_id=adm.id) }}" 
+                                        class="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-lg shadow-xs"
+                                        title="Discharge Patient"
+                                    >
+                                        Discharge
+                                    </a>
+                                </div>
+                            </td>
+
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="p-8 text-center text-slate-500 font-semibold">
+                                No admitted patients found matching current filter.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}

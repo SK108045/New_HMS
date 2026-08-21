@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>
         {% block title %}
-            {% if request.blueprint == 'admin' %}Hospital Administration & Control{% elif request.blueprint == 'billing' %}POS & Billing{% elif request.blueprint == 'pharmacy' %}Pharmacy & Dispensation{% elif request.blueprint == 'doctor' %}Doctor & Clinical EMR{% elif request.blueprint == 'triage' %}Triage & Nursing Station{% else %}Reception & Front-Desk{% endif %}
+            {% if request.blueprint == 'admin' %}Hospital Administration & Control{% elif request.blueprint == 'inpatient' %}Inpatient Care & Wards{% elif request.blueprint == 'billing' %}POS & Billing{% elif request.blueprint == 'pharmacy' %}Pharmacy & Dispensation{% elif request.blueprint == 'doctor' %}Doctor & Clinical EMR{% elif request.blueprint == 'triage' %}Triage & Nursing Station{% else %}Reception & Front-Desk{% endif %}
         {% endblock %} - {{ facility_name }}
     </title>
     
@@ -25,7 +25,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body 
-    class="h-full text-slate-900 font-sans antialiased text-sm portal-{% if request.blueprint == 'admin' %}admin{% elif request.blueprint == 'billing' %}billing{% elif request.blueprint == 'pharmacy' %}pharmacy{% elif request.blueprint == 'doctor' %}doctor{% elif request.blueprint == 'triage' %}triage{% else %}reception{% endif %}" 
+    class="h-full text-slate-900 font-sans antialiased text-sm portal-{% if request.blueprint == 'admin' %}admin{% elif request.blueprint == 'inpatient' %}inpatient{% elif request.blueprint == 'billing' %}billing{% elif request.blueprint == 'pharmacy' %}pharmacy{% elif request.blueprint == 'doctor' %}doctor{% elif request.blueprint == 'triage' %}triage{% else %}reception{% endif %}" 
     x-data="{ 
         sidebarOpen: (localStorage.getItem('hms_sidebar_open') !== 'false'),
         mobileDrawerOpen: false,
@@ -62,7 +62,7 @@
                 <!-- Facility Brand Header -->
                 <div class="p-4 border-b border-slate-200 sidebar-accent-bg">
                     <div class="flex items-start justify-between gap-2">
-                        <a href="{% if request.blueprint == 'admin' %}{{ url_for('admin.dashboard') }}{% elif request.blueprint == 'billing' %}{{ url_for('billing.pos') }}{% elif request.blueprint == 'pharmacy' %}{{ url_for('pharmacy.dashboard') }}{% elif request.blueprint == 'doctor' %}{{ url_for('doctor.dashboard') }}{% elif request.blueprint == 'triage' %}{{ url_for('triage.dashboard') }}{% else %}{{ url_for('reception.dashboard') }}{% endif %}" class="flex items-start gap-3 flex-1 min-w-0">
+                        <a href="{% if request.blueprint == 'admin' %}{{ url_for('admin.dashboard') }}{% elif request.blueprint == 'inpatient' %}{{ url_for('inpatient.dashboard') }}{% elif request.blueprint == 'billing' %}{{ url_for('billing.pos') }}{% elif request.blueprint == 'pharmacy' %}{{ url_for('pharmacy.dashboard') }}{% elif request.blueprint == 'doctor' %}{{ url_for('doctor.dashboard') }}{% elif request.blueprint == 'triage' %}{{ url_for('triage.dashboard') }}{% else %}{{ url_for('reception.dashboard') }}{% endif %}" class="flex items-start gap-3 flex-1 min-w-0">
                             <div class="w-10 h-10 rounded-lg brand-logo flex items-center justify-center font-mono font-bold text-xl shadow-xs shrink-0 mt-0.5">
                                 +
                             </div>
@@ -75,7 +75,7 @@
                                         {{ facility_code }}
                                     </span>
                                     <span class="text-[10px] text-slate-600 uppercase font-bold tracking-wider">
-                                        {% if request.blueprint == 'admin' %}Command HQ{% elif request.blueprint == 'billing' %}POS & Billing{% elif request.blueprint == 'pharmacy' %}Pharmacy & Dispensing{% elif request.blueprint == 'doctor' %}Doctor & EMR{% elif request.blueprint == 'triage' %}Triage Unit{% else %}Reception Unit{% endif %}
+                                        {% if request.blueprint == 'admin' %}Command HQ{% elif request.blueprint == 'inpatient' %}Inpatient & Wards{% elif request.blueprint == 'billing' %}POS & Billing{% elif request.blueprint == 'pharmacy' %}Pharmacy & Dispensing{% elif request.blueprint == 'doctor' %}Doctor & EMR{% elif request.blueprint == 'triage' %}Triage Unit{% else %}Reception Unit{% endif %}
                                     </span>
                                 </div>
                             </div>
@@ -98,11 +98,11 @@
                         <div class="flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full accent-dot animate-pulse"></span>
                             <span class="font-bold text-slate-800 text-xs">
-                                {% if request.blueprint == 'admin' %}Executive Command HQ{% elif request.blueprint == 'billing' %}POS & Cashier Station{% elif request.blueprint == 'pharmacy' %}Pharmacy & Dispensation Desk{% elif request.blueprint == 'doctor' %}Doctor Consultation Room{% elif request.blueprint == 'triage' %}Triage & Nursing Station{% else %}Reception & Front-Desk{% endif %}
+                                {% if request.blueprint == 'admin' %}Executive Command HQ{% elif request.blueprint == 'inpatient' %}Inpatient Care & Ward Station{% elif request.blueprint == 'billing' %}POS & Cashier Station{% elif request.blueprint == 'pharmacy' %}Pharmacy & Dispensation Desk{% elif request.blueprint == 'doctor' %}Doctor Consultation Room{% elif request.blueprint == 'triage' %}Triage & Nursing Station{% else %}Reception & Front-Desk{% endif %}
                             </span>
                         </div>
                         <span class="text-[10px] font-mono text-slate-500 font-bold">
-                            {% if request.blueprint == 'admin' %}HQ-00{% elif request.blueprint == 'billing' %}POS-01{% elif request.blueprint == 'pharmacy' %}PHARM-01{% elif request.blueprint == 'doctor' %}ROOM-01{% elif request.blueprint == 'triage' %}TRIAGE-01{% else %}DESK-01{% endif %}
+                            {% if request.blueprint == 'admin' %}HQ-00{% elif request.blueprint == 'inpatient' %}WARD-01{% elif request.blueprint == 'billing' %}POS-01{% elif request.blueprint == 'pharmacy' %}PHARM-01{% elif request.blueprint == 'doctor' %}ROOM-01{% elif request.blueprint == 'triage' %}TRIAGE-01{% else %}DESK-01{% endif %}
                         </span>
                     </div>
                 </div>
@@ -587,6 +587,89 @@
                                     <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
                                     <span>POS Billing</span>
                                 </a>
+                                <a href="{{ url_for('inpatient.dashboard') }}" class="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-700 hover:bg-slate-100 font-bold">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                                    <span>Inpatient Wards</span>
+                                </a>
+                            </div>
+                        </div>
+
+                    {% elif request.blueprint == 'inpatient' %}
+                        <!-- =================== DEDICATED INPATIENT CARE & WARD PORTAL =================== -->
+                        <div class="px-3 pt-2 pb-1.5 text-xs font-mono font-extrabold uppercase tracking-wider text-slate-500">
+                            Ward Care Operations
+                        </div>
+
+                        <!-- 1. Ward Telemetry & Bed Rack -->
+                        <a 
+                            href="{{ url_for('inpatient.dashboard') }}" 
+                            class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 {% if request.endpoint == 'inpatient.dashboard' %}nav-active{% else %}text-slate-800 hover:text-slate-950 hover:bg-slate-100 font-bold{% endif %}"
+                        >
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                            </svg>
+                            <span>Ward Bed Rack</span>
+                        </a>
+
+                        <!-- 2. Admitted Inpatients Directory -->
+                        <a 
+                            href="{{ url_for('inpatient.admissions') }}" 
+                            class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 {% if request.endpoint == 'inpatient.admissions' %}nav-active{% else %}text-slate-800 hover:text-slate-950 hover:bg-slate-100 font-bold{% endif %}"
+                        >
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                            </svg>
+                            <span>Admitted Patients</span>
+                        </a>
+
+                        <!-- 3. New Patient Admission -->
+                        <a 
+                            href="{{ url_for('inpatient.admit') }}" 
+                            class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 {% if request.endpoint == 'inpatient.admit' %}nav-active{% else %}text-slate-800 hover:text-slate-950 hover:bg-slate-100 font-bold{% endif %}"
+                        >
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+                            </svg>
+                            <span>Admission Intake</span>
+                        </a>
+
+                        <!-- 4. Ward & Bed Management -->
+                        <a 
+                            href="{{ url_for('inpatient.beds') }}" 
+                            class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 {% if request.endpoint == 'inpatient.beds' %}nav-active{% else %}text-slate-800 hover:text-slate-950 hover:bg-slate-100 font-bold{% endif %}"
+                        >
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+                            </svg>
+                            <span>Bed Management</span>
+                        </a>
+
+                        <!-- Portal Switcher Links for Inpatient -->
+                        <div class="pt-4 mt-3 border-t border-slate-200">
+                            <div class="px-3 pb-2 text-[11px] font-mono font-extrabold uppercase tracking-wider text-slate-500">
+                                Jump to Clinical Portal
+                            </div>
+                            <div class="space-y-1">
+                                <a href="{{ url_for('doctor.dashboard') }}" class="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-700 hover:bg-slate-100 font-bold">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                                    <span>Doctor EMR</span>
+                                </a>
+                                <a href="{{ url_for('triage.dashboard') }}" class="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-700 hover:bg-slate-100 font-bold">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-teal-500"></span>
+                                    <span>Triage Station</span>
+                                </a>
+                                <a href="{{ url_for('pharmacy.dashboard') }}" class="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-700 hover:bg-slate-100 font-bold">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                    <span>Pharmacy Desk</span>
+                                </a>
+                                <a href="{{ url_for('billing.pos') }}" class="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-700 hover:bg-slate-100 font-bold">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                                    <span>POS Billing</span>
+                                </a>
+                                <a href="{{ url_for('reception.dashboard') }}" class="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-700 hover:bg-slate-100 font-bold">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-stone-500"></span>
+                                    <span>Reception Desk</span>
+                                </a>
                             </div>
                         </div>
 
@@ -674,15 +757,15 @@
                 <div class="flex items-center justify-between gap-3">
                     <div class="flex items-center gap-2.5 min-w-0 flex-1">
                         <div class="w-10 h-10 rounded-xl operator-avatar flex items-center justify-center font-mono font-extrabold text-sm shadow-xs shrink-0 border-2 border-slate-300">
-                            {% if session.get('username') %}{{ session.get('username')[:2]|upper }}{% elif request.blueprint == 'admin' %}HQ{% elif request.blueprint == 'billing' %}POS{% elif request.blueprint == 'pharmacy' %}PH{% elif request.blueprint == 'doctor' %}DR{% elif request.blueprint == 'triage' %}TR{% else %}RC{% endif %}
+                            {% if session.get('username') %}{{ session.get('username')[:2]|upper }}{% elif request.blueprint == 'admin' %}HQ{% elif request.blueprint == 'inpatient' %}WD{% elif request.blueprint == 'billing' %}POS{% elif request.blueprint == 'pharmacy' %}PH{% elif request.blueprint == 'doctor' %}DR{% elif request.blueprint == 'triage' %}TR{% else %}RC{% endif %}
                         </div>
                         <div class="min-w-0 flex-1">
                             <div class="text-sm font-extrabold text-slate-950 truncate leading-snug">
-                                {{ session.get('full_name') or ( 'Dr. Robert Odhiambo (Director)' if request.blueprint == 'admin' else ('Cashier Joyce Wambui' if request.blueprint == 'billing' else ('Pharm. Evans Omondi' if request.blueprint == 'pharmacy' else ('Dr. Sarah Kamau' if request.blueprint == 'doctor' else ('Duty Triage Nurse' if request.blueprint == 'triage' else 'Mary Wanjiku')))) ) }}
+                                {% if session.get('full_name') %}{{ session.get('full_name') }}{% elif request.blueprint == 'admin' %}Dr. Robert Odhiambo (Director){% elif request.blueprint == 'inpatient' %}Nurse Joyce Chebet (Ward Lead){% elif request.blueprint == 'billing' %}Cashier Joyce Wambui{% elif request.blueprint == 'pharmacy' %}Pharm. Evans Omondi{% elif request.blueprint == 'doctor' %}Dr. Sarah Kamau{% elif request.blueprint == 'triage' %}Duty Triage Nurse{% else %}Mary Wanjiku{% endif %}
                             </div>
                             <div class="text-xs font-mono font-bold text-slate-700 flex items-center gap-1.5 mt-0.5">
                                 <span class="w-2 h-2 rounded-full status-dot shrink-0"></span>
-                                <span class="truncate font-semibold">{{ session.get('staff_id') or ('STF-ADM-00' if request.blueprint == 'admin' else 'Active Session') }}</span>
+                                <span class="truncate font-semibold">{% if session.get('staff_id') %}{{ session.get('staff_id') }}{% elif request.blueprint == 'admin' %}STF-ADM-00{% elif request.blueprint == 'inpatient' %}STF-WRD-01{% elif request.blueprint == 'billing' %}STF-BIL-01{% elif request.blueprint == 'pharmacy' %}STF-PHM-01{% elif request.blueprint == 'doctor' %}STF-DOC-01{% elif request.blueprint == 'triage' %}STF-TRG-01{% else %}STF-REC-01{% endif %}</span>
                             </div>
                         </div>
                     </div>
@@ -776,6 +859,13 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
                                 </svg>
                                 <span>+ Manage Staff</span>
+                            </a>
+                        {% elif request.blueprint == 'inpatient' %}
+                            <a href="{{ url_for('inpatient.admit') }}" class="btn-primary py-2 px-3.5 text-sm tracking-wide">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+                                </svg>
+                                <span>+ Admit Patient</span>
                             </a>
                         {% elif request.blueprint == 'doctor' %}
                             <a href="{{ url_for('doctor.waiting_queue') }}" class="btn-primary py-2 px-3.5 text-sm tracking-wide">

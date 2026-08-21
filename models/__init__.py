@@ -8,6 +8,7 @@ from .pharmacy import MedicationItem, DrugBatch, DispensationRecord, StockTransa
 from .billing import Invoice, Payment, ShiftRegister
 from .user import User
 from .audit import AuditLog
+from .inpatient import Ward, Bed, Admission, BedTransfer, NursingNote, WardRoundNote
 
 __all__ = [
     'db',
@@ -27,5 +28,11 @@ __all__ = [
     'Payment',
     'ShiftRegister',
     'User',
-    'AuditLog'
+    'AuditLog',
+    'Ward',
+    'Bed',
+    'Admission',
+    'BedTransfer',
+    'NursingNote',
+    'WardRoundNote'
 ]

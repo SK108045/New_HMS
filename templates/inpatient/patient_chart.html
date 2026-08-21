@@ -1,0 +1,720 @@
+{% extends 'base.html' %}
+
+{% block title %}Inpatient Chart: {{ patient.full_name }} ({{ admission.admission_number }}) - Ward Services{% endblock %}
+
+{% block content %}
+<div class="space-y-6 pb-16" x-data="{ activeTab: 'nursing', showNursingModal: false, showRoundModal: false, showTransferModal: false }">
+
+    <!-- Top Inpatient Banner -->
+    <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-sm p-5 space-y-4">
+        
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            
+            <!-- Left: Patient Avatar & Demographics -->
+            <div class="flex items-start gap-4">
+                <div class="w-16 h-16 rounded-2xl bg-blue-900 text-white flex items-center justify-center font-mono font-black text-xl shadow-sm shrink-0 border-2 border-blue-950">
+                    {{ patient.full_name[:2]|upper }}
+                </div>
+                
+                <div>
+                    <div class="flex items-center gap-2.5 flex-wrap">
+                        <h1 class="text-2xl font-black text-slate-950 tracking-tight">{{ patient.full_name }}</h1>
+                        <span class="font-mono font-black text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-900 border border-blue-300">
+                            {{ admission.admission_number }}
+                        </span>
+                        {% if admission.status == 'admitted' %}
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                                <span>Currently Admitted</span>
+                            </span>
+                        {% else %}
+                            <span class="px-2.5 py-0.5 rounded-full text-xs font-black bg-slate-100 text-slate-800 border border-slate-300">
+                                {{ admission.status.upper() }}
+                            </span>
+                        {% endif %}
+                    </div>
+
+                    <div class="text-xs text-slate-600 font-medium flex items-center gap-3 mt-1.5 flex-wrap">
+                        <span class="font-mono font-bold text-slate-800">{{ patient.hospital_id }}</span>
+                        <span>&bull;</span>
+                        <span>{{ patient.gender }}, {{ patient.age }} yrs</span>
+                        <span>&bull;</span>
+                        <span>Blood: <strong class="text-slate-900">{{ patient.blood_group or 'O+' }}</strong></span>
+                        <span>&bull;</span>
+                        <span>Admitted: <strong class="text-slate-900">{{ admission.admitted_at.strftime('%d %b %Y, %H:%M') }}</strong></span>
+                    </div>
+
+                    <div class="text-xs text-slate-700 font-semibold mt-1">
+                        Diagnosis: <strong class="text-blue-950">{{ admission.admitting_diagnosis }}</strong> 
+                        {% if admission.icd10_code %}
+                            <span class="font-mono font-bold text-[11px] bg-slate-100 px-1 rounded border border-slate-300">{{ admission.icd10_code }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Ward & Bed Badge & LOS -->
+            <div class="flex items-center gap-3 bg-blue-50 border-2 border-blue-200 p-3.5 rounded-xl shrink-0">
+                <div class="text-right">
+                    <div class="font-black text-sm text-blue-950">{{ admission.ward.name }}</div>
+                    <div class="text-xs font-mono font-black text-blue-800">
+                        Bed: {{ admission.bed.bed_number }} ({{ admission.bed.bed_type }})
+                    </div>
+                    <div class="text-[11px] text-slate-600 font-bold mt-0.5">
+                        Stay: <strong>{{ admission.length_of_stay_days }} Day{{ 's' if admission.length_of_stay_days != 1 else '' }}</strong> &bull; KES {{ "{:,.0f}".format(admission.bed.daily_rate) }}/d
+                    </div>
+                </div>
+                
+                <div class="w-12 h-12 rounded-xl bg-blue-900 text-white flex items-center justify-center font-mono font-black text-sm shadow-xs">
+                    {{ admission.ward.code }}
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Secondary Clinical Highlights Strip -->
+        <div class="pt-3 border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div>
+                <span class="text-slate-500 font-bold uppercase text-[10px] block">Attending Doctor</span>
+                <span class="font-black text-slate-900">{{ admission.admitting_doctor }}</span>
+            </div>
+            <div>
+                <span class="text-slate-500 font-bold uppercase text-[10px] block">Dietary Order</span>
+                <span class="font-black text-slate-900">{{ admission.dietary_plan }}</span>
+            </div>
+            <div>
+                <span class="text-slate-500 font-bold uppercase text-[10px] block">Nursing Acuity</span>
+                <span class="font-black text-slate-900">{{ admission.nursing_acuity }}</span>
+            </div>
+            <div>
+                <span class="text-slate-500 font-bold uppercase text-[10px] block">Allergy Safety</span>
+                <span class="font-black {% if patient.allergies and patient.allergies != 'None Known' %}text-rose-700{% else %}text-emerald-700{% endif %}">
+                    {{ patient.allergies or 'NKDA (No Known Allergies)' }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Quick Inpatient Action Buttons -->
+        <div class="pt-3 border-t border-slate-200 flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex items-center gap-2">
+                <button 
+                    type="button" 
+                    @click="showNursingModal = true"
+                    class="btn-primary py-2 px-3 text-xs font-black flex items-center gap-1.5"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    <span>+ Shift Nursing Note</span>
+                </button>
+
+                <button 
+                    type="button" 
+                    @click="showRoundModal = true"
+                    class="px-3 py-2 bg-indigo-800 hover:bg-indigo-900 text-white text-xs font-black rounded-lg shadow-xs flex items-center gap-1.5"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <span>+ Doctor Ward Round</span>
+                </button>
+
+                <button 
+                    type="button" 
+                    @click="showTransferModal = true"
+                    class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black rounded-lg border border-slate-300 flex items-center gap-1.5"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                    </svg>
+                    <span>Transfer Bed</span>
+                </button>
+            </div>
+
+            <div class="flex items-center gap-2">
+                {% if admission.status == 'admitted' %}
+                    <a 
+                        href="{{ url_for('inpatient.discharge', admission_id=admission.id) }}" 
+                        class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black rounded-lg shadow-xs flex items-center gap-1.5"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                        </svg>
+                        <span>Initiate Clinical Discharge &rarr;</span>
+                    </a>
+                {% else %}
+                    <a 
+                        href="{{ url_for('inpatient.print_discharge_summary', admission_id=admission.id) }}" 
+                        class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black rounded-lg shadow-xs flex items-center gap-1.5"
+                        target="_blank"
+                    >
+                        <span>🖨️ Print Discharge Certificate</span>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Navigation Tabs for Inpatient Chart -->
+    <div class="border-b-2 border-slate-200 flex items-center gap-2 overflow-x-auto no-scrollbar">
+        
+        <button 
+            type="button" 
+            @click="activeTab = 'nursing'"
+            :class="activeTab === 'nursing' ? 'border-blue-800 text-blue-950 border-b-2 font-black' : 'text-slate-600 hover:text-slate-900 font-bold'"
+            class="py-3 px-4 text-xs uppercase tracking-wider flex items-center gap-2 transition-all shrink-0"
+        >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+            </svg>
+            <span>Shift Nursing Care ({{ admission.nursing_notes|length }})</span>
+        </button>
+
+        <button 
+            type="button" 
+            @click="activeTab = 'rounds'"
+            :class="activeTab === 'rounds' ? 'border-blue-800 text-blue-950 border-b-2 font-black' : 'text-slate-600 hover:text-slate-900 font-bold'"
+            class="py-3 px-4 text-xs uppercase tracking-wider flex items-center gap-2 transition-all shrink-0"
+        >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <span>Doctor Ward Rounds ({{ admission.ward_rounds|length }})</span>
+        </button>
+
+        <button 
+            type="button" 
+            @click="activeTab = 'vitals'"
+            :class="activeTab === 'vitals' ? 'border-blue-800 text-blue-950 border-b-2 font-black' : 'text-slate-600 hover:text-slate-900 font-bold'"
+            class="py-3 px-4 text-xs uppercase tracking-wider flex items-center gap-2 transition-all shrink-0"
+        >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            <span>Vitals Observations ({{ vitals_history|length }})</span>
+        </button>
+
+        <button 
+            type="button" 
+            @click="activeTab = 'transfers'"
+            :class="activeTab === 'transfers' ? 'border-blue-800 text-blue-950 border-b-2 font-black' : 'text-slate-600 hover:text-slate-900 font-bold'"
+            class="py-3 px-4 text-xs uppercase tracking-wider flex items-center gap-2 transition-all shrink-0"
+        >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+            </svg>
+            <span>Bed Transfers ({{ admission.transfers|length }})</span>
+        </button>
+
+    </div>
+
+    <!-- TAB 1: SHIFT NURSING NOTES -->
+    <div x-show="activeTab === 'nursing'" class="space-y-4">
+        
+        <div class="flex items-center justify-between">
+            <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">
+                Nursing Progress Notes & Shift Handovers
+            </h2>
+            <button 
+                type="button" 
+                @click="showNursingModal = true"
+                class="btn-primary py-1.5 px-3 text-xs font-extrabold"
+            >
+                + Add Shift Note
+            </button>
+        </div>
+
+        <div class="space-y-4">
+            {% for note in admission.nursing_notes %}
+                <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs p-5 space-y-3">
+                    
+                    <div class="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-black border
+                                {% if 'Morning' in note.shift %}bg-amber-100 text-amber-900 border-amber-300
+                                {% elif 'Afternoon' in note.shift %}bg-blue-100 text-blue-900 border-blue-300
+                                {% else %}bg-purple-100 text-purple-900 border-purple-300{% endif %}">
+                                {{ note.shift }}
+                            </span>
+                            <span class="font-extrabold text-slate-950 text-sm">Nurse: {{ note.nurse_name }}</span>
+                        </div>
+                        <span class="font-mono text-xs font-bold text-slate-600">{{ note.created_at.strftime('%d %b %Y &bull; %H:%M') }}</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        
+                        <!-- Nursing Care & Observations -->
+                        <div class="space-y-2">
+                            <div>
+                                <span class="font-extrabold text-slate-800 uppercase block text-[10px]">Nursing Interventions & Care</span>
+                                <p class="text-slate-900 font-medium whitespace-pre-line mt-0.5">{{ note.nursing_interventions }}</p>
+                            </div>
+                            {% if note.subjective_assessment %}
+                                <div>
+                                    <span class="font-extrabold text-slate-800 uppercase block text-[10px]">Patient Subjective State</span>
+                                    <p class="text-slate-700 font-medium mt-0.5">{{ note.subjective_assessment }}</p>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Vitals, Fluids & Meds -->
+                        <div class="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            {% if note.vital_signs_summary %}
+                                <div>
+                                    <span class="font-mono font-bold text-slate-600 uppercase text-[10px] block">Vitals Snapshot</span>
+                                    <span class="font-mono font-bold text-slate-950">{{ note.vital_signs_summary }}</span>
+                                </div>
+                            {% endif %}
+                            {% if note.intake_output_notes %}
+                                <div>
+                                    <span class="font-mono font-bold text-slate-600 uppercase text-[10px] block">Fluid Balance (Intake / Output)</span>
+                                    <span class="font-mono font-bold text-blue-900">{{ note.intake_output_notes }}</span>
+                                </div>
+                            {% endif %}
+                            {% if note.medications_administered %}
+                                <div>
+                                    <span class="font-mono font-bold text-slate-600 uppercase text-[10px] block">Medications Given (eMAR)</span>
+                                    <span class="font-medium text-slate-900">{{ note.medications_administered }}</span>
+                                </div>
+                            {% endif %}
+                            {% if note.handover_instructions %}
+                                <div class="border-t border-slate-200 pt-1">
+                                    <span class="font-extrabold text-amber-800 uppercase text-[10px] block">Next Shift Handover Alert</span>
+                                    <span class="font-semibold text-slate-900">{{ note.handover_instructions }}</span>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                    </div>
+
+                </div>
+            {% else %}
+                <div class="bg-white rounded-2xl border-2 border-slate-200 p-8 text-center text-slate-500 font-semibold">
+                    No nursing shift notes recorded yet. Click "+ Add Shift Note" to chart the first entry.
+                </div>
+            {% endfor %}
+        </div>
+
+    </div>
+
+    <!-- TAB 2: DOCTOR WARD ROUNDS -->
+    <div x-show="activeTab === 'rounds'" class="space-y-4">
+        
+        <div class="flex items-center justify-between">
+            <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">
+                Attending Physician Daily Ward Rounds
+            </h2>
+            <button 
+                type="button" 
+                @click="showRoundModal = true"
+                class="px-3 py-1.5 bg-indigo-800 hover:bg-indigo-900 text-white text-xs font-extrabold rounded-lg shadow-xs"
+            >
+                + Add Doctor Ward Round
+            </button>
+        </div>
+
+        <div class="space-y-4">
+            {% for rnd in admission.ward_rounds %}
+                <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs p-5 space-y-3">
+                    
+                    <div class="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                        <div class="flex items-center gap-2">
+                            <span class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-900 font-mono font-black text-xs flex items-center justify-center">DR</span>
+                            <div>
+                                <span class="font-black text-slate-950 text-sm">{{ rnd.doctor_name }}</span>
+                                <span class="text-xs text-slate-500 font-medium block">Daily Clinical Evaluation</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-black border
+                                {% if 'Fit' in rnd.discharge_readiness %}bg-emerald-100 text-emerald-900 border-emerald-300
+                                {% elif 'Tomorrow' in rnd.discharge_readiness %}bg-blue-100 text-blue-900 border-blue-300
+                                {% else %}bg-slate-100 text-slate-800 border-slate-300{% endif %}">
+                                {{ rnd.discharge_readiness }}
+                            </span>
+                            <span class="font-mono text-xs font-bold text-slate-600 block mt-0.5">{{ rnd.round_date.strftime('%d %b %Y, %H:%M') }}</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div>
+                            <span class="font-extrabold text-slate-800 uppercase block text-[10px]">Clinical Progress & Examination</span>
+                            <p class="text-slate-900 font-medium whitespace-pre-line mt-0.5">{{ rnd.clinical_progress }}</p>
+                        </div>
+                        <div class="space-y-2">
+                            {% if rnd.lab_radiology_review %}
+                                <div>
+                                    <span class="font-extrabold text-slate-800 uppercase block text-[10px]">Diagnostics Review</span>
+                                    <p class="text-slate-700 font-medium mt-0.5">{{ rnd.lab_radiology_review }}</p>
+                                </div>
+                            {% endif %}
+                            <div>
+                                <span class="font-extrabold text-indigo-900 uppercase block text-[10px]">Treatment Plan & Modifications</span>
+                                <p class="text-slate-900 font-bold bg-indigo-50 p-2.5 rounded-lg border border-indigo-200 mt-0.5">{{ rnd.treatment_plan_changes }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            {% else %}
+                <div class="bg-white rounded-2xl border-2 border-slate-200 p-8 text-center text-slate-500 font-semibold">
+                    No doctor daily ward rounds charted yet.
+                </div>
+            {% endfor %}
+        </div>
+
+    </div>
+
+    <!-- TAB 3: VITALS OBSERVATIONS -->
+    <div x-show="activeTab === 'vitals'" class="space-y-4">
+        
+        <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+            <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+                <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">
+                    Recorded Vital Signs Observations History
+                </h2>
+                <span class="text-xs font-mono font-bold text-slate-600">{{ vitals_history|length }} Recordings</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs min-w-[700px]">
+                    <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                        <tr>
+                            <th class="p-3.5">Recorded At</th>
+                            <th class="p-3.5 text-center">BP (mmHg)</th>
+                            <th class="p-3.5 text-center">Pulse (bpm)</th>
+                            <th class="p-3.5 text-center">Temp (°C)</th>
+                            <th class="p-3.5 text-center">SpO₂ (%)</th>
+                            <th class="p-3.5 text-center">RR (bpm)</th>
+                            <th class="p-3.5 text-center">Pain Score</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 font-mono">
+                        {% for v in vitals_history %}
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-3.5 font-bold text-slate-950 font-sans">
+                                    {{ v.created_at.strftime('%d %b %Y &bull; %H:%M') }}
+                                </td>
+                                <td class="p-3.5 text-center font-black {% if v.systolic_bp and v.systolic_bp >= 140 %}text-rose-700{% else %}text-slate-900{% endif %}">
+                                    {{ v.bp_display }}
+                                </td>
+                                <td class="p-3.5 text-center font-bold text-slate-900">
+                                    {{ v.pulse_rate or '&mdash;' }}
+                                </td>
+                                <td class="p-3.5 text-center font-bold {% if v.temperature and v.temperature >= 38.0 %}text-rose-700 font-black{% else %}text-slate-900{% endif %}">
+                                    {{ v.temperature or '&mdash;' }}
+                                </td>
+                                <td class="p-3.5 text-center font-black {% if v.spo2 and v.spo2 < 95 %}text-rose-700{% else %}text-emerald-700{% endif %}">
+                                    {{ v.spo2 or '&mdash;' }}%
+                                </td>
+                                <td class="p-3.5 text-center font-bold text-slate-900">
+                                    {{ v.respiratory_rate or '&mdash;' }}
+                                </td>
+                                <td class="p-3.5 text-center font-bold text-slate-900">
+                                    <span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold {{ v.triage_badge_class }}">
+                                        {{ v.triage_category }}
+                                    </span>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="7" class="p-8 text-center text-slate-500 font-semibold font-sans">
+                                    No vitals entries on record for this patient.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- TAB 4: BED TRANSFERS -->
+    <div x-show="activeTab === 'transfers'" class="space-y-4">
+        
+        <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+            <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+                <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">
+                    Inter-Ward & Bed Reassignment Audit History
+                </h2>
+                <button 
+                    type="button" 
+                    @click="showTransferModal = true"
+                    class="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white text-xs font-extrabold rounded-lg shadow-xs"
+                >
+                    + New Bed Transfer
+                </button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs min-w-[700px]">
+                    <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                        <tr>
+                            <th class="p-3.5">Transfer Date</th>
+                            <th class="p-3.5">From Location</th>
+                            <th class="p-3.5">To Destination</th>
+                            <th class="p-3.5">Reason for Transfer</th>
+                            <th class="p-3.5 text-right">Authorized By</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        {% for trf in admission.transfers %}
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-3.5 font-mono font-bold text-slate-900">
+                                    {{ trf.transferred_at.strftime('%d %b %Y, %H:%M') }}
+                                </td>
+                                <td class="p-3.5 font-semibold text-slate-800">
+                                    {{ trf.from_ward.name }} &bull; Bed {{ trf.from_bed.bed_number }}
+                                </td>
+                                <td class="p-3.5 font-black text-blue-900">
+                                    {{ trf.to_ward.name }} &bull; Bed {{ trf.to_bed.bed_number }}
+                                </td>
+                                <td class="p-3.5 font-medium text-slate-700">
+                                    {{ trf.transfer_reason }}
+                                </td>
+                                <td class="p-3.5 text-right font-bold text-slate-900">
+                                    {{ trf.transferred_by }}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="p-8 text-center text-slate-500 font-semibold">
+                                    Patient has remained in primary assigned bed since admission ({{ admission.ward.name }} - Bed {{ admission.bed.bed_number }}).
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ==================== MODAL 1: ADD SHIFT NURSING NOTE ==================== -->
+    <div 
+        x-show="showNursingModal" 
+        x-cloak 
+        class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs"
+    >
+        <div class="bg-white rounded-2xl border-2 border-slate-300 shadow-2xl max-w-2xl w-full p-6 space-y-4" @click.away="showNursingModal = false">
+            
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-blue-700"></span>
+                    <h3 class="text-base font-black text-slate-950">Log Shift Nursing Care Observation</h3>
+                </div>
+                <button type="button" @click="showNursingModal = false" class="text-slate-400 hover:text-slate-700 text-lg font-bold">✕</button>
+            </div>
+
+            <form method="POST" action="{{ url_for('inpatient.add_nursing_note', admission_id=admission.id) }}" class="space-y-4">
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                            Duty Shift *
+                        </label>
+                        <select name="shift" required class="form-select text-xs font-bold w-full">
+                            <option value="Morning Shift (07:00 - 15:00)">Morning Shift (07:00 - 15:00)</option>
+                            <option value="Afternoon Shift (15:00 - 23:00)">Afternoon Shift (15:00 - 23:00)</option>
+                            <option value="Night Shift (23:00 - 07:00)">Night Shift (23:00 - 07:00)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                            Duty Nurse Name
+                        </label>
+                        <input type="text" name="nurse_name" value="{{ session.get('full_name') or 'Nurse Joyce Chebet' }}" class="form-input text-xs font-semibold">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Nursing Interventions & Care Actions *
+                    </label>
+                    <textarea name="nursing_interventions" required rows="3" placeholder="e.g. Administered IV antibiotics, changed wound dressing, repositioned patient Q2H, oral hygiene performed." class="form-textarea text-xs"></textarea>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                            Vitals Summary (BP, Pulse, Temp, SpO2)
+                        </label>
+                        <input type="text" name="vital_signs_summary" placeholder="e.g. BP 124/82, HR 76, Temp 36.9C, SpO2 99%" class="form-input text-xs font-mono">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                            Fluid Balance (Intake / Output)
+                        </label>
+                        <input type="text" name="intake_output_notes" placeholder="e.g. Oral 1000ml, IV 500ml / Urine 1200ml" class="form-input text-xs font-mono">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Medications & IV Infusions Administered
+                    </label>
+                    <input type="text" name="medications_administered" placeholder="e.g. IV Ceftriaxone 1g, Paracetamol 1g PO, Normal Saline 500ml @ 80ml/hr" class="form-input text-xs">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Next Shift Handover Alert / Special Instructions
+                    </label>
+                    <input type="text" name="handover_instructions" placeholder="e.g. Monitor morning fasting blood sugar, repeat CBC in afternoon." class="form-input text-xs">
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+                    <button type="button" @click="showNursingModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg">Cancel</button>
+                    <button type="submit" class="btn-primary py-2 px-5 text-xs font-black">Save Nursing Note</button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+
+    <!-- ==================== MODAL 2: ADD DOCTOR WARD ROUND ==================== -->
+    <div 
+        x-show="showRoundModal" 
+        x-cloak 
+        class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs"
+    >
+        <div class="bg-white rounded-2xl border-2 border-slate-300 shadow-2xl max-w-2xl w-full p-6 space-y-4" @click.away="showRoundModal = false">
+            
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-indigo-700"></span>
+                    <h3 class="text-base font-black text-slate-950">Record Attending Doctor Ward Round</h3>
+                </div>
+                <button type="button" @click="showRoundModal = false" class="text-slate-400 hover:text-slate-700 text-lg font-bold">✕</button>
+            </div>
+
+            <form method="POST" action="{{ url_for('inpatient.add_ward_round', admission_id=admission.id) }}" class="space-y-4">
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                            Attending Doctor *
+                        </label>
+                        <select name="doctor_name" class="form-select text-xs font-bold w-full">
+                            {% for doc in doctors %}
+                                <option value="{{ doc }}">{{ doc }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                            Discharge Readiness Status
+                        </label>
+                        <select name="discharge_readiness" class="form-select text-xs font-bold w-full">
+                            <option value="Continue Inpatient Care">Continue Inpatient Care</option>
+                            <option value="Plan Discharge Tomorrow">Plan Discharge Tomorrow</option>
+                            <option value="Fit for Discharge Today">Fit for Discharge Today</option>
+                            <option value="Requires ICU / HDU Transfer">Requires ICU / HDU Transfer</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Clinical Progress & Examination Findings *
+                    </label>
+                    <textarea name="clinical_progress" required rows="3" placeholder="e.g. Patient afebrile, chest auscultation clear bilaterally, surgical site clean with no discharge, tolerating oral diet well." class="form-textarea text-xs"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Diagnostics & Laboratory Review
+                    </label>
+                    <input type="text" name="lab_radiology_review" placeholder="e.g. WBC normalized to 7.2, CXR shows resolving consolidation." class="form-input text-xs">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Treatment Plan Modifications & Orders *
+                    </label>
+                    <textarea name="treatment_plan_changes" required rows="2" placeholder="e.g. Step down IV Ceftriaxone to Oral Augmentin 625mg BD, stop IV fluids, encourage ambulation." class="form-textarea text-xs"></textarea>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+                    <button type="button" @click="showRoundModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg">Cancel</button>
+                    <button type="submit" class="btn-primary py-2 px-5 text-xs font-black">Save Ward Round</button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+
+    <!-- ==================== MODAL 3: INTER-WARD BED TRANSFER ==================== -->
+    <div 
+        x-show="showTransferModal" 
+        x-cloak 
+        class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs"
+    >
+        <div class="bg-white rounded-2xl border-2 border-slate-300 shadow-2xl max-w-lg w-full p-6 space-y-4" @click.away="showTransferModal = false">
+            
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-blue-700"></span>
+                    <h3 class="text-base font-black text-slate-950">Inter-Ward Bed Transfer</h3>
+                </div>
+                <button type="button" @click="showTransferModal = false" class="text-slate-400 hover:text-slate-700 text-lg font-bold">✕</button>
+            </div>
+
+            <form method="POST" action="{{ url_for('inpatient.transfer_bed', admission_id=admission.id) }}" class="space-y-4">
+                
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                    <span class="text-slate-500 font-bold block">Current Placement:</span>
+                    <span class="font-black text-slate-950">{{ admission.ward.name }} &bull; Bed {{ admission.bed.bed_number }}</span>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Destination Ward *
+                    </label>
+                    <select 
+                        name="to_ward_id" 
+                        required 
+                        class="form-select text-xs font-bold w-full"
+                        @change="fetch('/inpatient/api/available-beds/' + $event.target.value).then(r => r.text()).then(html => document.getElementById('transfer-bed-select').innerHTML = html)"
+                    >
+                        {% for w in wards %}
+                            <option value="{{ w.id }}">{{ w.name }} ({{ w.code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Destination Available Bed *
+                    </label>
+                    <select id="transfer-bed-select" name="to_bed_id" required class="form-select text-xs font-bold w-full">
+                        <option value="">-- Choose Destination Bed --</option>
+                        {% for b in available_beds %}
+                            <option value="{{ b.id }}">{{ b.ward.code }} - {{ b.bed_number }} ({{ b.bed_type }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Clinical / Operational Reason for Transfer *
+                    </label>
+                    <input type="text" name="transfer_reason" required placeholder="e.g. Step down from ICU to General Ward / Patient requested private room." class="form-input text-xs font-semibold">
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+                    <button type="button" @click="showTransferModal = false" class="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg">Cancel</button>
+                    <button type="submit" class="btn-primary py-2 px-5 text-xs font-black">Execute Transfer</button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}

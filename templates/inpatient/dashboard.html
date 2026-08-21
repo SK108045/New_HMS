@@ -1,0 +1,344 @@
+{% extends 'base.html' %}
+
+{% block title %}Inpatient Care & Ward Station - Clinical Telemetry{% endblock %}
+
+{% block content %}
+<div class="space-y-6 pb-12">
+
+    <!-- Top Station Command Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-200 pb-5">
+        <div>
+            <div class="flex items-center gap-2 font-mono text-xs font-extrabold tracking-wider text-blue-700 uppercase mb-1">
+                <span class="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+                <span>Station WARD-01 &bull; Inpatient Department (IPD)</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
+                Ward Management & Live Bed Telemetry
+            </h1>
+            <p class="text-sm font-semibold text-slate-700 mt-1">
+                Live floorplan occupancy, patient admissions, shift nursing handovers, and discharge planning.
+            </p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a 
+                href="{{ url_for('inpatient.admit') }}" 
+                class="btn-primary py-2.5 px-4 text-xs font-extrabold tracking-wider flex items-center gap-2 shadow-sm"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+                </svg>
+                <span>+ Admit Inpatient</span>
+            </a>
+            <a 
+                href="{{ url_for('inpatient.admissions') }}" 
+                class="btn-secondary py-2.5 px-3.5 text-xs font-extrabold flex items-center gap-2"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                </svg>
+                <span>Admissions Roster</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- 4 High-Contrast Inpatient KPI Metric Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        
+        <!-- 1. Total Bed Capacity -->
+        <div class="bg-white rounded-2xl border-2 border-slate-200 p-5 shadow-xs flex items-center justify-between">
+            <div>
+                <p class="text-xs font-mono font-extrabold uppercase tracking-wider text-slate-600">Total Bed Capacity</p>
+                <p class="text-3xl font-black text-slate-950 mt-1">{{ total_beds }} Beds</p>
+                <p class="text-xs font-bold text-slate-700 mt-1">{{ wards|length }} Active Wards Configured</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-blue-100 border-2 border-blue-200 flex items-center justify-center text-blue-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                </svg>
+            </div>
+        </div>
+
+        <!-- 2. Occupied Beds & Occupancy Rate -->
+        <div class="bg-white rounded-2xl border-2 border-slate-200 p-5 shadow-xs flex items-center justify-between">
+            <div>
+                <p class="text-xs font-mono font-extrabold uppercase tracking-wider text-slate-600">Occupied & In Care</p>
+                <p class="text-3xl font-black text-blue-900 mt-1">{{ occupied_beds }} <span class="text-sm font-extrabold text-slate-600">({{ overall_occupancy_rate }}%)</span></p>
+                <p class="text-xs font-bold text-blue-700 mt-1 flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                    <span>{{ active_admissions|length }} Admitted Inpatients</span>
+                </p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-blue-100 border-2 border-blue-200 flex items-center justify-center text-blue-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <!-- 3. Available Beds for Intake -->
+        <div class="bg-white rounded-2xl border-2 border-slate-200 p-5 shadow-xs flex items-center justify-between">
+            <div>
+                <p class="text-xs font-mono font-extrabold uppercase tracking-wider text-slate-600">Available Beds</p>
+                <p class="text-3xl font-black text-emerald-700 mt-1 font-mono">{{ available_beds }}</p>
+                <p class="text-xs font-bold text-slate-700 mt-1">Ready for immediate intake</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-emerald-100 border-2 border-emerald-200 flex items-center justify-center text-emerald-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <!-- 4. Today's Admissions & Discharges -->
+        <div class="bg-white rounded-2xl border-2 border-slate-200 p-5 shadow-xs flex items-center justify-between">
+            <div>
+                <p class="text-xs font-mono font-extrabold uppercase tracking-wider text-slate-600">Today's Inflow / Outflow</p>
+                <div class="flex items-center gap-3 mt-1">
+                    <span class="text-2xl font-black text-blue-800 font-mono">+{{ today_admissions }} In</span>
+                    <span class="text-2xl font-black text-emerald-700 font-mono">-{{ today_discharges }} Out</span>
+                </div>
+                <p class="text-xs font-bold text-slate-700 mt-1">Census turnover</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-purple-100 border-2 border-purple-200 flex items-center justify-center text-purple-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                </svg>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Interactive Visual Bed Rack Floorplan (By Ward) -->
+    <div class="space-y-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-blue-700"></span>
+                <h2 class="text-base font-black text-slate-950 uppercase tracking-wide">
+                    Live Interactive Floorplan & Bed Grid
+                </h2>
+            </div>
+            
+            <!-- Legend -->
+            <div class="flex items-center gap-4 text-xs font-extrabold flex-wrap">
+                <span class="flex items-center gap-1.5 text-emerald-800">
+                    <span class="w-3 h-3 rounded-md bg-emerald-500 border border-emerald-600"></span> Available
+                </span>
+                <span class="flex items-center gap-1.5 text-blue-900">
+                    <span class="w-3 h-3 rounded-md bg-blue-600 border border-blue-700"></span> Occupied
+                </span>
+                <span class="flex items-center gap-1.5 text-amber-900">
+                    <span class="w-3 h-3 rounded-md bg-amber-400 border border-amber-500"></span> Cleaning
+                </span>
+                <span class="flex items-center gap-1.5 text-rose-900">
+                    <span class="w-3 h-3 rounded-md bg-rose-500 border border-rose-600"></span> Maintenance
+                </span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {% for ward in wards %}
+                <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+                    
+                    <!-- Ward Header -->
+                    <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono font-black text-xs px-2 py-0.5 rounded bg-slate-900 text-white">{{ ward.code }}</span>
+                                <h3 class="font-black text-slate-950 text-sm">{{ ward.name }}</h3>
+                            </div>
+                            <p class="text-xs text-slate-600 font-semibold mt-0.5">
+                                {{ ward.floor }} &bull; {{ ward.gender_category }} &bull; In-Charge: <strong>{{ ward.daily_nurse_in_charge }}</strong>
+                            </p>
+                        </div>
+
+                        <div class="text-right">
+                            <span class="text-xs font-mono font-black text-slate-950">
+                                {{ ward.occupied_beds_count }}/{{ ward.total_beds_count }} Beds
+                            </span>
+                            <div class="text-[11px] font-bold {% if ward.occupancy_rate >= 80 %}text-rose-700{% else %}text-blue-700{% endif %}">
+                                {{ ward.occupancy_rate }}% Full
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ward Beds Matrix -->
+                    <div class="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {% for bed in ward.beds %}
+                            {% if bed.status == 'occupied' and bed.current_admission %}
+                                <!-- Occupied Bed Card -->
+                                <a 
+                                    href="{{ url_for('inpatient.patient_chart', admission_id=bed.current_admission.id) }}"
+                                    class="p-3 rounded-xl bg-blue-50 border-2 border-blue-300 hover:border-blue-700 transition-all flex flex-col justify-between group shadow-xs"
+                                >
+                                    <div class="flex items-start justify-between">
+                                        <span class="font-mono font-black text-xs text-blue-950">{{ bed.bed_number }}</span>
+                                        <span class="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                                    </div>
+                                    
+                                    <div class="my-2">
+                                        <div class="font-black text-xs text-slate-950 truncate group-hover:text-blue-900">
+                                            {{ bed.current_admission.patient.full_name }}
+                                        </div>
+                                        <div class="text-[10px] text-slate-600 font-mono">
+                                            Day {{ bed.current_admission.length_of_stay_days }} &bull; {{ bed.current_admission.patient.hospital_id }}
+                                        </div>
+                                    </div>
+
+                                    <div class="text-[10px] font-bold text-blue-700 flex items-center justify-between border-t border-blue-200 pt-1">
+                                        <span>Chart &rarr;</span>
+                                        <span class="font-mono">KES {{ "{:,.0f}".format(bed.daily_rate) }}/d</span>
+                                    </div>
+                                </a>
+                            {% elif bed.status == 'available' %}
+                                <!-- Available Bed Card -->
+                                <a 
+                                    href="{{ url_for('inpatient.admit') }}"
+                                    class="p-3 rounded-xl bg-emerald-50/70 border-2 border-dashed border-emerald-300 hover:border-emerald-600 hover:bg-emerald-50 transition-all flex flex-col justify-between group shadow-xs"
+                                >
+                                    <div class="flex items-start justify-between">
+                                        <span class="font-mono font-black text-xs text-emerald-950">{{ bed.bed_number }}</span>
+                                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                    </div>
+                                    
+                                    <div class="my-2 text-center">
+                                        <div class="text-xs font-black text-emerald-900">Vacant</div>
+                                        <div class="text-[10px] text-slate-600 font-semibold">{{ bed.bed_type }}</div>
+                                    </div>
+
+                                    <div class="text-[10px] font-bold text-emerald-700 flex items-center justify-between border-t border-emerald-200 pt-1">
+                                        <span>+ Admit</span>
+                                        <span class="font-mono">KES {{ "{:,.0f}".format(bed.daily_rate) }}/d</span>
+                                    </div>
+                                </a>
+                            {% elif bed.status == 'cleaning' %}
+                                <!-- Cleaning Bed Card -->
+                                <div class="p-3 rounded-xl bg-amber-50 border-2 border-amber-300 flex flex-col justify-between shadow-xs">
+                                    <div class="flex items-start justify-between">
+                                        <span class="font-mono font-black text-xs text-amber-950">{{ bed.bed_number }}</span>
+                                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                    </div>
+                                    <div class="my-2 text-center">
+                                        <div class="text-xs font-black text-amber-900">Sanitizing</div>
+                                        <div class="text-[10px] text-slate-600">Discharge Turnover</div>
+                                    </div>
+                                    <form method="POST" action="{{ url_for('inpatient.beds') }}">
+                                        <input type="hidden" name="bed_id" value="{{ bed.id }}">
+                                        <input type="hidden" name="status" value="available">
+                                        <button type="submit" class="w-full text-center text-[10px] font-black text-amber-900 bg-amber-200/80 hover:bg-amber-300 py-0.5 rounded">
+                                            Ready for Intake &rarr;
+                                        </button>
+                                    </form>
+                                </div>
+                            {% else %}
+                                <!-- Maintenance Bed Card -->
+                                <div class="p-3 rounded-xl bg-rose-50 border-2 border-rose-300 flex flex-col justify-between shadow-xs">
+                                    <div class="flex items-start justify-between">
+                                        <span class="font-mono font-black text-xs text-rose-950">{{ bed.bed_number }}</span>
+                                        <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                                    </div>
+                                    <div class="my-2 text-center">
+                                        <div class="text-xs font-black text-rose-900">Maintenance</div>
+                                        <div class="text-[10px] text-slate-600">Out of Service</div>
+                                    </div>
+                                    <div class="text-[10px] font-mono text-center text-slate-500 pt-1 border-t border-rose-200">
+                                        Locked
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Active Inpatients Roster Table -->
+    <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+        <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-blue-700"></span>
+                <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">
+                    Currently Admitted Inpatients ({{ active_admissions|length }})
+                </h2>
+            </div>
+            <a href="{{ url_for('inpatient.admissions') }}" class="text-xs font-extrabold text-blue-700 hover:underline">
+                View All Admissions &rarr;
+            </a>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs min-w-[850px]">
+                <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                    <tr>
+                        <th class="p-3.5">Admission Ref & Patient</th>
+                        <th class="p-3.5">Ward & Bed</th>
+                        <th class="p-3.5">Admitting Diagnosis</th>
+                        <th class="p-3.5">Attending Doctor</th>
+                        <th class="p-3.5 text-center">Length of Stay</th>
+                        <th class="p-3.5 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for adm in recent_admissions %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="p-3.5">
+                                <div class="font-mono font-bold text-xs text-blue-800">{{ adm.admission_number }}</div>
+                                <div class="font-black text-sm text-slate-950">{{ adm.patient.full_name }}</div>
+                                <div class="text-[11px] text-slate-600 font-mono">{{ adm.patient.hospital_id }} &bull; {{ adm.patient.gender }} ({{ adm.patient.age }}y)</div>
+                            </td>
+                            <td class="p-3.5">
+                                <div class="font-extrabold text-slate-900">{{ adm.ward.name }}</div>
+                                <div class="font-mono font-bold text-xs text-blue-800 flex items-center gap-1.5 mt-0.5">
+                                    <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+                                    <span>Bed {{ adm.bed.bed_number }} ({{ adm.bed.bed_type }})</span>
+                                </div>
+                            </td>
+                            <td class="p-3.5 font-medium text-slate-800 max-w-xs">
+                                <div class="truncate font-semibold">{{ adm.admitting_diagnosis }}</div>
+                                {% if adm.icd10_code %}
+                                    <span class="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                        {{ adm.icd10_code }}
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="p-3.5 font-semibold text-slate-800">
+                                {{ adm.admitting_doctor }}
+                            </td>
+                            <td class="p-3.5 text-center">
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-mono font-black bg-blue-100 text-blue-900 border border-blue-300">
+                                    {{ adm.length_of_stay_days }} Day{{ 's' if adm.length_of_stay_days != 1 else '' }}
+                                </span>
+                            </td>
+                            <td class="p-3.5 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <a 
+                                        href="{{ url_for('inpatient.patient_chart', admission_id=adm.id) }}" 
+                                        class="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-xs rounded-lg shadow-xs"
+                                    >
+                                        Clinical Chart
+                                    </a>
+                                    <a 
+                                        href="{{ url_for('inpatient.discharge', admission_id=adm.id) }}" 
+                                        class="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-lg shadow-xs"
+                                        title="Initiate Discharge"
+                                    >
+                                        Discharge
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="p-8 text-center text-slate-500 font-semibold">
+                                No active inpatients currently admitted in the wards.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

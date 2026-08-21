@@ -7,7 +7,8 @@ from models import (
     db, Patient, QueueEntry, Appointment, VitalsRecord,
     ConsultationNote, LabOrder, Prescription, BillingItem,
     MedicationItem, DrugBatch, DispensationRecord, StockTransaction,
-    Invoice, Payment, ShiftRegister, User, AuditLog
+    Invoice, Payment, ShiftRegister, User, AuditLog,
+    Ward, Bed, Admission, BedTransfer, NursingNote, WardRoundNote
 )
 from auth import auth_bp
 from reception import reception_bp
@@ -16,6 +17,7 @@ from doctor import doctor_bp
 from pharmacy import pharmacy_bp
 from billing import billing_bp
 from admin import admin_bp
+from inpatient import inpatient_bp
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -38,6 +40,7 @@ def create_app(config_class=Config):
     app.register_blueprint(pharmacy_bp)
     app.register_blueprint(billing_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(inpatient_bp)
 
     @app.route('/')
     def index():
@@ -51,6 +54,8 @@ def create_app(config_class=Config):
                     return redirect(url_for('doctor.dashboard'))
                 elif user.portal == 'triage':
                     return redirect(url_for('triage.dashboard'))
+                elif user.portal == 'inpatient':
+                    return redirect(url_for('inpatient.dashboard'))
                 elif user.portal == 'pharmacy':
                     return redirect(url_for('pharmacy.dashboard'))
                 elif user.portal == 'billing':
@@ -190,6 +195,17 @@ def seed_initial_data():
             "department": "Revenue Operations & POS Settlement",
             "email": "cashier.joyce@apexmedical.org",
             "phone": "+254 755 000 005"
+        },
+        {
+            "username": "nurse_ward",
+            "password": "Ward@2026",
+            "full_name": "Nurse Joyce Chebet",
+            "staff_id": "STF-WRD-01",
+            "role": "nurse",
+            "portal": "inpatient",
+            "department": "Inpatient Admissions & Ward Services",
+            "email": "nurse.joyce@apexmedical.org",
+            "phone": "+254 766 000 006"
         },
         {
             "username": "admin",
@@ -416,275 +432,430 @@ def seed_initial_data():
         db.session.add(shift1)
         db.session.commit()
 
-    if Patient.query.first():
-        return
+    # 3. Seed Patients and Outpatient workflow if empty
+    if Patient.query.count() == 0:
+        patients_data = [
+            {
+                "first_name": "James",
+                "last_name": "Mwangi",
+                "full_name": "James Mwangi",
+                "national_id": "28491043",
+                "phone": "0712 345 678",
+                "date_of_birth": date(1986, 4, 12),
+                "gender": "Male",
+                "blood_group": "O+",
+                "allergies": "Penicillin (Moderate rash)",
+                "primary_payer": "Insurance",
+                "insurance_company": "Jubilee Health Insurance",
+                "insurance_policy_number": "JUB-882910-A",
+                "next_of_kin_name": "Grace Mwangi",
+                "next_of_kin_phone": "0723 456 789",
+                "next_of_kin_relation": "Spouse",
+                "residential_address": "House 14, Kilimani Ring Rd, Nairobi"
+            },
+            {
+                "first_name": "Sarah",
+                "last_name": "Achieng",
+                "full_name": "Sarah Achieng",
+                "national_id": "31904281",
+                "phone": "0734 567 890",
+                "date_of_birth": date(1994, 9, 23),
+                "gender": "Female",
+                "blood_group": "A+",
+                "allergies": "None known",
+                "primary_payer": "Cash",
+                "next_of_kin_name": "David Achieng",
+                "next_of_kin_phone": "0745 678 901",
+                "next_of_kin_relation": "Parent",
+                "residential_address": "Apex Court, Apt 3B, Parklands"
+            },
+            {
+                "first_name": "Patrick",
+                "last_name": "Kiprono",
+                "full_name": "Patrick Kiprono",
+                "national_id": "22910455",
+                "phone": "0756 789 012",
+                "date_of_birth": date(1978, 1, 15),
+                "gender": "Male",
+                "blood_group": "B+",
+                "allergies": "Sulfonamides (Severe Anaphylaxis)",
+                "primary_payer": "Insurance",
+                "insurance_company": "Social Health Authority (SHA)",
+                "insurance_policy_number": "SHA-902184-B",
+                "next_of_kin_name": "Mary Kiprono",
+                "next_of_kin_phone": "0767 890 123",
+                "next_of_kin_relation": "Spouse",
+                "residential_address": "Estate 4, Karen West, Nairobi"
+            },
+            {
+                "first_name": "Fatima",
+                "last_name": "Hassan",
+                "full_name": "Fatima Hassan",
+                "national_id": "35819024",
+                "phone": "0778 901 234",
+                "date_of_birth": date(2001, 11, 8),
+                "gender": "Female",
+                "blood_group": "O-",
+                "allergies": "None known",
+                "primary_payer": "Corporate",
+                "insurance_company": "AAR Healthcare",
+                "insurance_policy_number": "AAR-771029",
+                "next_of_kin_name": "Omar Hassan",
+                "next_of_kin_phone": "0789 012 345",
+                "next_of_kin_relation": "Parent",
+                "residential_address": "South C, Plainsview Rd, Block C"
+            },
+            {
+                "first_name": "Ezekiel",
+                "last_name": "Mutua",
+                "full_name": "Ezekiel Mutua",
+                "national_id": "18402911",
+                "phone": "0790 123 456",
+                "date_of_birth": date(1965, 6, 30),
+                "gender": "Male",
+                "blood_group": "AB+",
+                "allergies": "Aspirin / NSAIDs",
+                "primary_payer": "Cash",
+                "next_of_kin_name": "John Mutua",
+                "next_of_kin_phone": "0701 234 567",
+                "next_of_kin_relation": "Child",
+                "residential_address": "P.O. Box 102, Machakos Town"
+            }
+        ]
 
-    patients_data = [
-        {
-            "first_name": "James",
-            "last_name": "Mwangi",
-            "full_name": "James Mwangi",
-            "national_id": "28491043",
-            "phone": "0712 345 678",
-            "date_of_birth": date(1986, 4, 12),
-            "gender": "Male",
-            "blood_group": "O+",
-            "allergies": "Penicillin (Moderate rash)",
-            "primary_payer": "Insurance",
-            "insurance_company": "Jubilee Health Insurance",
-            "insurance_policy_number": "JUB-882910-A",
-            "next_of_kin_name": "Grace Mwangi",
-            "next_of_kin_phone": "0723 456 789",
-            "next_of_kin_relation": "Spouse",
-            "residential_address": "House 14, Kilimani Ring Rd, Nairobi"
-        },
-        {
-            "first_name": "Sarah",
-            "last_name": "Achieng",
-            "full_name": "Sarah Achieng",
-            "national_id": "31904281",
-            "phone": "0734 567 890",
-            "date_of_birth": date(1994, 9, 23),
-            "gender": "Female",
-            "blood_group": "A+",
-            "allergies": "None known",
-            "primary_payer": "Cash",
-            "next_of_kin_name": "David Achieng",
-            "next_of_kin_phone": "0745 678 901",
-            "next_of_kin_relation": "Parent",
-            "residential_address": "Apex Court, Apt 3B, Parklands"
-        },
-        {
-            "first_name": "Patrick",
-            "last_name": "Kiprono",
-            "full_name": "Patrick Kiprono",
-            "national_id": "22910455",
-            "phone": "0756 789 012",
-            "date_of_birth": date(1978, 1, 15),
-            "gender": "Male",
-            "blood_group": "B+",
-            "allergies": "Sulfonamides (Severe Anaphylaxis)",
-            "primary_payer": "Insurance",
-            "insurance_company": "Social Health Authority (SHA)",
-            "insurance_policy_number": "SHA-902184-B",
-            "next_of_kin_name": "Mary Kiprono",
-            "next_of_kin_phone": "0767 890 123",
-            "next_of_kin_relation": "Spouse",
-            "residential_address": "Estate 4, Karen West, Nairobi"
-        },
-        {
-            "first_name": "Fatima",
-            "last_name": "Hassan",
-            "full_name": "Fatima Hassan",
-            "national_id": "35819024",
-            "phone": "0778 901 234",
-            "date_of_birth": date(2001, 11, 8),
-            "gender": "Female",
-            "blood_group": "O-",
-            "allergies": "None known",
-            "primary_payer": "Corporate",
-            "insurance_company": "AAR Healthcare",
-            "insurance_policy_number": "AAR-771029",
-            "next_of_kin_name": "Omar Hassan",
-            "next_of_kin_phone": "0789 012 345",
-            "next_of_kin_relation": "Parent",
-            "residential_address": "South C, Plainsview Rd, Block C"
-        },
-        {
-            "first_name": "Ezekiel",
-            "last_name": "Mutua",
-            "full_name": "Ezekiel Mutua",
-            "national_id": "18402911",
-            "phone": "0790 123 456",
-            "date_of_birth": date(1965, 6, 30),
-            "gender": "Male",
-            "blood_group": "AB+",
-            "allergies": "Aspirin / NSAIDs",
-            "primary_payer": "Cash",
-            "next_of_kin_name": "John Mutua",
-            "next_of_kin_phone": "0701 234 567",
-            "next_of_kin_relation": "Child",
-            "residential_address": "P.O. Box 102, Machakos Town"
-        }
-    ]
+        saved_patients = []
+        for p_data in patients_data:
+            h_id = Patient.generate_hospital_id(db.session)
+            patient = Patient(hospital_id=h_id, **p_data)
+            db.session.add(patient)
+            db.session.flush()
+            saved_patients.append(patient)
 
-    saved_patients = []
-    for p_data in patients_data:
-        h_id = Patient.generate_hospital_id(db.session)
-        patient = Patient(hospital_id=h_id, **p_data)
-        db.session.add(patient)
+        # Seed queue entries
+        ticket1 = QueueEntry.generate_daily_ticket(db.session)
+        q1 = QueueEntry(
+            ticket_number=ticket1,
+            patient_id=saved_patients[0].id,
+            stage='billing',
+            priority='urgent',
+            status='waiting',
+            chief_complaint='Acute persistent chest tightness and shortness of breath x 2 hrs',
+            destination_department='General OPD',
+            assigned_doctor='Dr. Sarah Kamau (General OPD)'
+        )
+        db.session.add(q1)
+
+        ticket2 = QueueEntry.generate_daily_ticket(db.session)
+        q2 = QueueEntry(
+            ticket_number=ticket2,
+            patient_id=saved_patients[1].id,
+            stage='triage',
+            priority='normal',
+            status='waiting',
+            chief_complaint='Follow-up for routine blood pressure check and prescription refill',
+            destination_department='General OPD'
+        )
+        db.session.add(q2)
+
+        # Seed sample historical vitals
+        v1 = VitalsRecord(
+            patient_id=saved_patients[0].id,
+            systolic_bp=142,
+            diastolic_bp=92,
+            pulse_rate=94,
+            temperature=37.2,
+            respiratory_rate=18,
+            spo2=96.0,
+            weight_kg=82.0,
+            height_cm=175.0,
+            bmi=26.8,
+            bmi_category='Overweight',
+            triage_category='yellow',
+            chief_complaint='Hypertension screening',
+            allergies=saved_patients[0].allergies,
+            recorded_by='Nurse Mercy',
+            assigned_doctor='Dr. Sarah Kamau',
+            destination_clinic='General OPD',
+            created_at=datetime.utcnow() - timedelta(days=20)
+        )
+        db.session.add(v1)
+
+        # Seed appointments
+        app1 = Appointment(
+            patient_id=saved_patients[2].id,
+            scheduled_date=date.today(),
+            scheduled_time="10:30",
+            department="Cardiology Clinic",
+            doctor_name="Dr. Njoroge",
+            reason="Bi-annual echocardiogram and cardiology consultation",
+            status="scheduled"
+        )
+        db.session.add(app1)
+
+        # Seed sample pending prescription
+        sample_meds = [
+            {
+                "drug": "Amoxicillin 500mg Capsules",
+                "dosage": "500mg",
+                "frequency": "1 cap TID (8-hourly)",
+                "duration": "5 days",
+                "quantity": 15,
+                "instructions": "Take after food with plenty of water",
+                "cost": 450.0
+            },
+            {
+                "drug": "Paracetamol 500mg Tablets",
+                "dosage": "1g",
+                "frequency": "2 tabs TID PRN pain",
+                "duration": "3 days",
+                "quantity": 18,
+                "instructions": "Take when needed for fever or headache",
+                "cost": 180.0
+            }
+        ]
+        rx_new = Prescription(
+            rx_number=Prescription.generate_rx_number(db.session),
+            patient_id=saved_patients[0].id,
+            queue_entry_id=q1.id,
+            doctor_name="Dr. Sarah Kamau (General OPD)",
+            medications_json=json.dumps(sample_meds),
+            notes="Patient has mild penicillin allergy; monitor for cutaneous reactions",
+            total_cost=630.0,
+            status="dispensed",
+            created_at=datetime.utcnow() - timedelta(hours=1)
+        )
+        db.session.add(rx_new)
         db.session.flush()
-        saved_patients.append(patient)
 
-    # Seed queue entries
-    ticket1 = QueueEntry.generate_daily_ticket(db.session)
-    q1 = QueueEntry(
-        ticket_number=ticket1,
-        patient_id=saved_patients[0].id,
-        stage='billing',
-        priority='urgent',
-        status='waiting',
-        chief_complaint='Acute persistent chest tightness and shortness of breath x 2 hrs',
-        destination_department='General OPD',
-        assigned_doctor='Dr. Sarah Kamau (General OPD)'
-    )
-    db.session.add(q1)
+        # Seed Staged Billing Items for Patient 1 (Consultation + Lab Tests + Dispensed Pharmacy + Procedure)
+        inv1_num = Invoice.generate_invoice_number(db.session)
+        inv1 = Invoice(
+            invoice_number=inv1_num,
+            patient_id=saved_patients[0].id,
+            queue_entry_id=q1.id,
+            subtotal=5530.0,
+            discount_amount=0.0,
+            tax_amount=0.0,
+            total_due=5530.0,
+            amount_paid=0.0,
+            balance_due=5530.0,
+            status='unpaid',
+            cashier_name='Cashier Joyce Wambui (Lead Cashier)'
+        )
+        db.session.add(inv1)
+        db.session.flush()
 
-    ticket2 = QueueEntry.generate_daily_ticket(db.session)
-    q2 = QueueEntry(
-        ticket_number=ticket2,
-        patient_id=saved_patients[1].id,
-        stage='triage',
-        priority='normal',
-        status='waiting',
-        chief_complaint='Follow-up for routine blood pressure check and prescription refill',
-        destination_department='General OPD'
-    )
-    db.session.add(q2)
+        b_items = [
+            BillingItem(patient_id=saved_patients[0].id, invoice_id=inv1.id, queue_entry_id=q1.id, service_type='consultation', item_description='General OPD Doctor Consultation', quantity=1, unit_price=1500.0, total_amount=1500.0, status='staged'),
+            BillingItem(patient_id=saved_patients[0].id, invoice_id=inv1.id, queue_entry_id=q1.id, service_type='lab', item_description='Full Blood Count (FBC/CBC)', quantity=1, unit_price=1200.0, total_amount=1200.0, status='staged'),
+            BillingItem(patient_id=saved_patients[0].id, invoice_id=inv1.id, queue_entry_id=q1.id, service_type='radiology', item_description='Chest X-Ray PA Radiograph', quantity=1, unit_price=2200.0, total_amount=2200.0, status='staged'),
+            BillingItem(patient_id=saved_patients[0].id, invoice_id=inv1.id, queue_entry_id=q1.id, service_type='pharmacy', item_description='Amoxicillin 500mg & Paracetamol Dispensation', quantity=1, unit_price=630.0, total_amount=630.0, status='staged'),
+        ]
+        db.session.add_all(b_items)
 
-    # Seed sample historical vitals
-    v1 = VitalsRecord(
-        patient_id=saved_patients[0].id,
-        systolic_bp=142,
-        diastolic_bp=92,
-        pulse_rate=94,
-        temperature=37.2,
-        respiratory_rate=18,
-        spo2=96.0,
-        weight_kg=82.0,
-        height_cm=175.0,
-        bmi=26.8,
-        bmi_category='Overweight',
-        triage_category='yellow',
-        chief_complaint='Hypertension screening',
-        allergies=saved_patients[0].allergies,
-        recorded_by='Nurse Mercy',
-        assigned_doctor='Dr. Sarah Kamau',
-        destination_clinic='General OPD',
-        created_at=datetime.utcnow() - timedelta(days=20)
-    )
-    db.session.add(v1)
+        # Seed Sample Historical Settled Payment for Patient 3 (Patrick Kiprono - SHA Insurance Claim)
+        inv2_num = Invoice.generate_invoice_number(db.session)
+        inv2 = Invoice(
+            invoice_number=inv2_num,
+            patient_id=saved_patients[2].id,
+            subtotal=7200.0,
+            discount_amount=200.0,
+            tax_amount=0.0,
+            total_due=7000.0,
+            amount_paid=7000.0,
+            balance_due=0.0,
+            status='paid',
+            paid_at=datetime.utcnow() - timedelta(hours=2),
+            cashier_name='Cashier Joyce Wambui'
+        )
+        db.session.add(inv2)
+        db.session.flush()
 
-    # Seed appointments
-    app1 = Appointment(
-        patient_id=saved_patients[2].id,
-        scheduled_date=date.today(),
-        scheduled_time="10:30",
-        department="Cardiology Clinic",
-        doctor_name="Dr. Njoroge",
-        reason="Bi-annual echocardiogram and cardiology consultation",
-        status="scheduled"
-    )
-    db.session.add(app1)
+        b_items_p3 = [
+            BillingItem(patient_id=saved_patients[2].id, invoice_id=inv2.id, service_type='consultation', item_description='Cardiology Specialist Review', quantity=1, unit_price=3000.0, total_amount=3000.0, status='paid'),
+            BillingItem(patient_id=saved_patients[2].id, invoice_id=inv2.id, service_type='lab', item_description='Liver Function Tests (LFTs)', quantity=1, unit_price=2800.0, total_amount=2800.0, status='paid'),
+            BillingItem(patient_id=saved_patients[2].id, invoice_id=inv2.id, service_type='procedure', item_description='Echocardiogram & Doppler Screening', quantity=1, unit_price=1400.0, total_amount=1400.0, status='paid'),
+        ]
+        db.session.add_all(b_items_p3)
 
-    # Seed sample pending prescription
-    sample_meds = [
-        {
-            "drug": "Amoxicillin 500mg Capsules",
-            "dosage": "500mg",
-            "frequency": "1 cap TID (8-hourly)",
-            "duration": "5 days",
-            "quantity": 15,
-            "instructions": "Take after food with plenty of water",
-            "cost": 450.0
-        },
-        {
-            "drug": "Paracetamol 500mg Tablets",
-            "dosage": "1g",
-            "frequency": "2 tabs TID PRN pain",
-            "duration": "3 days",
-            "quantity": 18,
-            "instructions": "Take when needed for fever or headache",
-            "cost": 180.0
-        }
-    ]
-    rx_new = Prescription(
-        rx_number=Prescription.generate_rx_number(db.session),
-        patient_id=saved_patients[0].id,
-        queue_entry_id=q1.id,
-        doctor_name="Dr. Sarah Kamau (General OPD)",
-        medications_json=json.dumps(sample_meds),
-        notes="Patient has mild penicillin allergy; monitor for cutaneous reactions",
-        total_cost=630.0,
-        status="dispensed",
-        created_at=datetime.utcnow() - timedelta(hours=1)
-    )
-    db.session.add(rx_new)
-    db.session.flush()
+        pay1 = Payment(
+            receipt_number=Payment.generate_receipt_number(db.session),
+            invoice_id=inv2.id,
+            patient_id=saved_patients[2].id,
+            total_amount_paid=7000.0,
+            payment_method_summary="M-Pesa [QHD89X72K1] (KES 2,000.00) + Insurance Claim [SHA] (KES 5,000.00)",
+            cash_amount=0.0,
+            mpesa_amount=2000.0,
+            mpesa_reference="QHD89X72K1",
+            mpesa_phone="0756789012",
+            insurance_amount=5000.0,
+            insurance_company="Social Health Authority (SHA)",
+            insurance_policy_number="SHA-902184-B",
+            insurance_claim_number="AUTH-SHA-2026-9921",
+            cashier_name="Cashier Joyce Wambui (Lead Cashier)",
+            shift_code="SHF-20260817-01",
+            created_at=datetime.utcnow() - timedelta(hours=2)
+        )
+        db.session.add(pay1)
 
-    # Seed Staged Billing Items for Patient 1 (Consultation + Lab Tests + Dispensed Pharmacy + Procedure)
-    inv1_num = Invoice.generate_invoice_number(db.session)
-    inv1 = Invoice(
-        invoice_number=inv1_num,
-        patient_id=saved_patients[0].id,
-        queue_entry_id=q1.id,
-        subtotal=5530.0,
-        discount_amount=0.0,
-        tax_amount=0.0,
-        total_due=5530.0,
-        amount_paid=0.0,
-        balance_due=5530.0,
-        status='unpaid',
-        cashier_name='Cashier Joyce Wambui (Lead Cashier)'
-    )
-    db.session.add(inv1)
-    db.session.flush()
+    # 4. Seed Inpatient Wards & Beds if empty
+    if Ward.query.count() == 0:
+        wards_data = [
+            {
+                "name": "Male Medical Ward",
+                "code": "MMW",
+                "gender_category": "Male",
+                "floor": "1st Floor, East Wing",
+                "wing": "St. Luke Wing",
+                "daily_nurse_in_charge": "Nurse Joyce Chebet",
+                "beds": [
+                    {"bed_number": "MMW-B01", "bed_type": "Standard General", "rate": 1500.0},
+                    {"bed_number": "MMW-B02", "bed_type": "Standard General", "rate": 1500.0},
+                    {"bed_number": "MMW-B03", "bed_type": "Semi-Private", "rate": 3000.0},
+                    {"bed_number": "MMW-B04", "bed_type": "Private Suite", "rate": 5500.0},
+                ]
+            },
+            {
+                "name": "Female Surgical Ward",
+                "code": "FSW",
+                "gender_category": "Female",
+                "floor": "1st Floor, West Wing",
+                "wing": "St. Teresa Wing",
+                "daily_nurse_in_charge": "Nurse Sharon Otieno",
+                "beds": [
+                    {"bed_number": "FSW-B01", "bed_type": "Standard General", "rate": 1500.0},
+                    {"bed_number": "FSW-B02", "bed_type": "Standard General", "rate": 1500.0},
+                    {"bed_number": "FSW-B03", "bed_type": "Semi-Private", "rate": 3000.0},
+                    {"bed_number": "FSW-B04", "bed_type": "Private Suite", "rate": 5500.0},
+                ]
+            },
+            {
+                "name": "Pediatric & Neonatal Ward",
+                "code": "PED",
+                "gender_category": "Pediatric",
+                "floor": "Ground Floor, South Wing",
+                "wing": "Children's Wing",
+                "daily_nurse_in_charge": "Nurse Faith Mutua",
+                "beds": [
+                    {"bed_number": "PED-B01", "bed_type": "Pediatric Crib", "rate": 1200.0},
+                    {"bed_number": "PED-B02", "bed_type": "Pediatric Standard", "rate": 1500.0},
+                    {"bed_number": "PED-B03", "bed_type": "Isolation Suite", "rate": 4000.0},
+                ]
+            },
+            {
+                "name": "Maternity & Labor Ward",
+                "code": "MAT",
+                "gender_category": "Female",
+                "floor": "2nd Floor, North Wing",
+                "wing": "Maternal Center",
+                "daily_nurse_in_charge": "Midwife Everlyne Kerubo",
+                "beds": [
+                    {"bed_number": "MAT-B01", "bed_type": "Antenatal Bed", "rate": 2000.0},
+                    {"bed_number": "MAT-B02", "bed_type": "Postnatal Recovery", "rate": 2500.0},
+                    {"bed_number": "MAT-B03", "bed_type": "Private Maternity Suite", "rate": 6000.0},
+                ]
+            },
+            {
+                "name": "Intensive Care Unit (ICU / HDU)",
+                "code": "ICU",
+                "gender_category": "Mixed",
+                "floor": "2nd Floor, Critical Care Wing",
+                "wing": "Trauma & ICU Center",
+                "daily_nurse_in_charge": "Nurse Brenda Wairimu (ICU Lead)",
+                "beds": [
+                    {"bed_number": "ICU-B01", "bed_type": "ICU Ventilator Bed", "rate": 12000.0},
+                    {"bed_number": "ICU-B02", "bed_type": "ICU Ventilator Bed", "rate": 12000.0},
+                    {"bed_number": "HDU-B01", "bed_type": "High Dependency Unit", "rate": 8000.0},
+                ]
+            }
+        ]
 
-    b_items = [
-        BillingItem(patient_id=saved_patients[0].id, invoice_id=inv1.id, queue_entry_id=q1.id, service_type='consultation', item_description='General OPD Doctor Consultation', quantity=1, unit_price=1500.0, total_amount=1500.0, status='staged'),
-        BillingItem(patient_id=saved_patients[0].id, invoice_id=inv1.id, queue_entry_id=q1.id, service_type='lab', item_description='Full Blood Count (FBC/CBC)', quantity=1, unit_price=1200.0, total_amount=1200.0, status='staged'),
-        BillingItem(patient_id=saved_patients[0].id, invoice_id=inv1.id, queue_entry_id=q1.id, service_type='radiology', item_description='Chest X-Ray PA Radiograph', quantity=1, unit_price=2200.0, total_amount=2200.0, status='staged'),
-        BillingItem(patient_id=saved_patients[0].id, invoice_id=inv1.id, queue_entry_id=q1.id, service_type='pharmacy', item_description='Amoxicillin 500mg & Paracetamol Dispensation', quantity=1, unit_price=630.0, total_amount=630.0, status='staged'),
-    ]
-    db.session.add_all(b_items)
+        created_wards = []
+        created_beds = []
+        for w_data in wards_data:
+            beds_list = w_data.pop("beds")
+            ward = Ward(**w_data)
+            db.session.add(ward)
+            db.session.flush()
+            created_wards.append(ward)
 
-    # Seed Sample Historical Settled Payment for Patient 3 (Patrick Kiprono - SHA Insurance Claim)
-    inv2_num = Invoice.generate_invoice_number(db.session)
-    inv2 = Invoice(
-        invoice_number=inv2_num,
-        patient_id=saved_patients[2].id,
-        subtotal=7200.0,
-        discount_amount=200.0,
-        tax_amount=0.0,
-        total_due=7000.0,
-        amount_paid=7000.0,
-        balance_due=0.0,
-        status='paid',
-        paid_at=datetime.utcnow() - timedelta(hours=2),
-        cashier_name='Cashier Joyce Wambui'
-    )
-    db.session.add(inv2)
-    db.session.flush()
+            for b_data in beds_list:
+                bed = Bed(
+                    ward_id=ward.id,
+                    bed_number=b_data["bed_number"],
+                    bed_type=b_data["bed_type"],
+                    daily_rate=b_data["rate"],
+                    status="available"
+                )
+                db.session.add(bed)
+                created_beds.append(bed)
 
-    b_items_p3 = [
-        BillingItem(patient_id=saved_patients[2].id, invoice_id=inv2.id, service_type='consultation', item_description='Cardiology Specialist Review', quantity=1, unit_price=3000.0, total_amount=3000.0, status='paid'),
-        BillingItem(patient_id=saved_patients[2].id, invoice_id=inv2.id, service_type='lab', item_description='Liver Function Tests (LFTs)', quantity=1, unit_price=2800.0, total_amount=2800.0, status='paid'),
-        BillingItem(patient_id=saved_patients[2].id, invoice_id=inv2.id, service_type='procedure', item_description='Echocardiogram & Doppler Screening', quantity=1, unit_price=1400.0, total_amount=1400.0, status='paid'),
-    ]
-    db.session.add_all(b_items_p3)
+        db.session.flush()
 
-    pay1 = Payment(
-        receipt_number=Payment.generate_receipt_number(db.session),
-        invoice_id=inv2.id,
-        patient_id=saved_patients[2].id,
-        total_amount_paid=7000.0,
-        payment_method_summary="M-Pesa [QHD89X72K1] (KES 2,000.00) + Insurance Claim [SHA] (KES 5,000.00)",
-        cash_amount=0.0,
-        mpesa_amount=2000.0,
-        mpesa_reference="QHD89X72K1",
-        mpesa_phone="0756789012",
-        insurance_amount=5000.0,
-        insurance_company="Social Health Authority (SHA)",
-        insurance_policy_number="SHA-902184-B",
-        insurance_claim_number="AUTH-SHA-2026-9921",
-        cashier_name="Cashier Joyce Wambui (Lead Cashier)",
-        shift_code="SHF-20260817-01",
-        created_at=datetime.utcnow() - timedelta(hours=2)
-    )
-    db.session.add(pay1)
+        # Seed sample active inpatient admission
+        all_patients = Patient.query.all()
+        if len(all_patients) > 0 and len(created_beds) > 0:
+            target_patient = all_patients[0]
+            target_bed = created_beds[0] # MMW-B01
+            target_ward = created_wards[0]
+
+            target_bed.status = 'occupied'
+            adm1 = Admission(
+                admission_number="ADM-2026-0001",
+                patient_id=target_patient.id,
+                ward_id=target_ward.id,
+                bed_id=target_bed.id,
+                admitting_doctor="Dr. Sarah Kamau (Lead Physician)",
+                admitting_diagnosis="Severe Community-Acquired Pneumonia with moderate hypoxemia",
+                icd10_code="J18.9",
+                admission_type="Emergency Admission",
+                admitted_at=datetime.utcnow() - timedelta(days=2, hours=4),
+                expected_discharge_date=date.today() + timedelta(days=2),
+                status="admitted",
+                dietary_plan="High Protein, Low Salt Hospital Diet",
+                isolation_required=False,
+                nursing_acuity="Moderate Care (Level 2)",
+                deposit_amount=5000.0,
+                emergency_contact_name=target_patient.next_of_kin_name,
+                emergency_contact_phone=target_patient.next_of_kin_phone,
+                emergency_contact_relation=target_patient.next_of_kin_relation
+            )
+            db.session.add(adm1)
+            db.session.flush()
+
+            # Add sample nursing notes for this patient
+            nn1 = NursingNote(
+                admission_id=adm1.id,
+                patient_id=target_patient.id,
+                nurse_name="Nurse Joyce Chebet",
+                shift="Morning Shift (07:00 - 15:00)",
+                subjective_assessment="Patient reports improved breathing ease after morning nebulization. Mild dry cough persists.",
+                nursing_interventions="Administered IV Ceftriaxone 1g, salbutamol nebulization 2.5mg given. Assisted with personal hygiene. Vitals charted.",
+                vital_signs_summary="BP 122/78, Pulse 76, Temp 36.8°C, SpO2 98% on room air",
+                intake_output_notes="Oral intake 1200ml, IV fluids 500ml / Urine output 1400ml clear",
+                medications_administered="IV Ceftriaxone 1g, Oral Paracetamol 1g, IV Normal Saline 500ml",
+                iv_infusions="Left forearm 20G cannula patent, infusing Normal Saline @ 60ml/hr",
+                handover_instructions="Repeat afternoon SpO2 checks. Encourage deep breathing and ambulation.",
+                created_at=datetime.utcnow() - timedelta(hours=3)
+            )
+            db.session.add(nn1)
+
+            # Add sample doctor ward round
+            wr1 = WardRoundNote(
+                admission_id=adm1.id,
+                patient_id=target_patient.id,
+                doctor_name="Dr. Sarah Kamau",
+                round_date=datetime.utcnow() - timedelta(hours=4),
+                clinical_progress="Patient afebrile for 36 hours. Chest auscultation reveals clearing bronchial breath sounds on right lower lobe. Respiratory rate steady at 18 bpm.",
+                lab_radiology_review="Repeat CBC shows WBC decreased from 14.2 to 7.8 (normalized).",
+                treatment_plan_changes="Step down from IV Ceftriaxone to Oral Augmentin 625mg BD starting tonight. Discontinue IV infusion. Patient may be cleared for discharge tomorrow if stable.",
+                discharge_readiness="Plan Discharge Tomorrow",
+                created_at=datetime.utcnow() - timedelta(hours=4)
+            )
+            db.session.add(wr1)
 
     db.session.commit()
-    print("Initial clinical, EMR, Pharmacy, and Billing seed data initialized successfully.")
+    print("Initial clinical, EMR, Pharmacy, Billing, and Inpatient Ward seed data initialized successfully.")
 
 if __name__ == '__main__':
     app = create_app()
