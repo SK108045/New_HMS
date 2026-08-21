@@ -582,3 +582,12 @@ def batches():
         batches=all_batches,
         transactions=transactions
     )
+
+
+# =================== 9. PRINTABLE OFFICIAL PRESCRIPTION (Rx) ===================
+@pharmacy_bp.route('/prescription/<int:prescription_id>/print')
+def print_prescription(prescription_id):
+    prescription = Prescription.query.get_or_404(prescription_id)
+    patient = prescription.patient
+    return render_template('clinical/print_prescription.html', prescription=prescription, patient=patient)
+

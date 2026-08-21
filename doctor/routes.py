@@ -1,10 +1,14 @@
+import os
 import json
 from datetime import datetime, date, timedelta
-from flask import render_template, request, redirect, url_for, flash, jsonify
+from flask import render_template, request, redirect, url_for, flash, jsonify, current_app, send_from_directory
+from werkzeug.utils import secure_filename
 from models import (
     db, Patient, QueueEntry, Appointment, VitalsRecord,
-    ConsultationNote, LabOrder, Prescription, BillingItem
+    ConsultationNote, LabOrder, Prescription, BillingItem,
+    ClinicalDocument, AuditLog
 )
+from auth.decorators import get_current_user, permission_required
 from . import doctor_bp
 
 # Predefined Common ICD-10 Presets
@@ -367,6 +371,7 @@ def consultation(queue_id):
     past_vitals = VitalsRecord.query.filter_by(patient_id=patient.id).order_by(VitalsRecord.created_at.desc()).all()
     past_labs = LabOrder.query.filter_by(patient_id=patient.id).order_by(LabOrder.created_at.desc()).all()
     past_rxs = Prescription.query.filter_by(patient_id=patient.id).order_by(Prescription.created_at.desc()).all()
+    clinical_documents = ClinicalDocument.query.filter_by(patient_id=patient.id).order_by(ClinicalDocument.created_at.desc()).all()
 
     return render_template(
         'doctor/consultation.html',
@@ -376,11 +381,17 @@ def consultation(queue_id):
         past_vitals=past_vitals,
         past_labs=past_labs,
         past_rxs=past_rxs,
+        clinical_documents=clinical_documents,
         icd10_database=ICD10_DATABASE,
         lab_catalog=LAB_CATALOG,
         drug_formulary=DRUG_FORMULARY,
         doctors_list=DOCTORS_LIST
     )
+
+
+@doctor_bp.route('/patient/<int:patient_id>/chart', methods=['GET'])
+def patient_chart(patient_id):
+    return direct_consult(patient_id)
 
 
 @doctor_bp.route('/patient/<int:patient_id>/consult', methods=['GET'])
@@ -638,3 +649,227 @@ def api_drugs():
         if q in item['name'].lower() or q in item['category'].lower()
     ]
     return jsonify(matches)
+
+
+# =================== 11. CLINICAL DOCUMENTS & SICK-OFF CERTIFICATES ===================
+@doctor_bp.route('/patient/<int:patient_id>/medical-certificate', methods=['GET', 'POST'])
+def generate_medical_certificate(patient_id):
+    patient = Patient.query.get_or_404(patient_id)
+    actor = get_current_user()
+
+    if request.method == 'POST':
+        addressed_to = request.form.get('addressed_to', 'To Whom It May Concern').strip()
+        diagnosis = request.form.get('diagnosis', '').strip()
+        start_date = request.form.get('start_date', datetime.utcnow().strftime('%Y-%m-%d'))
+        days_excused = int(request.form.get('days_excused', 3))
+        fit_to_resume_date = request.form.get('fit_to_resume_date', '')
+        fitness_status = request.form.get('fitness_status', 'Total Bed Rest & Temporary Unfitness')
+        clinical_remarks = request.form.get('clinical_remarks', '').strip()
+        doctor_name = request.form.get('doctor_name', '').strip() or (actor.full_name if actor else 'Dr. Sarah Kamau')
+
+        if not diagnosis or not fit_to_resume_date:
+            flash('Diagnosis and Fit-to-Resume Date are required.', 'error')
+            return redirect(url_for('doctor.generate_medical_certificate', patient_id=patient.id))
+
+        doc_num = ClinicalDocument.generate_document_number('medical_certificate', db.session)
+        doc = ClinicalDocument(
+            document_number=doc_num,
+            patient_id=patient.id,
+            document_type='medical_certificate',
+            title=f"Medical Sick-Off Certificate ({days_excused} Days)",
+            description=f"Excuse from duties: {diagnosis}. Excused for {days_excused} days.",
+            created_by_id=actor.id if actor else None,
+            created_by_name=doctor_name,
+            is_signed=True,
+            signed_by=doctor_name,
+            signed_at=datetime.utcnow()
+        )
+        doc.metadata_dict = {
+            'addressed_to': addressed_to,
+            'diagnosis': diagnosis,
+            'start_date': start_date,
+            'days_excused': days_excused,
+            'fit_to_resume_date': fit_to_resume_date,
+            'fitness_status': fitness_status,
+            'clinical_remarks': clinical_remarks,
+            'doctor_name': doctor_name
+        }
+
+        db.session.add(doc)
+        db.session.commit()
+
+        AuditLog.log_event(
+            'issued_medical_certificate',
+            'clinical_document',
+            doc.id,
+            f"Issued Medical Sick-Off Certificate ({doc.document_number}) for {patient.full_name} ({days_excused} days).",
+            actor=actor,
+            severity='info'
+        )
+
+        flash(f"Medical Certificate {doc.document_number} generated successfully.", 'success')
+        return redirect(url_for('doctor.print_medical_certificate', patient_id=patient.id, doc_id=doc.id))
+
+    return render_template(
+        'clinical/medical_certificate.html',
+        patient=patient,
+        now=datetime.utcnow()
+    )
+
+
+@doctor_bp.route('/patient/<int:patient_id>/medical-certificate/<int:doc_id>/print')
+def print_medical_certificate(patient_id, doc_id):
+    patient = Patient.query.get_or_404(patient_id)
+    doc = ClinicalDocument.query.get_or_404(doc_id)
+    return render_template('clinical/print_medical_certificate.html', patient=patient, doc=doc)
+
+
+# =================== 12. SPECIALIST MEDICAL REFERRAL LETTERS ===================
+@doctor_bp.route('/patient/<int:patient_id>/referral', methods=['GET', 'POST'])
+def generate_referral_letter(patient_id):
+    patient = Patient.query.get_or_404(patient_id)
+    actor = get_current_user()
+
+    if request.method == 'POST':
+        receiving_facility = request.form.get('receiving_facility', '').strip()
+        specialty_dept = request.form.get('specialty_dept', '').strip()
+        urgency = request.form.get('urgency', 'Urgent / Priority Transfer')
+        working_diagnosis = request.form.get('working_diagnosis', '').strip()
+        clinical_history = request.form.get('clinical_history', '').strip()
+        investigations_summary = request.form.get('investigations_summary', '').strip()
+        current_medications = request.form.get('current_medications', '').strip()
+        reason_for_referral = request.form.get('reason_for_referral', '').strip()
+        referring_doctor = request.form.get('referring_doctor', '').strip() or (actor.full_name if actor else 'Dr. Sarah Kamau')
+
+        if not receiving_facility or not working_diagnosis or not reason_for_referral:
+            flash('Receiving Facility, Working Diagnosis, and Reason for Referral are required.', 'error')
+            return redirect(url_for('doctor.generate_referral_letter', patient_id=patient.id))
+
+        doc_num = ClinicalDocument.generate_document_number('referral_letter', db.session)
+        doc = ClinicalDocument(
+            document_number=doc_num,
+            patient_id=patient.id,
+            document_type='referral_letter',
+            title=f"Specialist Referral to {receiving_facility}",
+            description=f"Referral for: {working_diagnosis}. Target: {specialty_dept}.",
+            created_by_id=actor.id if actor else None,
+            created_by_name=referring_doctor,
+            is_signed=True,
+            signed_by=referring_doctor,
+            signed_at=datetime.utcnow()
+        )
+        doc.metadata_dict = {
+            'receiving_facility': receiving_facility,
+            'specialty_dept': specialty_dept,
+            'urgency': urgency,
+            'working_diagnosis': working_diagnosis,
+            'clinical_history': clinical_history,
+            'investigations_summary': investigations_summary,
+            'current_medications': current_medications,
+            'reason_for_referral': reason_for_referral,
+            'referring_doctor': referring_doctor
+        }
+
+        db.session.add(doc)
+        db.session.commit()
+
+        AuditLog.log_event(
+            'issued_referral_letter',
+            'clinical_document',
+            doc.id,
+            f"Generated Referral Letter ({doc.document_number}) for {patient.full_name} to {receiving_facility}.",
+            actor=actor,
+            severity='info'
+        )
+
+        flash(f"Referral Letter {doc.document_number} issued successfully.", 'success')
+        return redirect(url_for('doctor.print_referral_letter', patient_id=patient.id, doc_id=doc.id))
+
+    return render_template(
+        'clinical/referral_letter.html',
+        patient=patient,
+        now=datetime.utcnow()
+    )
+
+
+@doctor_bp.route('/patient/<int:patient_id>/referral/<int:doc_id>/print')
+def print_referral_letter(patient_id, doc_id):
+    patient = Patient.query.get_or_404(patient_id)
+    doc = ClinicalDocument.query.get_or_404(doc_id)
+    return render_template('clinical/print_referral_letter.html', patient=patient, doc=doc)
+
+
+# =================== 13. PRINTABLE OFFICIAL PRESCRIPTION (Rx) ===================
+@doctor_bp.route('/prescription/<int:prescription_id>/print')
+def print_prescription(prescription_id):
+    prescription = Prescription.query.get_or_404(prescription_id)
+    patient = prescription.patient
+    return render_template('clinical/print_prescription.html', prescription=prescription, patient=patient)
+
+
+# =================== 14. DIGITAL ATTACHMENT UPLOAD VAULT ===================
+@doctor_bp.route('/patient/<int:patient_id>/documents/upload', methods=['POST'])
+def upload_attachment(patient_id):
+    patient = Patient.query.get_or_404(patient_id)
+    actor = get_current_user()
+
+    title = request.form.get('title', '').strip()
+    doc_type = request.form.get('document_type', 'other')
+    description = request.form.get('description', '').strip()
+    file = request.files.get('file')
+
+    if not title:
+        flash('Document title is required.', 'error')
+        return redirect(url_for('doctor.patient_chart', patient_id=patient.id))
+
+    saved_path = None
+    original_filename = None
+    file_size = 0
+    mime_type = None
+
+    if file and file.filename:
+        filename = secure_filename(file.filename)
+        original_filename = filename
+        upload_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'documents')
+        os.makedirs(upload_folder, exist_ok=True)
+        
+        timestamp_prefix = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        stored_filename = f"{timestamp_prefix}_{filename}"
+        file_dest = os.path.join(upload_folder, stored_filename)
+        file.save(file_dest)
+        
+        saved_path = f"uploads/documents/{stored_filename}"
+        file_size = os.path.getsize(file_dest)
+        mime_type = file.mimetype
+
+    doc_num = ClinicalDocument.generate_document_number(doc_type, db.session)
+    doc = ClinicalDocument(
+        document_number=doc_num,
+        patient_id=patient.id,
+        document_type=doc_type,
+        title=title,
+        description=description,
+        file_path=saved_path,
+        file_name=original_filename,
+        file_size=file_size,
+        mime_type=mime_type,
+        created_by_id=actor.id if actor else None,
+        created_by_name=actor.full_name if actor else 'Attending Clinician',
+        created_at=datetime.utcnow()
+    )
+
+    db.session.add(doc)
+    db.session.commit()
+
+    AuditLog.log_event(
+        'uploaded_clinical_document',
+        'clinical_document',
+        doc.id,
+        f"Uploaded clinical attachment '{title}' ({doc_type}) for {patient.full_name}.",
+        actor=actor,
+        severity='info'
+    )
+
+    flash(f"Attachment '{title}' uploaded to patient records successfully.", 'success')
+    return redirect(request.referrer or url_for('doctor.patient_chart', patient_id=patient.id))
+

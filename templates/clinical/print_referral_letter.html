@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Referral Letter - {{ patient.full_name }} ({{ doc.document_number }})</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dist/styles.css') }}">
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; font-size: 10.5pt !important; color: #000 !important; }
+            .sheet { border: none !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; }
+        }
+        .stamp-box {
+            border: 2px dashed #94a3b8;
+            border-radius: 8px;
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen py-8 text-slate-900 font-sans antialiased">
+
+    <!-- Floating Action Toolbar -->
+    <div class="max-w-3xl mx-auto mb-6 px-4 flex items-center justify-between no-print">
+        <a 
+            href="{{ url_for('doctor.patient_chart', patient_id=patient.id) }}" 
+            class="px-4 py-2 bg-white text-slate-800 text-xs font-black rounded-xl border border-slate-300 shadow-xs hover:bg-slate-50 flex items-center gap-1.5"
+        >
+            &larr; Back to Patient Chart
+        </a>
+
+        <div class="flex items-center gap-3">
+            <button 
+                onclick="window.print()" 
+                class="px-5 py-2 bg-slate-950 hover:bg-slate-800 text-white text-xs font-black rounded-xl shadow-md flex items-center gap-2"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                </svg>
+                <span>Print Referral Letter (A4)</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Official A4 Referral Letter Sheet -->
+    <div class="sheet max-w-3xl mx-auto bg-white border-2 border-slate-300 shadow-xl rounded-2xl p-8 sm:p-12 space-y-7">
+        
+        <!-- Hospital Header -->
+        <div class="border-b-2 border-slate-900 pb-5 flex items-start justify-between gap-4">
+            <div class="flex items-start gap-4">
+                <div class="w-16 h-16 rounded-xl bg-slate-950 text-white font-mono font-black text-2xl flex items-center justify-center border border-slate-800 shrink-0">
+                    +
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-black text-slate-950 tracking-tight uppercase">
+                        Apex Regional Medical Center
+                    </h1>
+                    <p class="text-xs font-extrabold text-slate-700 uppercase tracking-wider font-mono">
+                        Directorate of Medical Services & Specialized Referrals
+                    </p>
+                    <p class="text-[11px] text-slate-600 font-medium mt-0.5">
+                        Hospital Road, Wing B &bull; P.O. Box 45100-00100 &bull; Tel: +254 (020) 790-0000 &bull; Email: referrals@apexmedical.org
+                    </p>
+                </div>
+            </div>
+
+            <div class="text-right font-mono text-xs shrink-0">
+                <span class="inline-block px-3 py-1 bg-indigo-100 border border-indigo-300 rounded font-black text-indigo-950 uppercase tracking-wider">
+                    {{ doc.metadata_dict.get('urgency', 'Referral Letter') }}
+                </span>
+                <p class="font-bold text-slate-800 mt-1.5">{{ doc.document_number }}</p>
+                <p class="text-slate-500">{{ doc.created_at.strftime('%d %b %Y') }}</p>
+            </div>
+        </div>
+
+        <!-- Addressed Header Box -->
+        <div class="grid grid-cols-2 gap-4 text-xs font-semibold p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <div>
+                <span class="text-slate-500 font-bold uppercase font-mono block text-[10px]">To Receiving Center:</span>
+                <p class="font-black text-slate-950 text-sm mt-0.5">{{ doc.metadata_dict.get('receiving_facility', 'Tertiary Referral Facility') }}</p>
+                <p class="text-slate-700 font-medium">{{ doc.metadata_dict.get('specialty_dept', 'Specialist Department') }}</p>
+            </div>
+            <div>
+                <span class="text-slate-500 font-bold uppercase font-mono block text-[10px]">From Referring Facility:</span>
+                <p class="font-black text-slate-950 text-sm mt-0.5">Apex Regional Medical Center</p>
+                <p class="text-slate-700 font-medium">{{ doc.metadata_dict.get('referring_doctor', doc.created_by_name) }}</p>
+            </div>
+        </div>
+
+        <!-- Title -->
+        <div class="text-center">
+            <h2 class="text-lg font-black text-slate-950 uppercase tracking-wider underline decoration-2 underline-offset-4">
+                Clinical Specialist Referral Letter
+            </h2>
+        </div>
+
+        <!-- Patient Demographics Summary -->
+        <div class="p-3.5 rounded-xl bg-white border-2 border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div>
+                <span class="font-mono font-bold text-slate-500 uppercase block text-[10px]">Patient Name</span>
+                <span class="font-black text-slate-950 text-sm">{{ patient.full_name }}</span>
+            </div>
+            <div>
+                <span class="font-mono font-bold text-slate-500 uppercase block text-[10px]">Hospital Record ID</span>
+                <span class="font-mono font-black text-slate-950 text-sm">{{ patient.hospital_id }}</span>
+            </div>
+            <div>
+                <span class="font-mono font-bold text-slate-500 uppercase block text-[10px]">Age / Gender</span>
+                <span class="font-bold text-slate-900 text-sm">{{ patient.age_display }} / {{ patient.gender }}</span>
+            </div>
+            <div>
+                <span class="font-mono font-bold text-slate-500 uppercase block text-[10px]">Contact Phone</span>
+                <span class="font-mono font-bold text-slate-900 text-sm">{{ patient.phone or 'On File' }}</span>
+            </div>
+        </div>
+
+        <!-- Clinical Narrative Sections -->
+        <div class="space-y-4 text-xs leading-relaxed text-slate-900">
+            
+            <!-- Working Diagnosis -->
+            <div>
+                <span class="font-mono font-black text-slate-700 uppercase tracking-wide block text-[11px]">1. Working Diagnosis & ICD-10 Coding:</span>
+                <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200 font-black text-slate-950 text-sm mt-1">
+                    {{ doc.metadata_dict.get('working_diagnosis', 'Medical Case') }}
+                </div>
+            </div>
+
+            <!-- History & Physical Examination -->
+            <div>
+                <span class="font-mono font-black text-slate-700 uppercase tracking-wide block text-[11px]">2. Clinical History & Physical Findings:</span>
+                <p class="font-medium text-slate-900 whitespace-pre-line mt-1 p-3 bg-slate-50 rounded-lg border border-slate-200">{{ doc.metadata_dict.get('clinical_history', 'N/A') }}</p>
+            </div>
+
+            <!-- Diagnostics Done -->
+            {% if doc.metadata_dict.get('investigations_summary') %}
+                <div>
+                    <span class="font-mono font-black text-slate-700 uppercase tracking-wide block text-[11px]">3. Diagnostic Investigations & Findings:</span>
+                    <p class="font-medium text-slate-900 whitespace-pre-line mt-1 p-3 bg-slate-50 rounded-lg border border-slate-200">{{ doc.metadata_dict.get('investigations_summary') }}</p>
+                </div>
+            {% endif %}
+
+            <!-- Current Medications -->
+            {% if doc.metadata_dict.get('current_medications') %}
+                <div>
+                    <span class="font-mono font-black text-slate-700 uppercase tracking-wide block text-[11px]">4. Current Treatment & Medications:</span>
+                    <p class="font-bold text-slate-950 font-mono mt-1 p-2.5 bg-slate-50 rounded-lg border border-slate-200">{{ doc.metadata_dict.get('current_medications') }}</p>
+                </div>
+            {% endif %}
+
+            <!-- Reason for Referral -->
+            <div>
+                <span class="font-mono font-black text-indigo-900 uppercase tracking-wide block text-[11px]">5. Specific Purpose of Specialist Referral:</span>
+                <p class="font-bold text-slate-950 mt-1 p-3 bg-indigo-50/70 rounded-lg border border-indigo-200">{{ doc.metadata_dict.get('reason_for_referral', 'Specialist Review and Management') }}</p>
+            </div>
+
+        </div>
+
+        <!-- Signature Section -->
+        <div class="pt-6 border-t-2 border-slate-300 grid grid-cols-2 gap-8 items-end text-xs">
+            <div class="space-y-2">
+                <div class="h-12 border-b-2 border-slate-900 flex items-end pb-1 font-serif text-lg italic text-slate-800">
+                    {{ doc.signed_by or doc.created_by_name }}
+                </div>
+                <div>
+                    <strong class="text-slate-950 font-black text-sm block">{{ doc.signed_by or doc.created_by_name }}</strong>
+                    <span class="text-slate-600 font-semibold block">Attending Medical Practitioner</span>
+                    <span class="font-mono text-slate-500 text-[10px] block">Apex Regional Medical Center</span>
+                </div>
+            </div>
+
+            <div class="stamp-box p-3 text-center flex flex-col items-center justify-center min-h-[100px]">
+                <span class="text-[10px] font-mono font-extrabold text-slate-400 uppercase tracking-widest block">Official Clinical Seal</span>
+                <span class="font-serif font-black text-indigo-950 uppercase text-xs mt-1">APEX MEDICAL REFERRALS</span>
+                <span class="font-mono font-bold text-slate-600 text-[10px]">DISPATCHED &bull; {{ doc.created_at.strftime('%d-%m-%Y') }}</span>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="border-t border-slate-200 pt-3 flex items-center justify-between text-[10px] font-mono text-slate-500">
+            <span>Ref No: {{ doc.document_number }}</span>
+            <span>Apex Hospital Electronic Health Record</span>
+        </div>
+
+    </div>
+
+</body>
+</html>

@@ -188,6 +188,18 @@
                 <span>4. 360° Timeline & PACS Viewer</span>
             </button>
 
+            <button 
+                type="button" 
+                @click="activeTab = 'documents'" 
+                :class="activeTab === 'documents' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'"
+                class="px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                </svg>
+                <span>5. Clinical Documents & Attachments ({{ clinical_documents|length }})</span>
+            </button>
+
         </div>
 
         <!-- =================== TAB 1: SOAP CLINICAL CONSULTATION & 3D ANATOMICAL MAPPER =================== -->
@@ -699,6 +711,145 @@
 
         </div>
 
+        <!-- =================== TAB 5: CLINICAL DOCUMENTS & ATTACHMENTS VAULT =================== -->
+        <div x-show="activeTab === 'documents'" class="space-y-6" x-cloak>
+            
+            <!-- Fast Clinical Document Action Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                <!-- 1. Sick-Off Certificate -->
+                <a 
+                    href="{{ url_for('doctor.generate_medical_certificate', patient_id=patient.id) }}" 
+                    class="p-5 bg-white rounded-2xl border-2 border-slate-200 hover:border-indigo-600 shadow-xs hover:shadow-md transition-all group block space-y-2"
+                >
+                    <div class="flex items-center justify-between">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-900 flex items-center justify-center font-mono font-black text-sm group-hover:bg-indigo-900 group-hover:text-white transition-colors">
+                            📜
+                        </div>
+                        <span class="text-xs font-mono font-bold text-indigo-700 uppercase tracking-wider">Official Form &rarr;</span>
+                    </div>
+                    <h4 class="font-black text-sm text-slate-950">Medical Sick-Off Certificate</h4>
+                    <p class="text-xs text-slate-600 font-medium leading-relaxed">
+                        Issue stamped medical excuse / sick leave certificates for employer or school.
+                    </p>
+                </a>
+
+                <!-- 2. Specialist Referral Letter -->
+                <a 
+                    href="{{ url_for('doctor.generate_referral_letter', patient_id=patient.id) }}" 
+                    class="p-5 bg-white rounded-2xl border-2 border-slate-200 hover:border-blue-600 shadow-xs hover:shadow-md transition-all group block space-y-2"
+                >
+                    <div class="flex items-center justify-between">
+                        <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-900 flex items-center justify-center font-mono font-black text-sm group-hover:bg-blue-900 group-hover:text-white transition-colors">
+                            🏥
+                        </div>
+                        <span class="text-xs font-mono font-bold text-blue-700 uppercase tracking-wider">Official Form &rarr;</span>
+                    </div>
+                    <h4 class="font-black text-sm text-slate-950">Specialist Referral Letter</h4>
+                    <p class="text-xs text-slate-600 font-medium leading-relaxed">
+                        Draft formal clinical transfer to tertiary referral centers or specialty consultants.
+                    </p>
+                </a>
+
+                <!-- 3. Upload Document Attachment -->
+                <button 
+                    type="button" 
+                    @click="uploadModalOpen = true" 
+                    class="p-5 bg-white rounded-2xl border-2 border-dashed border-slate-300 hover:border-slate-800 shadow-xs hover:shadow-md transition-all group text-left space-y-2 block w-full"
+                >
+                    <div class="flex items-center justify-between">
+                        <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-900 flex items-center justify-center font-mono font-black text-sm group-hover:bg-slate-900 group-hover:text-white transition-colors">
+                            📎
+                        </div>
+                        <span class="text-xs font-mono font-bold text-slate-700 uppercase tracking-wider">+ Upload File</span>
+                    </div>
+                    <h4 class="font-black text-sm text-slate-950">Upload Clinical Attachment</h4>
+                    <p class="text-xs text-slate-600 font-medium leading-relaxed">
+                        Attach external lab PDFs, radiology scans (X-rays/CT), ID copies, or insurance forms.
+                    </p>
+                </button>
+
+            </div>
+
+            <!-- Documents Table -->
+            <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+                <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-black text-slate-950 uppercase tracking-wide">
+                            Patient Clinical Documents & File Vault
+                        </h3>
+                        <p class="text-xs text-slate-600 font-semibold mt-0.5">Permanent record of issued clinical certificates and diagnostic uploads.</p>
+                    </div>
+                    <span class="text-xs font-mono font-bold text-slate-600">{{ clinical_documents|length }} Documents on File</span>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs min-w-[700px]">
+                        <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                            <tr>
+                                <th class="p-3.5">Document Details</th>
+                                <th class="p-3.5">Classification</th>
+                                <th class="p-3.5">Issued / Uploaded By</th>
+                                <th class="p-3.5">Date</th>
+                                <th class="p-3.5 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200 font-sans">
+                            {% for doc in clinical_documents %}
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-3.5">
+                                        <div class="font-extrabold text-slate-950 text-sm">{{ doc.title }}</div>
+                                        <div class="font-mono text-[11px] text-blue-900 font-bold mt-0.5">
+                                            {{ doc.document_number }}
+                                            {% if doc.file_name %}&bull; <span class="text-slate-600">{{ doc.file_name }} ({{ doc.formatted_size }})</span>{% endif %}
+                                        </div>
+                                    </td>
+                                    <td class="p-3.5">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-black uppercase border
+                                            {% if doc.document_type == 'medical_certificate' %}bg-indigo-100 text-indigo-900 border-indigo-300
+                                            {% elif doc.document_type == 'referral_letter' %}bg-blue-100 text-blue-900 border-blue-300
+                                            {% elif doc.document_type == 'discharge_summary' %}bg-purple-100 text-purple-900 border-purple-300
+                                            {% else %}bg-slate-100 text-slate-800 border-slate-300{% endif %}">
+                                            {{ doc.document_type|replace('_', ' ') }}
+                                        </span>
+                                    </td>
+                                    <td class="p-3.5 font-bold text-slate-900">
+                                        {{ doc.created_by_name }}
+                                    </td>
+                                    <td class="p-3.5 font-mono text-slate-600 font-semibold">
+                                        {{ doc.created_at.strftime('%d %b %Y &bull; %H:%M') }}
+                                    </td>
+                                    <td class="p-3.5 text-right">
+                                        {% if doc.document_type == 'medical_certificate' %}
+                                            <a href="{{ url_for('doctor.print_medical_certificate', patient_id=patient.id, doc_id=doc.id) }}" target="_blank" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-300 rounded-lg text-xs font-black inline-flex items-center gap-1">
+                                                <span>Print Certificate</span>
+                                            </a>
+                                        {% elif doc.document_type == 'referral_letter' %}
+                                            <a href="{{ url_for('doctor.print_referral_letter', patient_id=patient.id, doc_id=doc.id) }}" target="_blank" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 rounded-lg text-xs font-black inline-flex items-center gap-1">
+                                                <span>Print Referral</span>
+                                            </a>
+                                        {% elif doc.file_path %}
+                                            <a href="{{ url_for('view_document', doc_id=doc.id) }}" target="_blank" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-lg text-xs font-black inline-flex items-center gap-1">
+                                                <span>View Attachment</span>
+                                            </a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="p-8 text-center text-slate-500 font-semibold">
+                                        No clinical documents or file attachments on record for this patient.
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+
+        </div>
+
         <!-- =================== ONE-CLICK DISPATCH & ORDER ROUTING BAR =================== -->
         <div class="bg-white rounded-xl border border-slate-200 shadow-lg p-5 sticky bottom-4 z-20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             
@@ -753,6 +904,56 @@
 
     </form>
 
+    <!-- ATTACHMENT UPLOAD MODAL -->
+    <div 
+        x-show="uploadModalOpen" 
+        x-cloak 
+        class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4"
+    >
+        <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-2xl max-w-lg w-full p-6 space-y-5" @click.away="uploadModalOpen = false">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-black text-slate-950">Upload Patient Clinical Attachment</h3>
+                <button type="button" @click="uploadModalOpen = false" class="text-slate-400 hover:text-slate-700 font-mono text-lg font-bold">&times;</button>
+            </div>
+
+            <form method="POST" action="{{ url_for('doctor.upload_attachment', patient_id=patient.id) }}" enctype="multipart/form-data" class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-extrabold text-slate-800 uppercase mb-1 font-mono">Document Title *</label>
+                    <input type="text" name="title" required placeholder="e.g. Chest X-Ray PA View Report / NHIF Pre-Auth Card" class="form-input text-xs font-bold w-full">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-extrabold text-slate-800 uppercase mb-1 font-mono">Classification</label>
+                        <select name="document_type" class="form-select text-xs font-bold w-full">
+                            <option value="radiology_scan">Radiology / PACS Scan</option>
+                            <option value="lab_report">External Lab Report</option>
+                            <option value="insurance_preauth">Insurance Pre-Authorization</option>
+                            <option value="id_copy">National ID / Birth Cert</option>
+                            <option value="referral_letter">External Referral Slip</option>
+                            <option value="other">General Medical File</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-extrabold text-slate-800 uppercase mb-1 font-mono">Select File *</label>
+                        <input type="file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.webp" class="form-input text-xs w-full py-1">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-extrabold text-slate-800 uppercase mb-1 font-mono">Clinical Remarks / Description</label>
+                    <textarea name="description" rows="2" placeholder="Optional notes regarding scan findings or source hospital..." class="form-textarea text-xs w-full"></textarea>
+                </div>
+
+                <div class="pt-3 border-t border-slate-200 flex items-center justify-between">
+                    <button type="button" @click="uploadModalOpen = false" class="btn-secondary py-2 px-4 text-xs font-bold">Cancel</button>
+                    <button type="submit" class="btn-primary py-2 px-6 text-xs font-black shadow-md">Upload & Save to Vault</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
@@ -761,6 +962,7 @@
     function doctorConsultation() {
         return {
             activeTab: 'soap',
+            uploadModalOpen: false,
             objectiveText: 'General: Well-nourished adult in no acute cardiopulmonary distress.\nHEENT: Normocephalic, no scleral icterus.\nCVS: S1, S2 present, regular rhythm.\nRespiratory: Good bilateral air entry, clear chest.',
             taggedRegions: [],
             icd10Query: '',

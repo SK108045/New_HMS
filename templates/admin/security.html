@@ -1,0 +1,483 @@
+{% extends 'base.html' %}
+
+{% block title %}Hospital Security Command Center & RBAC - Apex Admin{% endblock %}
+
+{% block content %}
+<div class="space-y-6 pb-16" x-data="{ activeTab: 'policies' }">
+
+    <!-- Top Station Command Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-200 pb-5">
+        <div>
+            <div class="flex items-center gap-2 font-mono text-xs font-extrabold tracking-wider text-purple-700 uppercase mb-1">
+                <span class="w-2 h-2 rounded-full bg-purple-600 animate-pulse"></span>
+                <span>Command HQ-00 &bull; Cyber & Clinical Security Directorate</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
+                Security Command Center & RBAC
+            </h1>
+            <p class="text-sm font-semibold text-slate-700 mt-1">
+                Configure Two-Factor Authentication (Google Authenticator), granular RBAC permission matrices, session idle timeouts, and staff security controls.
+            </p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a 
+                href="{{ url_for('admin.audit') }}" 
+                class="btn-secondary py-2.5 px-3.5 text-xs font-extrabold flex items-center gap-2"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                </svg>
+                <span>Full Audit Stream</span>
+            </a>
+            <a 
+                href="{{ url_for('auth.setup_2fa') }}" 
+                class="btn-primary py-2.5 px-4 text-xs font-extrabold flex items-center gap-2 shadow-sm"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+                <span>Configure My 2FA</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- 4 Security KPI Metric Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        
+        <!-- 1. 2FA Protection Rate -->
+        <div class="bg-white rounded-2xl border-2 border-slate-200 p-5 shadow-xs flex items-center justify-between">
+            <div>
+                <p class="text-xs font-mono font-extrabold uppercase tracking-wider text-slate-600">2FA Protection Rate</p>
+                <p class="text-3xl font-black text-slate-950 mt-1">{{ two_fa_percentage }}%</p>
+                <p class="text-xs font-bold text-emerald-700 mt-1">{{ two_fa_enabled_count }} of {{ total_users }} Staff Enrolled</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-purple-100 border-2 border-purple-200 flex items-center justify-center text-purple-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <!-- 2. Session Inactivity Timeout -->
+        <div class="bg-white rounded-2xl border-2 border-slate-200 p-5 shadow-xs flex items-center justify-between">
+            <div>
+                <p class="text-xs font-mono font-extrabold uppercase tracking-wider text-slate-600">Session Idle Timeout</p>
+                <p class="text-3xl font-black text-blue-900 mt-1 font-mono">{{ settings.session_timeout_minutes }} min</p>
+                <p class="text-xs font-bold text-slate-700 mt-1">Sliding token renewal</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-blue-100 border-2 border-blue-200 flex items-center justify-center text-blue-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <!-- 3. Brute Force Protection -->
+        <div class="bg-white rounded-2xl border-2 border-slate-200 p-5 shadow-xs flex items-center justify-between">
+            <div>
+                <p class="text-xs font-mono font-extrabold uppercase tracking-wider text-slate-600">Lockout Threshold</p>
+                <p class="text-3xl font-black text-amber-900 mt-1 font-mono">{{ settings.max_failed_attempts }} Attempts</p>
+                <p class="text-xs font-bold text-slate-700 mt-1">{{ settings.lockout_duration_minutes }}m penalty duration</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-amber-100 border-2 border-amber-200 flex items-center justify-center text-amber-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <!-- 4. Security Incident Events -->
+        <div class="bg-white rounded-2xl border-2 border-slate-200 p-5 shadow-xs flex items-center justify-between">
+            <div>
+                <p class="text-xs font-mono font-extrabold uppercase tracking-wider text-slate-600">Security Events</p>
+                <p class="text-3xl font-black text-rose-700 mt-1 font-mono">{{ security_incidents_count }}</p>
+                <p class="text-xs font-bold text-slate-700 mt-1">Logged in audit trail</p>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-rose-100 border-2 border-rose-200 flex items-center justify-center text-rose-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="border-b-2 border-slate-200 flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <button 
+            type="button" 
+            @click="activeTab = 'policies'"
+            :class="activeTab === 'policies' ? 'border-purple-800 text-purple-950 border-b-2 font-black' : 'text-slate-600 hover:text-slate-900 font-bold'"
+            class="py-3 px-4 text-xs uppercase tracking-wider flex items-center gap-2 transition-all shrink-0"
+        >
+            <span>🛡️ Security Policies & 2FA</span>
+        </button>
+
+        <button 
+            type="button" 
+            @click="activeTab = 'rbac'"
+            :class="activeTab === 'rbac' ? 'border-purple-800 text-purple-950 border-b-2 font-black' : 'text-slate-600 hover:text-slate-900 font-bold'"
+            class="py-3 px-4 text-xs uppercase tracking-wider flex items-center gap-2 transition-all shrink-0"
+        >
+            <span>🔑 RBAC Permissions Matrix</span>
+        </button>
+
+        <button 
+            type="button" 
+            @click="activeTab = 'staff'"
+            :class="activeTab === 'staff' ? 'border-purple-800 text-purple-950 border-b-2 font-black' : 'text-slate-600 hover:text-slate-900 font-bold'"
+            class="py-3 px-4 text-xs uppercase tracking-wider flex items-center gap-2 transition-all shrink-0"
+        >
+            <span>👥 Staff 2FA & Account Control</span>
+        </button>
+
+        <button 
+            type="button" 
+            @click="activeTab = 'logs'"
+            :class="activeTab === 'logs' ? 'border-purple-800 text-purple-950 border-b-2 font-black' : 'text-slate-600 hover:text-slate-900 font-bold'"
+            class="py-3 px-4 text-xs uppercase tracking-wider flex items-center gap-2 transition-all shrink-0"
+        >
+            <span>📜 Security Audit Stream</span>
+        </button>
+    </div>
+
+    <!-- TAB 1: SYSTEM SECURITY POLICIES FORM -->
+    <div x-show="activeTab === 'policies'" class="space-y-6">
+        <form method="POST" action="{{ url_for('admin.update_security_settings') }}" class="bg-white rounded-2xl border-2 border-slate-200 shadow-md p-6 sm:p-8 space-y-6">
+            
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div>
+                    <h2 class="text-base font-black text-slate-950">Hospital-Wide Authentication & Access Controls</h2>
+                    <p class="text-xs text-slate-600 font-semibold mt-0.5">Parameters apply immediately to all clinical stations across the facility.</p>
+                </div>
+                <span class="text-xs font-mono font-bold text-slate-500">Updated: {{ settings.updated_at.strftime('%d/%m/%Y %H:%M') }}</span>
+            </div>
+
+            <!-- Two-Factor Authentication Controls -->
+            <div class="space-y-3">
+                <span class="text-xs font-mono font-extrabold uppercase text-purple-800 block">Google Authenticator (2FA / MFA) Policies</span>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label class="p-4 rounded-xl border-2 border-slate-200 bg-slate-50 hover:bg-slate-100 flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" name="require_2fa_for_admin_doctor" value="1" {% if settings.require_2fa_for_admin_doctor %}checked{% endif %} class="w-5 h-5 rounded text-purple-600 focus:ring-purple-500 mt-0.5">
+                        <div>
+                            <strong class="text-xs font-black text-slate-950 block">Mandate 2FA for Doctors & Administrators</strong>
+                            <span class="text-[11px] text-slate-600 font-medium block mt-0.5">Requires Google Authenticator verification for all privileged medical consultants and system executives upon login.</span>
+                        </div>
+                    </label>
+
+                    <label class="p-4 rounded-xl border-2 border-slate-200 bg-slate-50 hover:bg-slate-100 flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" name="require_2fa_for_all" value="1" {% if settings.require_2fa_for_all %}checked{% endif %} class="w-5 h-5 rounded text-purple-600 focus:ring-purple-500 mt-0.5">
+                        <div>
+                            <strong class="text-xs font-black text-slate-950 block">Enforce 2FA for Entire Hospital Workforce</strong>
+                            <span class="text-[11px] text-slate-600 font-medium block mt-0.5">Mandates Google Authenticator for nurses, pharmacists, cashiers, and receptionists across all desks.</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Session & Lockout Parameters -->
+            <div class="space-y-3 pt-2">
+                <span class="text-xs font-mono font-extrabold uppercase text-purple-800 block">Session Management & Brute-Force Defense</span>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                            Inactivity Timeout (Minutes)
+                        </label>
+                        <select name="session_timeout_minutes" class="form-select text-xs font-bold w-full">
+                            <option value="15" {% if settings.session_timeout_minutes == 15 %}selected{% endif %}>15 Minutes (High Security)</option>
+                            <option value="30" {% if settings.session_timeout_minutes == 30 %}selected{% endif %}>30 Minutes (Recommended)</option>
+                            <option value="60" {% if settings.session_timeout_minutes == 60 %}selected{% endif %}>60 Minutes (Standard)</option>
+                            <option value="120" {% if settings.session_timeout_minutes == 120 %}selected{% endif %}>120 Minutes (Extended)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                            Max Failed Login Attempts
+                        </label>
+                        <select name="max_failed_attempts" class="form-select text-xs font-bold w-full">
+                            <option value="3" {% if settings.max_failed_attempts == 3 %}selected{% endif %}>3 Attempts (Strict)</option>
+                            <option value="5" {% if settings.max_failed_attempts == 5 %}selected{% endif %}>5 Attempts (Recommended)</option>
+                            <option value="10" {% if settings.max_failed_attempts == 10 %}selected{% endif %}>10 Attempts (Relaxed)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                            Account Lockout Duration
+                        </label>
+                        <select name="lockout_duration_minutes" class="form-select text-xs font-bold w-full">
+                            <option value="10" {% if settings.lockout_duration_minutes == 10 %}selected{% endif %}>10 Minutes</option>
+                            <option value="15" {% if settings.lockout_duration_minutes == 15 %}selected{% endif %}>15 Minutes (Standard)</option>
+                            <option value="30" {% if settings.lockout_duration_minutes == 30 %}selected{% endif %}>30 Minutes</option>
+                            <option value="60" {% if settings.lockout_duration_minutes == 60 %}selected{% endif %}>60 Minutes</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Password Policy -->
+            <div class="space-y-3 pt-2">
+                <span class="text-xs font-mono font-extrabold uppercase text-purple-800 block">Password Complexity Policy</span>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                            Minimum Password Length
+                        </label>
+                        <select name="password_min_length" class="form-select text-xs font-bold w-full">
+                            <option value="8" {% if settings.password_min_length == 8 %}selected{% endif %}>8 Characters</option>
+                            <option value="10" {% if settings.password_min_length == 10 %}selected{% endif %}>10 Characters</option>
+                            <option value="12" {% if settings.password_min_length == 12 %}selected{% endif %}>12 Characters (High Security)</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center pt-5">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" name="require_special_chars" value="1" {% if settings.require_special_chars %}checked{% endif %} class="w-5 h-5 rounded text-purple-600 focus:ring-purple-500">
+                            <span class="text-xs font-bold text-slate-800">Require Mixed Case, Numbers & Special Symbols</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-4 border-t-2 border-slate-200 flex items-center justify-end">
+                <button type="submit" class="btn-primary py-2.5 px-6 text-xs font-black shadow-md flex items-center gap-2">
+                    <span>Save & Deploy Security Policies &rarr;</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- TAB 2: RBAC PERMISSIONS MATRIX -->
+    <div x-show="activeTab === 'rbac'" class="space-y-4" x-cloak>
+        <form method="POST" action="{{ url_for('admin.update_role_permissions') }}" class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+            
+            <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">Role-Based Access Control (RBAC) Matrix</h2>
+                    <p class="text-xs text-slate-600 font-semibold mt-0.5">Toggle granular capabilities for standard clinical and operational roles.</p>
+                </div>
+                <button type="submit" class="btn-primary py-2 px-4 text-xs font-black shadow-xs">
+                    Save RBAC Matrix
+                </button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs min-w-[900px]">
+                    <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                        <tr>
+                            <th class="p-3.5">Category & Permission</th>
+                            <th class="p-3.5 text-center">Doctor</th>
+                            <th class="p-3.5 text-center">Nurse</th>
+                            <th class="p-3.5 text-center">Pharmacist</th>
+                            <th class="p-3.5 text-center">Cashier</th>
+                            <th class="p-3.5 text-center">Receptionist</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        {% for perm in permissions %}
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-3.5">
+                                    <div class="font-extrabold text-slate-950">{{ perm.name }}</div>
+                                    <div class="font-mono text-[10px] text-blue-900 font-bold">{{ perm.code }} &bull; <span class="text-slate-500 uppercase">{{ perm.category }}</span></div>
+                                    <div class="text-[11px] text-slate-600 font-medium mt-0.5">{{ perm.description }}</div>
+                                </td>
+
+                                {% for role in ['doctor', 'nurse', 'pharmacist', 'cashier', 'receptionist'] %}
+                                    <td class="p-3.5 text-center">
+                                        <input 
+                                            type="checkbox" 
+                                            name="perm_{{ role }}_{{ perm.code }}" 
+                                            value="1" 
+                                            {% if role_matrix.get(role, {}).get(perm.code) %}checked{% endif %}
+                                            class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                                        >
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="p-4 bg-slate-50 border-t-2 border-slate-200 flex items-center justify-end">
+                <button type="submit" class="btn-primary py-2 px-6 text-xs font-black shadow-xs">
+                    Save RBAC Matrix
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- TAB 3: STAFF 2FA & ACCOUNT CONTROL -->
+    <div x-show="activeTab === 'staff'" class="space-y-4" x-cloak>
+        <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+            
+            <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">Staff 2FA Enrollment & Security State</h2>
+                    <p class="text-xs text-slate-600 font-semibold mt-0.5">Manage two-factor status, unlock brute-forced accounts, and force password updates.</p>
+                </div>
+                <span class="text-xs font-mono font-bold text-slate-600">{{ users|length }} Registered Staff</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs min-w-[850px]">
+                    <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                        <tr>
+                            <th class="p-3.5">Staff Member</th>
+                            <th class="p-3.5">Role & Portal</th>
+                            <th class="p-3.5 text-center">Google Authenticator</th>
+                            <th class="p-3.5 text-center">Account Security</th>
+                            <th class="p-3.5">Last Active</th>
+                            <th class="p-3.5 text-right">Security Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        {% for u in users %}
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-3.5">
+                                    <div class="font-extrabold text-sm text-slate-950">{{ u.full_name }}</div>
+                                    <div class="font-mono text-xs text-slate-600 font-bold">{{ u.username }} &bull; {{ u.staff_id }}</div>
+                                </td>
+
+                                <td class="p-3.5">
+                                    <span class="font-black text-xs text-slate-900 uppercase">{{ u.role }}</span>
+                                    <div class="text-[11px] text-slate-600 font-semibold">{{ u.department }}</div>
+                                </td>
+
+                                <td class="p-3.5 text-center">
+                                    {% if u.is_2fa_enabled %}
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                            <span>✓ Active</span>
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                            <span>Not Enrolled</span>
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="p-3.5 text-center">
+                                    {% if u.is_locked() %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-900 border border-rose-300 animate-pulse">
+                                            🔒 LOCKED
+                                        </span>
+                                    {% elif u.force_password_change %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                            Must Reset PW
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                            Healthy
+                                        </span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="p-3.5 font-mono text-slate-700">
+                                    {{ u.last_activity_at.strftime('%d %b, %H:%M') if u.last_activity_at else (u.last_login.strftime('%d %b, %H:%M') if u.last_login else 'Never') }}
+                                </td>
+
+                                <td class="p-3.5 text-right">
+                                    <div class="flex items-center justify-end gap-2 flex-wrap">
+                                        {% if u.is_locked() %}
+                                            <form method="POST" action="{{ url_for('admin.unlock_user', user_id=u.id) }}">
+                                                <button type="submit" class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-[11px] rounded-lg shadow-xs">
+                                                    Unlock
+                                                </button>
+                                            </form>
+                                        {% endif %}
+
+                                        {% if u.is_2fa_enabled %}
+                                            <form method="POST" action="{{ url_for('admin.reset_user_2fa', user_id=u.id) }}" onsubmit="return confirm('Reset 2FA for {{ u.full_name }}? Staff will need to scan a new QR code.');">
+                                                <button type="submit" class="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-extrabold text-[11px] rounded-lg">
+                                                    Reset 2FA
+                                                </button>
+                                            </form>
+                                        {% endif %}
+
+                                        <form method="POST" action="{{ url_for('admin.force_user_password_change', user_id=u.id) }}">
+                                            <button type="submit" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-extrabold text-[11px] rounded-lg" title="Require password update on next login">
+                                                Force PW Reset
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- TAB 4: SECURITY AUDIT STREAM -->
+    <div x-show="activeTab === 'logs'" class="space-y-4" x-cloak>
+        <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+            <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">Live Security & Anomaly Logs</h2>
+                    <p class="text-xs text-slate-600 font-semibold mt-0.5">Immutable audit recordings of authentications, 2FA events, and permission overrides.</p>
+                </div>
+                <span class="text-xs font-mono font-bold text-slate-600">Last 50 Events</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs min-w-[850px]">
+                    <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                        <tr>
+                            <th class="p-3.5">Timestamp</th>
+                            <th class="p-3.5">Severity</th>
+                            <th class="p-3.5">Action Event</th>
+                            <th class="p-3.5">Actor & IP Address</th>
+                            <th class="p-3.5">Event Details</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        {% for log in audit_logs %}
+                            <tr class="hover:bg-slate-50 font-sans">
+                                <td class="p-3.5 font-mono font-bold text-slate-900 whitespace-nowrap">
+                                    {{ log.created_at.strftime('%d/%m/%Y %H:%M:%S') }}
+                                </td>
+
+                                <td class="p-3.5">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase border
+                                        {% if log.severity == 'critical' or log.severity == 'security_breach' %}bg-rose-100 text-rose-900 border-rose-300
+                                        {% elif log.severity == 'warning' %}bg-amber-100 text-amber-900 border-amber-300
+                                        {% else %}bg-slate-100 text-slate-800 border-slate-300{% endif %}">
+                                        {{ log.severity }}
+                                    </span>
+                                </td>
+
+                                <td class="p-3.5 font-mono font-extrabold text-blue-950">
+                                    {{ log.action }}
+                                </td>
+
+                                <td class="p-3.5">
+                                    <div class="font-black text-slate-950">{{ log.actor_name }}</div>
+                                    <div class="font-mono text-[10px] text-slate-500">{{ log.ip_address or '127.0.0.1' }}</div>
+                                </td>
+
+                                <td class="p-3.5 text-slate-800 font-medium">
+                                    {{ log.details }}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="p-8 text-center text-slate-500 font-semibold">
+                                    No security log entries recorded.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

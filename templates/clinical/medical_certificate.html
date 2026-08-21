@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+
+{% block title %}Issue Official Medical Certificate - Apex Clinical EMR{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6 pb-16">
+
+    <!-- Top Navigation Breadcrumbs & Header -->
+    <div class="border-b-2 border-slate-200 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2 font-mono text-xs font-extrabold tracking-wider text-indigo-700 uppercase mb-1">
+                <a href="{{ url_for('doctor.patient_chart', patient_id=patient.id) }}" class="hover:underline">&larr; Return to Patient EMR Chart</a>
+                <span>&bull;</span>
+                <span>Clinical Documentation</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
+                Issue Medical Certificate / Sick-Off Note
+            </h1>
+            <p class="text-xs font-semibold text-slate-600 mt-0.5">
+                Generate an official, stamped sick leave excuse certificate for workplace or educational institutions.
+            </p>
+        </div>
+
+        <!-- Patient Demographics Pill -->
+        <div class="p-3 bg-white rounded-xl border-2 border-slate-200 shadow-xs flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-900 font-mono font-black text-sm flex items-center justify-center border border-indigo-200">
+                {{ patient.gender[0] if patient.gender else 'P' }}
+            </div>
+            <div>
+                <strong class="text-sm font-black text-slate-950 block">{{ patient.full_name }}</strong>
+                <span class="font-mono text-xs text-slate-600 font-bold">{{ patient.hospital_id }} &bull; {{ patient.age_display }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Certificate Generator Form -->
+    <form method="POST" action="{{ url_for('doctor.generate_medical_certificate', patient_id=patient.id) }}" class="bg-white rounded-2xl border-2 border-slate-200 shadow-md p-6 sm:p-8 space-y-6">
+        
+        <div class="border-b border-slate-200 pb-3 flex items-center justify-between">
+            <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">
+                Medical Certificate Particulars
+            </h2>
+            <span class="text-xs font-mono font-bold text-slate-500">Date: {{ now.strftime('%d %B %Y') }}</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            
+            <!-- Recipient / Purpose -->
+            <div class="sm:col-span-2">
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Addressed To (Employer / School / Institution) *
+                </label>
+                <input 
+                    type="text" 
+                    name="addressed_to" 
+                    value="To Whom It May Concern" 
+                    required 
+                    placeholder="e.g. The Human Resource Manager / School Principal" 
+                    class="form-input text-xs font-bold w-full"
+                >
+            </div>
+
+            <!-- Clinical Diagnosis -->
+            <div class="sm:col-span-2">
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Clinical Diagnosis / Medical Reason *
+                </label>
+                <input 
+                    type="text" 
+                    name="diagnosis" 
+                    required 
+                    placeholder="e.g. Acute Upper Respiratory Tract Infection (URTI) with High Grade Fever" 
+                    class="form-input text-xs font-bold w-full"
+                >
+            </div>
+
+            <!-- Start Date -->
+            <div>
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Sick Leave Start Date *
+                </label>
+                <input 
+                    type="date" 
+                    name="start_date" 
+                    value="{{ now.strftime('%Y-%m-%d') }}" 
+                    required 
+                    class="form-input text-xs font-bold w-full"
+                >
+            </div>
+
+            <!-- Days Excused -->
+            <div>
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Duration of Recommended Bed Rest (Days) *
+                </label>
+                <input 
+                    type="number" 
+                    name="days_excused" 
+                    value="3" 
+                    min="1" 
+                    max="60" 
+                    required 
+                    class="form-input text-xs font-bold w-full"
+                >
+            </div>
+
+            <!-- Fit to Resume Date -->
+            <div>
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Fit to Resume Duty / Classes Date *
+                </label>
+                <input 
+                    type="date" 
+                    name="fit_to_resume_date" 
+                    required 
+                    class="form-input text-xs font-bold w-full"
+                >
+            </div>
+
+            <!-- Duty Restriction Type -->
+            <div>
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Fitness & Work Capacity Recommendation
+                </label>
+                <select name="fitness_status" class="form-select text-xs font-bold w-full">
+                    <option value="Total Bed Rest & Temporary Unfitness">Total Bed Rest & Temporary Unfitness</option>
+                    <option value="Light Duties Only (No Heavy Lifting)">Light Duties Only (No Heavy Lifting)</option>
+                    <option value="Sedentary Work / Desk Duties Only">Sedentary Work / Desk Duties Only</option>
+                    <option value="Fit to Resume Regular Duties">Fit to Resume Regular Duties</option>
+                </select>
+            </div>
+
+            <!-- Clinical Remarks -->
+            <div class="sm:col-span-2">
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Physician's Clinical Observations & Instructions
+                </label>
+                <textarea 
+                    name="clinical_remarks" 
+                    rows="3" 
+                    placeholder="e.g. Patient underwent clinical examination and treatment at our outpatient clinic. Strictly advised adequate oral hydration and bed rest." 
+                    class="form-textarea text-xs font-medium w-full"
+                ></textarea>
+            </div>
+
+            <!-- Attending Doctor Name -->
+            <div class="sm:col-span-2">
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Attending Medical Practitioner
+                </label>
+                <input 
+                    type="text" 
+                    name="doctor_name" 
+                    value="{{ session.get('full_name', 'Dr. Sarah Kamau') }} (Reg: KMPDC-A9842)" 
+                    required 
+                    class="form-input text-xs font-bold w-full"
+                >
+            </div>
+
+        </div>
+
+        <div class="pt-4 border-t-2 border-slate-200 flex items-center justify-between">
+            <a 
+                href="{{ url_for('doctor.patient_chart', patient_id=patient.id) }}" 
+                class="btn-secondary py-2.5 px-4 text-xs font-black"
+            >
+                Cancel
+            </a>
+
+            <button 
+                type="submit" 
+                class="btn-primary py-2.5 px-6 text-xs font-black shadow-md flex items-center gap-2"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                </svg>
+                <span>Generate & Open Printable Certificate &rarr;</span>
+            </button>
+        </div>
+
+    </form>
+
+</div>
+{% endblock %}

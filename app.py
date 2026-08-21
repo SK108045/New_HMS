@@ -1,14 +1,16 @@
 import os
 import json
+import time
 from datetime import datetime, date, timedelta
-from flask import Flask, redirect, url_for, session
+from flask import Flask, redirect, url_for, session, request, flash, send_from_directory
 from config import Config
 from models import (
     db, Patient, QueueEntry, Appointment, VitalsRecord,
     ConsultationNote, LabOrder, Prescription, BillingItem,
     MedicationItem, DrugBatch, DispensationRecord, StockTransaction,
     Invoice, Payment, ShiftRegister, User, AuditLog,
-    Ward, Bed, Admission, BedTransfer, NursingNote, WardRoundNote
+    Ward, Bed, Admission, BedTransfer, NursingNote, WardRoundNote,
+    SecuritySetting, Permission, RolePermission, ClinicalDocument
 )
 from auth import auth_bp
 from reception import reception_bp
@@ -23,8 +25,9 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Ensure upload folder exists
+    # Ensure upload folders exist
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    os.makedirs(os.path.join(app.root_path, 'static', 'uploads', 'documents'), exist_ok=True)
     os.makedirs(os.path.join(app.root_path, 'static', 'dist'), exist_ok=True)
     os.makedirs(os.path.join(app.root_path, 'static', 'js'), exist_ok=True)
     os.makedirs(os.path.join(app.root_path, 'static', 'images'), exist_ok=True)
@@ -41,6 +44,33 @@ def create_app(config_class=Config):
     app.register_blueprint(billing_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(inpatient_bp)
+
+    # Sliding Session Inactivity Middleware
+    @app.before_request
+    def enforce_session_security():
+        # Exclude static assets and authentication endpoints
+        if request.endpoint and (request.endpoint.startswith('static') or request.endpoint.startswith('auth.')):
+            return
+
+        if 'user_id' in session:
+            now_ts = time.time()
+            last_active = session.get('last_active', now_ts)
+            
+            try:
+                settings = SecuritySetting.get_settings()
+                timeout_seconds = (settings.session_timeout_minutes or 30) * 60
+            except Exception:
+                timeout_seconds = 1800
+
+            if (now_ts - last_active) > timeout_seconds:
+                user_portal = session.get('portal', 'reception')
+                from auth.decorators import logout_user
+                logout_user()
+                flash('Your clinical session has expired due to inactivity. Please sign in again.', 'warning')
+                return redirect(url_for('auth.login', portal=user_portal))
+            
+            # Renew sliding activity timestamp
+            session['last_active'] = now_ts
 
     @app.route('/')
     def index():
@@ -63,6 +93,22 @@ def create_app(config_class=Config):
                 else:
                     return redirect(url_for('reception.dashboard'))
         return redirect(url_for('auth.login', portal='reception'))
+
+    # Universal Document Viewer & Streamer
+    @app.route('/documents/view/<int:doc_id>')
+    def view_document(doc_id):
+        doc = ClinicalDocument.query.get_or_404(doc_id)
+        if doc.file_path:
+            file_dir = os.path.join(app.root_path, 'static')
+            return send_from_directory(file_dir, doc.file_path)
+        elif doc.document_type == 'medical_certificate':
+            return redirect(url_for('doctor.print_medical_certificate', patient_id=doc.patient_id, doc_id=doc.id))
+        elif doc.document_type == 'referral_letter':
+            return redirect(url_for('doctor.print_referral_letter', patient_id=doc.patient_id, doc_id=doc.id))
+        elif doc.document_type == 'discharge_summary' and doc.admission_id:
+            return redirect(url_for('inpatient.print_discharge_summary', admission_id=doc.admission_id))
+        flash('This document has no uploaded file attachment.', 'info')
+        return redirect(request.referrer or url_for('doctor.dashboard'))
 
     # Context processors for global template helpers
     @app.context_processor
@@ -127,10 +173,57 @@ def create_app(config_class=Config):
         return value.strftime(format)
 
     with app.app_context():
+        upgrade_db_schema()
         db.create_all()
         seed_initial_data()
 
     return app
+
+def upgrade_db_schema():
+    """
+    Ensures missing columns in existing SQLite tables are dynamically added without data loss.
+    """
+    with db.engine.connect() as conn:
+        # Check users table
+        try:
+            res = conn.execute(db.text("PRAGMA table_info(users)"))
+            cols = {row[1] for row in res.fetchall()}
+            if cols:
+                user_alterations = [
+                    ("is_2fa_enabled", "BOOLEAN DEFAULT 0"),
+                    ("totp_secret", "VARCHAR(64)"),
+                    ("backup_codes_json", "TEXT"),
+                    ("failed_login_attempts", "INTEGER DEFAULT 0"),
+                    ("locked_until", "DATETIME"),
+                    ("password_changed_at", "DATETIME"),
+                    ("force_password_change", "BOOLEAN DEFAULT 0"),
+                    ("last_activity_at", "DATETIME"),
+                    ("custom_permissions_json", "TEXT")
+                ]
+                for col_name, col_type in user_alterations:
+                    if col_name not in cols:
+                        conn.execute(db.text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
+                        conn.commit()
+        except Exception:
+            pass
+
+        # Check audit_logs table
+        try:
+            res = conn.execute(db.text("PRAGMA table_info(audit_logs)"))
+            cols = {row[1] for row in res.fetchall()}
+            if cols:
+                audit_alterations = [
+                    ("ip_address", "VARCHAR(64)"),
+                    ("user_agent", "VARCHAR(255)"),
+                    ("severity", "VARCHAR(30) DEFAULT 'info'"),
+                    ("details_json", "TEXT")
+                ]
+                for col_name, col_type in audit_alterations:
+                    if col_name not in cols:
+                        conn.execute(db.text(f"ALTER TABLE audit_logs ADD COLUMN {col_name} {col_type}"))
+                        conn.commit()
+        except Exception:
+            pass
 
 def seed_initial_data():
     """
@@ -854,8 +947,121 @@ def seed_initial_data():
             )
             db.session.add(wr1)
 
+    # =================== SEED SECURITY SETTINGS & RBAC PERMISSIONS ===================
+    if not SecuritySetting.query.first():
+        sec_settings = SecuritySetting(
+            require_2fa_for_all=False,
+            require_2fa_for_admin_doctor=True,
+            session_timeout_minutes=30,
+            max_failed_attempts=5,
+            lockout_duration_minutes=15,
+            password_min_length=8,
+            require_special_chars=True
+        )
+        db.session.add(sec_settings)
+
+    # Canonical System Permissions
+    canonical_permissions = [
+        # Patient Records
+        ("patient:view", "View Patient Records & History", "Patients", "Access demographic profiles and outpatient history"),
+        ("patient:register", "Register New Patients", "Patients", "Create new patient records and allocate hospital IDs"),
+        ("patient:edit", "Edit Patient Demographics", "Patients", "Modify patient contact info and insurance particulars"),
+        
+        # Clinical Consultation & EMR
+        ("clinical:consult", "Perform Medical Consultations", "Clinical", "Document clinical notes, examinations, and diagnoses"),
+        ("clinical:prescribe", "Prescribe Medications (Rx)", "Clinical", "Generate electronic prescriptions sent to pharmacy"),
+        ("clinical:order_labs", "Order Diagnostic Tests", "Clinical", "Request lab tests and radiology imaging"),
+        
+        # Clinical Documents
+        ("documents:generate_cert", "Issue Medical Sick-Off Certificates", "Documents", "Generate stamped clinical sick leave notes"),
+        ("documents:generate_referral", "Issue Specialist Referral Letters", "Documents", "Draft official hospital referral documents"),
+        ("documents:upload", "Upload & Manage Patient Attachments", "Documents", "Upload radiological scans, PDFs, and ID records"),
+        
+        # Inpatient Care & Wards
+        ("inpatient:admit", "Admit Patient to Wards", "Inpatient", "Assign ward beds and document intake clinical orders"),
+        ("inpatient:transfer", "Execute Inter-Ward Bed Transfers", "Inpatient", "Reassign beds and log transfer rationale"),
+        ("inpatient:chart", "Document Nursing & Ward Rounds", "Inpatient", "Record shift nursing notes and daily doctor progress"),
+        ("inpatient:discharge", "Clinical Inpatient Discharge", "Inpatient", "Finalize discharge clearance and generate certificates"),
+        
+        # Pharmacy & Dispensing
+        ("pharmacy:dispense", "Dispense Prescriptions", "Pharmacy", "Clear and dispense pharmaceutical orders with counseling"),
+        ("pharmacy:manage_stock", "Manage Drug Inventory & Batches", "Pharmacy", "Adjust stock, manage batches, and log purchase entries"),
+        
+        # Billing & Financials
+        ("billing:create_invoice", "Create & Stage Invoices", "Billing", "Compile invoices and apply departmental fee schedules"),
+        ("billing:collect_payment", "Collect Tender Payments", "Billing", "Process cash, M-Pesa, card, and insurance settlements"),
+        ("billing:waive_discount", "Waive Charges & Authorize Discounts", "Billing", "Grant authorized discounts and fee waivers"),
+        
+        # Hospital Administration & Security
+        ("admin:manage_users", "Manage Staff User Accounts", "Admin", "Create, edit, suspend, and reset staff credentials"),
+        ("admin:security_config", "Configure Security Policies & 2FA", "Admin", "Manage global 2FA and password requirements"),
+        ("admin:view_audit", "Access Immutable Audit Trail", "Admin", "Inspect all clinical and financial activity logs")
+    ]
+
+    for code, name, cat, desc in canonical_permissions:
+        if not Permission.query.filter_by(code=code).first():
+            p = Permission(code=code, name=name, category=cat, description=desc)
+            db.session.add(p)
+
+    db.session.flush()
+
+    # Seed Default Role-Permission Mappings if not configured
+    if RolePermission.query.count() == 0:
+        default_role_matrix = {
+            'doctor': [
+                'patient:view', 'clinical:consult', 'clinical:prescribe', 'clinical:order_labs',
+                'documents:generate_cert', 'documents:generate_referral', 'documents:upload',
+                'inpatient:chart', 'inpatient:discharge'
+            ],
+            'nurse': [
+                'patient:view', 'clinical:order_labs', 'inpatient:admit', 'inpatient:transfer',
+                'inpatient:chart', 'documents:upload'
+            ],
+            'pharmacist': [
+                'patient:view', 'pharmacy:dispense', 'pharmacy:manage_stock', 'documents:upload'
+            ],
+            'cashier': [
+                'patient:view', 'billing:create_invoice', 'billing:collect_payment', 'billing:waive_discount'
+            ],
+            'receptionist': [
+                'patient:view', 'patient:register', 'patient:edit', 'documents:upload'
+            ]
+        }
+
+        for role, perm_list in default_role_matrix.items():
+            for p_code in perm_list:
+                rp = RolePermission(role=role, permission_code=p_code)
+                db.session.add(rp)
+
+    # Seed Sample Clinical Document (Medical Certificate for James Mwangi)
+    if ClinicalDocument.query.count() == 0:
+        target_p = Patient.query.first()
+        if target_p:
+            sample_doc = ClinicalDocument(
+                document_number="MED-CERT-202608-0001",
+                patient_id=target_p.id,
+                document_type="medical_certificate",
+                title="Medical Sick-Off Certificate (3 Days Rest)",
+                description="Severe Bronchitis - Bed rest recommended.",
+                created_by_name="Dr. Sarah Kamau (OPD Lead)",
+                is_signed=True,
+                signed_by="Dr. Sarah Kamau",
+                signed_at=datetime.utcnow() - timedelta(days=1)
+            )
+            sample_doc.metadata_dict = {
+                'addressed_to': 'To Whom It May Concern',
+                'diagnosis': 'Acute Exacerbation of Bronchitis with Pyrexia',
+                'start_date': (date.today() - timedelta(days=1)).strftime('%Y-%m-%d'),
+                'days_excused': 3,
+                'fit_to_resume_date': (date.today() + timedelta(days=2)).strftime('%Y-%m-%d'),
+                'fitness_status': 'Total Bed Rest & Temporary Unfitness',
+                'clinical_remarks': 'Patient attended outpatient clinic and received nebulization and oral antibiotics. Advised strict rest.',
+                'doctor_name': 'Dr. Sarah Kamau (KMPDC-A9842)'
+            }
+            db.session.add(sample_doc)
+
     db.session.commit()
-    print("Initial clinical, EMR, Pharmacy, Billing, and Inpatient Ward seed data initialized successfully.")
+    print("Initial clinical, EMR, Pharmacy, Billing, Inpatient Ward, and RBAC Security seed data initialized successfully.")
 
 if __name__ == '__main__':
     app = create_app()

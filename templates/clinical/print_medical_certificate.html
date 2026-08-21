@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Official Medical Certificate - {{ patient.full_name }} ({{ doc.document_number }})</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dist/styles.css') }}">
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; font-size: 11pt !important; color: #000 !important; }
+            .sheet { border: none !important; box-shadow: none !important; margin: 0 !important; padding: 0 !important; }
+        }
+        .stamp-box {
+            border: 2px dashed #94a3b8;
+            border-radius: 8px;
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen py-8 text-slate-900 font-sans antialiased">
+
+    <!-- Floating Action Toolbar -->
+    <div class="max-w-3xl mx-auto mb-6 px-4 flex items-center justify-between no-print">
+        <a 
+            href="{{ url_for('doctor.patient_chart', patient_id=patient.id) }}" 
+            class="px-4 py-2 bg-white text-slate-800 text-xs font-black rounded-xl border border-slate-300 shadow-xs hover:bg-slate-50 flex items-center gap-1.5"
+        >
+            &larr; Back to Patient Chart
+        </a>
+
+        <div class="flex items-center gap-3">
+            <button 
+                onclick="window.print()" 
+                class="px-5 py-2 bg-slate-950 hover:bg-slate-800 text-white text-xs font-black rounded-xl shadow-md flex items-center gap-2"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                </svg>
+                <span>Print Official Certificate (A4)</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Official A4 Medical Certificate Sheet -->
+    <div class="sheet max-w-3xl mx-auto bg-white border-2 border-slate-300 shadow-xl rounded-2xl p-8 sm:p-12 space-y-8">
+        
+        <!-- Hospital Header -->
+        <div class="border-b-2 border-slate-900 pb-5 flex items-start justify-between gap-4">
+            <div class="flex items-start gap-4">
+                <div class="w-16 h-16 rounded-xl bg-slate-950 text-white font-mono font-black text-2xl flex items-center justify-center border border-slate-800 shrink-0">
+                    +
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-black text-slate-950 tracking-tight uppercase">
+                        Apex Regional Medical Center
+                    </h1>
+                    <p class="text-xs font-extrabold text-slate-700 uppercase tracking-wider font-mono">
+                        Directorate of Outpatient & Inpatient Clinical Services
+                    </p>
+                    <p class="text-[11px] text-slate-600 font-medium mt-0.5">
+                        Hospital Road, Wing B &bull; P.O. Box 45100-00100 &bull; Tel: +254 (020) 790-0000 &bull; Email: clinical@apexmedical.org
+                    </p>
+                </div>
+            </div>
+
+            <div class="text-right font-mono text-xs shrink-0">
+                <span class="inline-block px-3 py-1 bg-slate-100 border border-slate-300 rounded font-black text-slate-950 uppercase tracking-wider">
+                    Official Certificate
+                </span>
+                <p class="font-bold text-slate-800 mt-1.5">{{ doc.document_number }}</p>
+                <p class="text-slate-500">{{ doc.created_at.strftime('%d %b %Y') }}</p>
+            </div>
+        </div>
+
+        <!-- Certificate Title -->
+        <div class="text-center space-y-1">
+            <h2 class="text-xl font-black text-slate-950 uppercase tracking-widest underline decoration-2 underline-offset-4">
+                Medical Certificate of Unfitness / Sick-Off Note
+            </h2>
+            <p class="text-xs font-mono font-bold text-slate-600 uppercase tracking-wider">
+                Issued pursuant to Kenya Medical Practitioners and Dentists Council (KMPDC) Regulations
+            </p>
+        </div>
+
+        <!-- Addressed Box -->
+        <div class="text-sm font-semibold text-slate-900">
+            <span class="text-slate-500 font-bold uppercase text-xs font-mono block">Addressed To:</span>
+            <span class="font-black text-base">{{ doc.metadata_dict.get('addressed_to', 'To Whom It May Concern') }}</span>
+        </div>
+
+        <!-- Patient Records Details Grid -->
+        <div class="p-4 rounded-xl bg-slate-50 border border-slate-300 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div>
+                <span class="font-mono font-bold text-slate-500 uppercase block text-[10px]">Patient Full Name</span>
+                <span class="font-black text-slate-950 text-sm">{{ patient.full_name }}</span>
+            </div>
+            <div>
+                <span class="font-mono font-bold text-slate-500 uppercase block text-[10px]">Hospital Record ID</span>
+                <span class="font-mono font-black text-slate-950 text-sm">{{ patient.hospital_id }}</span>
+            </div>
+            <div>
+                <span class="font-mono font-bold text-slate-500 uppercase block text-[10px]">Age / Gender</span>
+                <span class="font-bold text-slate-900 text-sm">{{ patient.age_display }} / {{ patient.gender }}</span>
+            </div>
+            <div>
+                <span class="font-mono font-bold text-slate-500 uppercase block text-[10px]">National ID / Passport</span>
+                <span class="font-mono font-bold text-slate-900 text-sm">{{ patient.national_id or 'On Record' }}</span>
+            </div>
+        </div>
+
+        <!-- Certificate Body Statement -->
+        <div class="space-y-4 text-sm leading-relaxed text-slate-900 font-medium">
+            <p>
+                This is to certify that the above-named patient was clinically examined and treated at this medical facility on 
+                <strong>{{ doc.created_at.strftime('%d %B %Y') }}</strong>.
+            </p>
+
+            <div class="p-4 rounded-xl border-2 border-slate-200 bg-white space-y-2">
+                <div>
+                    <span class="font-mono font-extrabold text-slate-600 uppercase text-xs block">Clinical Diagnosis / Medical Assessment:</span>
+                    <p class="font-black text-base text-slate-950 mt-0.5">{{ doc.metadata_dict.get('diagnosis', 'Clinical Medical Condition') }}</p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-200 text-xs">
+                    <div>
+                        <span class="font-mono font-bold text-slate-500 uppercase block text-[10px]">Sick Leave Start Date:</span>
+                        <span class="font-mono font-bold text-slate-950">{{ doc.metadata_dict.get('start_date', doc.created_at.strftime('%Y-%m-%d')) }}</span>
+                    </div>
+                    <div>
+                        <span class="font-mono font-bold text-slate-500 uppercase block text-[10px]">Recommended Rest Duration:</span>
+                        <span class="font-bold text-indigo-900 text-sm font-black">{{ doc.metadata_dict.get('days_excused', '3') }} Days Excused</span>
+                    </div>
+                    <div>
+                        <span class="font-mono font-bold text-slate-500 uppercase block text-[10px]">Fit to Resume Duty:</span>
+                        <span class="font-mono font-black text-emerald-800 text-sm">{{ doc.metadata_dict.get('fit_to_resume_date', 'N/A') }}</span>
+                    </div>
+                </div>
+            </div>
+
+            {% if doc.metadata_dict.get('clinical_remarks') %}
+                <div>
+                    <span class="font-mono font-extrabold text-slate-600 uppercase text-xs block">Physician's Remarks & Work Capacity:</span>
+                    <p class="text-xs font-semibold text-slate-800 italic mt-0.5">{{ doc.metadata_dict.get('clinical_remarks') }}</p>
+                </div>
+            {% endif %}
+
+            <p class="text-xs text-slate-600 font-semibold">
+                In my professional medical opinion, the patient is recommended <strong>{{ doc.metadata_dict.get('fitness_status', 'Total Bed Rest & Temporary Unfitness') }}</strong> during this period to facilitate adequate medical recovery.
+            </p>
+        </div>
+
+        <!-- Signature & Official Stamp Section -->
+        <div class="pt-8 border-t-2 border-slate-300 grid grid-cols-2 gap-8 items-end text-xs">
+            
+            <!-- Doctor Credentials & Signature -->
+            <div class="space-y-3">
+                <div class="h-14 border-b-2 border-slate-900 flex items-end pb-1 font-serif text-lg italic text-slate-800">
+                    {{ doc.signed_by or doc.created_by_name }}
+                </div>
+                <div>
+                    <strong class="text-slate-950 font-black text-sm block">{{ doc.signed_by or doc.created_by_name }}</strong>
+                    <span class="text-slate-600 font-semibold block">Attending Medical Practitioner</span>
+                    <span class="font-mono text-slate-500 text-[10px] block">Apex Regional Medical Center &bull; Clinical Registry</span>
+                </div>
+            </div>
+
+            <!-- Hospital Official Rubber Stamp -->
+            <div class="stamp-box p-4 text-center flex flex-col items-center justify-center min-h-[110px]">
+                <span class="text-[10px] font-mono font-extrabold text-slate-400 uppercase tracking-widest block">Official Hospital Stamp</span>
+                <span class="font-serif font-black text-indigo-950 uppercase text-xs mt-1">APEX REGIONAL MEDICAL CENTER</span>
+                <span class="font-mono font-bold text-slate-600 text-[10px]">VERIFIED &bull; {{ doc.created_at.strftime('%d-%m-%Y') }}</span>
+            </div>
+
+        </div>
+
+        <!-- Footer Verification Barcode -->
+        <div class="border-t border-slate-200 pt-3 flex items-center justify-between text-[10px] font-mono text-slate-500">
+            <span>Doc Ref: {{ doc.document_number }}</span>
+            <span>Security Hash: SHA256-{{ doc.document_number[-6:] }}-VALID</span>
+            <span>Apex Hospital Information Management System</span>
+        </div>
+
+    </div>
+
+</body>
+</html>

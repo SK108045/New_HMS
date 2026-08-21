@@ -9,6 +9,8 @@ from .billing import Invoice, Payment, ShiftRegister
 from .user import User
 from .audit import AuditLog
 from .inpatient import Ward, Bed, Admission, BedTransfer, NursingNote, WardRoundNote
+from .security import SecuritySetting, Permission, RolePermission
+from .document import ClinicalDocument
 
 __all__ = [
     'db',
@@ -34,5 +36,9 @@ __all__ = [
     'Admission',
     'BedTransfer',
     'NursingNote',
-    'WardRoundNote'
+    'WardRoundNote',
+    'SecuritySetting',
+    'Permission',
+    'RolePermission',
+    'ClinicalDocument'
 ]
