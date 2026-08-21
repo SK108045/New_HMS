@@ -774,9 +774,12 @@
                             <div class="text-sm font-extrabold text-slate-950 truncate leading-snug">
                                 {% if session.get('full_name') %}{{ session.get('full_name') }}{% elif request.blueprint == 'admin' %}Dr. Robert Odhiambo (Director){% elif request.blueprint == 'inpatient' %}Nurse Joyce Chebet (Ward Lead){% elif request.blueprint == 'billing' %}Cashier Joyce Wambui{% elif request.blueprint == 'pharmacy' %}Pharm. Evans Omondi{% elif request.blueprint == 'doctor' %}Dr. Sarah Kamau{% elif request.blueprint == 'triage' %}Duty Triage Nurse{% else %}Mary Wanjiku{% endif %}
                             </div>
-                            <div class="text-xs font-mono font-bold text-slate-700 flex items-center gap-1.5 mt-0.5">
+                            <div class="text-xs font-mono font-bold text-slate-700 flex items-center gap-1.5 mt-0.5 flex-wrap">
                                 <span class="w-2 h-2 rounded-full status-dot shrink-0"></span>
                                 <span class="truncate font-semibold">{% if session.get('staff_id') %}{{ session.get('staff_id') }}{% elif request.blueprint == 'admin' %}STF-ADM-00{% elif request.blueprint == 'inpatient' %}STF-WRD-01{% elif request.blueprint == 'billing' %}STF-BIL-01{% elif request.blueprint == 'pharmacy' %}STF-PHM-01{% elif request.blueprint == 'doctor' %}STF-DOC-01{% elif request.blueprint == 'triage' %}STF-TRG-01{% else %}STF-REC-01{% endif %}</span>
+                                <a href="{{ url_for('auth.setup_2fa') }}" class="text-[10px] px-1.5 py-0.2 rounded bg-indigo-50 border border-indigo-200 text-indigo-900 font-bold hover:bg-indigo-100 flex items-center gap-0.5" title="Google Authenticator 2FA Setup">
+                                    <span>🔐 2FA</span>
+                                </a>
                             </div>
                         </div>
                     </div>
