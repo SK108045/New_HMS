@@ -46,10 +46,14 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
     # ==================== 2FA / TOTP METHODS ====================
-    def generate_totp_secret(self):
-        """Generate a standard 32-character base32 secret for Google Authenticator."""
-        if not self.totp_secret:
+    def generate_totp_secret(self, force_new=False):
+        """Generate a standard 32-character base32 secret for Google Authenticator and persist it."""
+        if not self.totp_secret or force_new:
             self.totp_secret = pyotp.random_base32()
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
         return self.totp_secret
 
     def get_totp_uri(self, issuer="Apex Regional Medical Center"):
@@ -63,9 +67,10 @@ class User(db.Model):
         """Verify 6-digit TOTP token with Google Authenticator (with valid window drift)."""
         if not self.totp_secret or not token:
             return False
+        clean_token = str(token).strip().replace(' ', '').replace('-', '')
         totp = pyotp.TOTP(self.totp_secret)
-        # valid_window=1 allows current 30s period +- 1 period for clock skew
-        return totp.verify(str(token).strip(), valid_window=1)
+        # valid_window=2 allows current 30s period +- 2 periods (60s drift tolerance)
+        return totp.verify(clean_token, valid_window=2)
 
     def generate_backup_codes(self, count=8) -> list:
         """Generate 8 single-use emergency backup codes and store their hashes."""

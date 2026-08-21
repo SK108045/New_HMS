@@ -349,6 +349,7 @@ def setup_2fa():
 
     # Generate or retrieve Base32 secret key
     secret = user.generate_totp_secret()
+    db.session.commit()
     totp_uri = user.get_totp_uri(issuer="Apex Regional Medical Center")
 
     # Generate scannable QR Code image as base64 Data URL
@@ -367,7 +368,7 @@ def setup_2fa():
     qr_data_url = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
 
     if request.method == 'POST':
-        verification_code = request.form.get('verification_code', '').strip().replace(' ', '')
+        verification_code = request.form.get('verification_code', '').strip().replace(' ', '').replace('-', '')
 
         if user.verify_totp(verification_code):
             # Activate 2FA and generate 8 emergency recovery codes
