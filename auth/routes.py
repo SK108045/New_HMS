@@ -1,5 +1,5 @@
 from datetime import datetime
-from flask import render_template, request, redirect, url_for, flash, session
+from flask import abort, current_app, render_template, request, redirect, url_for, flash, session
 from models import db, User
 from . import auth_bp
 from .decorators import login_user, logout_user, is_authenticated, get_current_user
@@ -92,7 +92,7 @@ PORTAL_META = {
         'staff_id': 'STF-ADM-00',
         'theme_class': 'portal-doctor',
         'badge_label': 'HQ-00',
-        'home_endpoint': 'reception.dashboard',
+        'home_endpoint': 'admin.dashboard',
         'icon': 'shield'
     }
 }
@@ -169,6 +169,9 @@ def demo_login(portal_name):
     """
     Convenience instant 1-click test login for reviewers to seamlessly jump into any portal.
     """
+    if not current_app.config.get('DEMO_LOGIN_ENABLED'):
+        abort(404)
+
     if portal_name not in PORTAL_META:
         portal_name = 'reception'
 

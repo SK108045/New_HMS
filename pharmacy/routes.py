@@ -192,6 +192,10 @@ def dispense(prescription_id):
         })
 
     if request.method == 'POST':
+        if prescription.status not in {'pending_dispense', 'partially_dispensed'}:
+            flash(f"Prescription {prescription.rx_number} has already been processed and cannot be dispensed again.", 'warning')
+            return redirect(url_for('pharmacy.queue'))
+
         pharmacist_name = request.form.get('pharmacist_name', 'Pharm. Evans Omondi (Lead Pharmacist)')
         counseling = request.form.get('counseling_notes', '').strip()
         dispensed_items = []
@@ -200,38 +204,64 @@ def dispense(prescription_id):
         for i, info in enumerate(med_stock_info):
             item = info['item']
             med_item = info['med_item']
-            qty_to_dispense = int(request.form.get(f'qty_dispensed_{i}', item.get('quantity', 1)))
+            try:
+                qty_to_dispense = int(request.form.get(f'qty_dispensed_{i}', item.get('quantity', 1)))
+            except (TypeError, ValueError):
+                flash('Dispensed quantities must be whole numbers.', 'error')
+                return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
+
+            prescribed_quantity = item.get('quantity', 1)
+            if qty_to_dispense != prescribed_quantity:
+                flash('Dispense the prescribed quantity for every medication; partial dispensing is not supported yet.', 'error')
+                return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
+
+            if not med_item:
+                flash(f"{item.get('drug', 'This medication')} is not available in inventory.", 'error')
+                return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
+
             batch_id = request.form.get(f'batch_id_{i}')
 
             batch = None
             if batch_id and batch_id.isdigit():
-                batch = DrugBatch.query.get(int(batch_id))
+                batch = db.session.get(DrugBatch, int(batch_id))
+                if not batch or batch.medication_id != (med_item.id if med_item else None):
+                    flash('Choose a valid stock batch for each medication.', 'error')
+                    return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
+
+            if not batch:
+                flash(f"Choose an active stock batch for {med_item.name}.", 'error')
+                return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
 
             # Deduct Inventory
-            if med_item:
-                prev_stock = med_item.current_stock
-                med_item.current_stock = max(0, med_item.current_stock - qty_to_dispense)
-                new_stock = med_item.current_stock
+            if qty_to_dispense > med_item.current_stock:
+                flash(f"Insufficient stock for {med_item.name}.", 'error')
+                return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
+            if qty_to_dispense > batch.quantity_remaining:
+                flash(f"Batch {batch.batch_number} does not contain enough stock.", 'error')
+                return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
 
-                # Deduct batch
-                if batch:
-                    batch.quantity_remaining = max(0, batch.quantity_remaining - qty_to_dispense)
-                    if batch.quantity_remaining == 0:
-                        batch.status = 'depleted'
+            prev_stock = med_item.current_stock
+            med_item.current_stock -= qty_to_dispense
+            new_stock = med_item.current_stock
 
-                # Record Stock Transaction
-                st = StockTransaction(
-                    medication_id=med_item.id,
-                    batch_id=batch.id if batch else None,
-                    transaction_type='dispense',
-                    quantity_change=-qty_to_dispense,
-                    previous_stock=prev_stock,
-                    new_stock=new_stock,
-                    reference_id=prescription.rx_number,
-                    notes=f"Dispensed to Patient {patient.full_name} ({patient.hospital_id})",
-                    recorded_by=pharmacist_name
-                )
-                db.session.add(st)
+            # Deduct batch
+            batch.quantity_remaining -= qty_to_dispense
+            if batch.quantity_remaining == 0:
+                batch.status = 'depleted'
+
+            # Record Stock Transaction
+            st = StockTransaction(
+                medication_id=med_item.id,
+                batch_id=batch.id,
+                transaction_type='dispense',
+                quantity_change=-qty_to_dispense,
+                previous_stock=prev_stock,
+                new_stock=new_stock,
+                reference_id=prescription.rx_number,
+                notes=f"Dispensed to Patient {patient.full_name} ({patient.hospital_id})",
+                recorded_by=pharmacist_name
+            )
+            db.session.add(st)
 
             item_cost = item.get('cost', 0.0)
             total_dispensed_amount += item_cost

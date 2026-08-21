@@ -1,14 +1,19 @@
 import os
+import secrets
+
+from dotenv import load_dotenv
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'hms-hospital-core-secure-key-2026-xyz')
+    SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_urlsafe(32)
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         'DATABASE_URL', 
         f"sqlite:///{os.path.join(BASE_DIR, 'hms.db')}"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    DEMO_LOGIN_ENABLED = os.environ.get('HMS_ENABLE_DEMO_LOGIN', '').lower() == 'true'
     
     # Upload settings
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads', 'photos')

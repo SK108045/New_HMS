@@ -7,6 +7,7 @@ from .emr import ConsultationNote, LabOrder, Prescription, BillingItem
 from .pharmacy import MedicationItem, DrugBatch, DispensationRecord, StockTransaction
 from .billing import Invoice, Payment, ShiftRegister
 from .user import User
+from .audit import AuditLog
 
 __all__ = [
     'db',
@@ -25,5 +26,6 @@ __all__ = [
     'Invoice',
     'Payment',
     'ShiftRegister',
-    'User'
+    'User',
+    'AuditLog'
 ]

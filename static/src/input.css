@@ -95,6 +95,21 @@
     --status-dot: 245 158 11;
   }
 
+  body.portal-admin {
+    --accent-50:  250 245 255;
+    --accent-100: 243 232 255;
+    --accent-200: 233 213 255;
+    --accent-500: 168 85 247;
+    --accent-600: 147 51 234;
+    --accent-700: 126 34 206;
+    --accent-800: 107 33 168;
+    --accent-900: 88 28 135;
+    --accent-950: 59 7 100;
+    --page-bg: 252 250 255;
+    --sidebar-accent-bg: 250 245 255;
+    --status-dot: 168 85 247;
+  }
+
   body {
     @apply font-sans text-slate-950 text-sm antialiased;
     background-color: rgb(var(--page-bg));

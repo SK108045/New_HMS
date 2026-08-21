@@ -17,11 +17,16 @@ Each portal features dedicated station authentication, unique color theming, ses
 | 💰 **Point-of-Sale (POS) & Billing** | `POS-01` | Warm Amber | Cashier Joyce Wambui | `cashier` | `Billing@2026` | `cashier` |
 | 🛡️ **Hospital Administration** | `HQ-00` | Universal Access | Dr. Robert Odhiambo | `admin` | `Admin@2026` | `admin` |
 
-> 💡 **Quick 1-Click Login**: Each portal login page includes a **"⚡ One-Click Instant Sign In"** button to automatically populate and authenticate sample credentials.
+> 💡 **Demo mode**: Set `HMS_ENABLE_DEMO_LOGIN=true` only in a local demonstration environment to show the one-click sample sign-in button. Keep it disabled for normal use.
 
 ---
 
 ## 🌟 Portals & Workflows Built
+
+### 0. 🛡️ Hospital Administration Portal (`/admin`)
+- **Login URL**: [`/admin/login`](http://localhost:5000/admin/login) or [`/login/admin`](http://localhost:5000/login/admin)
+- **Access**: Administrator accounts only. The seeded `admin` account is the initial administrator.
+- **Features**: Hospital-wide command dashboard, staff creation and role/portal/status management, operations oversight, finance and shift oversight, medication and expiry governance, and a persistent administrator audit log.
 
 ### 1. 📋 Reception & Front-Desk Portal (`/reception`)
 - **Login URL**: [`/reception/login`](http://localhost:5000/reception/login) or [`/login/reception`](http://localhost:5000/login/reception)
@@ -70,18 +75,24 @@ Each portal features dedicated station authentication, unique color theming, ses
    source venv/bin/activate
    ```
 
-3. **Install Dependencies:**
+3. **Configure the Application:**
+   ```bash
+   cp .env.example .env
+   # Set SECRET_KEY to a long, unique random value before using real patient data.
+   ```
+
+4. **Install Dependencies:**
    ```bash
    pip install -r requirements.txt
    npm install
    ```
 
-4. **Build CSS Styles:**
+5. **Build CSS Styles:**
    ```bash
    npx tailwindcss -i ./static/src/input.css -o ./static/dist/styles.css --minify
    ```
 
-5. **Run the Application:**
+6. **Run the Application:**
    ```bash
    python app.py
    ```

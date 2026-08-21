@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+
+{% block title %}Revenue, Invoices & Shift Governance - Hospital Administration{% endblock %}
+
+{% block content %}
+<div class="space-y-6 pb-12">
+
+    <!-- Top Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-200 pb-5">
+        <div>
+            <div class="flex items-center gap-2 font-mono text-xs font-extrabold tracking-wider text-purple-700 uppercase mb-1">
+                <span>Revenue Operations & Audit</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
+                Finance & Revenue Governance
+            </h1>
+            <p class="text-sm font-semibold text-slate-700 mt-1">
+                Live oversight of patient invoices, settlement receipts, payment tender channels, and cashier shift reconciliation (X/Z reports).
+            </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <a 
+                href="{{ url_for('billing.pos') }}" 
+                class="btn-primary py-2.5 px-4 text-xs font-extrabold flex items-center gap-2"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                <span>Open POS Workstation</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Dual Panel: Recent Invoices & Payment Collections -->
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
+        <!-- 1. Recent Invoices Ledger -->
+        <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+            <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
+                    <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">Patient Folios & Invoices</h2>
+                </div>
+                <span class="text-xs font-mono font-bold px-2 py-0.5 bg-rose-100 text-rose-900 rounded border border-rose-300">
+                    {{ invoices|length }} Records
+                </span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                        <tr>
+                            <th class="p-3.5">Invoice #</th>
+                            <th class="p-3.5">Patient</th>
+                            <th class="p-3.5 text-right">Balance Due</th>
+                            <th class="p-3.5 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        {% for inv in invoices %}
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="p-3.5 font-mono font-bold text-slate-900">
+                                    {{ inv.invoice_number }}
+                                </td>
+                                <td class="p-3.5">
+                                    <div class="font-extrabold text-slate-950">{{ inv.patient.full_name }}</div>
+                                    <div class="text-[11px] text-slate-600 font-mono">{{ inv.patient.hospital_id }}</div>
+                                </td>
+                                <td class="p-3.5 text-right font-mono font-black text-slate-950 text-sm">
+                                    KES {{ "{:,.2f}".format(inv.balance_due) }}
+                                </td>
+                                <td class="p-3.5 text-center">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-black border
+                                        {% if inv.status == 'paid' %}bg-emerald-100 text-emerald-900 border-emerald-300
+                                        {% elif inv.status == 'partially_paid' %}bg-blue-100 text-blue-900 border-blue-300
+                                        {% elif inv.status == 'waived' %}bg-purple-100 text-purple-900 border-purple-300
+                                        {% else %}bg-amber-100 text-amber-900 border-amber-300{% endif %}">
+                                        {{ inv.status.replace('_', ' ').upper() }}
+                                    </span>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="4" class="p-6 text-center text-slate-500 font-semibold">
+                                    No invoices generated yet.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 2. Recent Confirmed Payment Receipts -->
+        <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+            <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                    <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">Confirmed Payment Receipts</h2>
+                </div>
+                <span class="text-xs font-mono font-bold px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded border border-emerald-300">
+                    {{ payments|length }} Receipts
+                </span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                        <tr>
+                            <th class="p-3.5">Receipt #</th>
+                            <th class="p-3.5">Patient</th>
+                            <th class="p-3.5 text-right">Amount Paid</th>
+                            <th class="p-3.5 text-right">Settled At</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        {% for pay in payments %}
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="p-3.5 font-mono font-bold text-slate-900">
+                                    {{ pay.receipt_number }}
+                                </td>
+                                <td class="p-3.5">
+                                    <div class="font-extrabold text-slate-950">{{ pay.patient.full_name }}</div>
+                                    <div class="text-[11px] text-slate-600 font-mono">{{ pay.payment_method_summary or 'Multi-tender' }}</div>
+                                </td>
+                                <td class="p-3.5 text-right font-mono font-black text-emerald-700 text-sm">
+                                    KES {{ "{:,.2f}".format(pay.total_amount_paid) }}
+                                </td>
+                                <td class="p-3.5 text-right font-mono font-semibold text-slate-600">
+                                    {{ pay.created_at|datetime_format }}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="4" class="p-6 text-center text-slate-500 font-semibold">
+                                    No payment receipts recorded yet.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Cashier Shift Reconciliation Ledger (X/Z Reports) -->
+    <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+        <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-600"></span>
+                <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">Cashier Shift Register Closeouts (X / Z Reports)</h2>
+            </div>
+            <span class="text-xs font-mono font-bold text-slate-600">Shift Accountability</span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs min-w-[800px]">
+                <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                    <tr>
+                        <th class="p-3.5">Shift Code</th>
+                        <th class="p-3.5">Cashier Name</th>
+                        <th class="p-3.5 text-right">Total Revenue</th>
+                        <th class="p-3.5 text-right">Cash Float / Declared</th>
+                        <th class="p-3.5 text-right">Variance / Discrepancy</th>
+                        <th class="p-3.5 text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for shift in shifts %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="p-3.5 font-mono font-black text-slate-950">
+                                {{ shift.shift_code }}
+                            </td>
+                            <td class="p-3.5 font-extrabold text-slate-950">
+                                {{ shift.cashier_name }}
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-black text-emerald-700">
+                                KES {{ "{:,.2f}".format(shift.total_revenue) }}
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-bold text-slate-700">
+                                KES {{ "{:,.2f}".format(shift.closing_cash_declared or 0.0) }}
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-bold">
+                                {% if shift.discrepancy is not none %}
+                                    <span class="{% if shift.discrepancy == 0 %}text-emerald-700 font-extrabold{% elif shift.discrepancy > 0 %}text-blue-700{% else %}text-rose-700 font-black{% endif %}">
+                                        KES {{ "{:,.2f}".format(shift.discrepancy) }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-slate-400">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-3.5 text-center">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-black border
+                                    {% if shift.status == 'closed' %}bg-emerald-100 text-emerald-900 border-emerald-300
+                                    {% else %}bg-amber-100 text-amber-900 border-amber-300{% endif %}">
+                                    {{ shift.status.upper() }}
+                                </span>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="p-6 text-center text-slate-500 font-semibold">
+                                No shift register closeouts recorded.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

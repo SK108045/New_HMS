@@ -1,0 +1,308 @@
+{% extends 'base.html' %}
+
+{% block title %}Staff & Access Control - Hospital Administration{% endblock %}
+
+{% block content %}
+<div class="space-y-6 pb-12" x-data="{ showAddForm: false, searchTerm: '' }">
+
+    <!-- Top Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-200 pb-5">
+        <div>
+            <div class="flex items-center gap-2 font-mono text-xs font-extrabold tracking-wider text-purple-700 uppercase mb-1">
+                <span>Identity & Access Management (IAM)</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
+                Staff & Role Control
+            </h1>
+            <p class="text-sm font-semibold text-slate-700 mt-1">
+                Provision clinical accounts, manage portal authorizations, toggle status, and reset staff credentials.
+            </p>
+        </div>
+
+        <button 
+            type="button" 
+            @click="showAddForm = !showAddForm" 
+            class="btn-primary py-2.5 px-4 text-xs font-extrabold flex items-center gap-2 shadow-sm"
+        >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
+            </svg>
+            <span x-text="showAddForm ? 'Close Form' : '+ Add New Staff Member'"></span>
+        </button>
+    </div>
+
+    <!-- Collapsible Register New Staff Account Card -->
+    <div 
+        x-show="showAddForm" 
+        x-cloak 
+        x-transition 
+        class="bg-white rounded-2xl border-2 border-purple-300 shadow-md p-6 space-y-4"
+    >
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-purple-700"></span>
+                <h2 class="text-base font-black text-slate-950">Provision New Clinical / Administrative Account</h2>
+            </div>
+            <span class="text-xs font-mono text-slate-500 font-bold">Auto-Hashed Password Security</span>
+        </div>
+
+        <form method="POST" action="{{ url_for('admin.staff') }}" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            
+            <!-- Full Name -->
+            <div>
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Full Staff Name *
+                </label>
+                <input 
+                    type="text" 
+                    name="full_name" 
+                    required 
+                    placeholder="e.g. Dr. Arthur Ndwiga" 
+                    class="form-input text-xs"
+                >
+            </div>
+
+            <!-- Staff ID -->
+            <div>
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Staff ID Code *
+                </label>
+                <input 
+                    type="text" 
+                    name="staff_id" 
+                    required 
+                    placeholder="e.g. STF-DOC-02" 
+                    class="form-input text-xs font-mono uppercase"
+                >
+            </div>
+
+            <!-- Username -->
+            <div>
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Login Username *
+                </label>
+                <input 
+                    type="text" 
+                    name="username" 
+                    required 
+                    placeholder="e.g. dr.arthur" 
+                    class="form-input text-xs font-mono lowercase"
+                >
+            </div>
+
+            <!-- Password -->
+            <div>
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Initial Password *
+                </label>
+                <input 
+                    type="password" 
+                    name="password" 
+                    required 
+                    placeholder="Enter secure password..." 
+                    class="form-input text-xs font-mono"
+                >
+            </div>
+
+            <!-- Role Selector -->
+            <div>
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Clinical Role *
+                </label>
+                <select name="role" required class="form-select text-xs font-bold">
+                    <option value="">-- Choose Role --</option>
+                    {% for r_key, r_portal in roles.items() %}
+                        <option value="{{ r_key }}">{{ r_key.title() }} ({{ r_portal.title() }} Portal)</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Department -->
+            <div>
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Department / Unit
+                </label>
+                <input 
+                    type="text" 
+                    name="department" 
+                    placeholder="e.g. Pediatric OPD" 
+                    class="form-input text-xs"
+                >
+            </div>
+
+            <!-- Email -->
+            <div>
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Staff Email (Optional)
+                </label>
+                <input 
+                    type="email" 
+                    name="email" 
+                    placeholder="staff@apexmedical.org" 
+                    class="form-input text-xs"
+                >
+            </div>
+
+            <!-- Phone -->
+            <div>
+                <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                    Contact Phone (Optional)
+                </label>
+                <input 
+                    type="text" 
+                    name="phone" 
+                    placeholder="+254 700 000 000" 
+                    class="form-input text-xs font-mono"
+                >
+            </div>
+
+            <!-- Submit Button -->
+            <div class="flex items-end">
+                <button 
+                    type="submit" 
+                    class="btn-primary w-full py-2.5 text-xs font-extrabold tracking-wider flex items-center justify-center gap-2"
+                >
+                    <span>Create Staff Account</span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                    </svg>
+                </button>
+            </div>
+
+        </form>
+    </div>
+
+    <!-- Staff Directory Table Card -->
+    <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+        
+        <!-- Table Header & Live Search Bar -->
+        <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-purple-700"></span>
+                <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">
+                    Authorized Staff Directory ({{ staff|length }} Accounts)
+                </h2>
+            </div>
+
+            <div class="w-full sm:w-72">
+                <input 
+                    type="text" 
+                    x-model="searchTerm" 
+                    placeholder="Filter staff by name, role, ID..." 
+                    class="form-input text-xs py-1.5 px-3 font-mono"
+                >
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs min-w-[900px]">
+                <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                    <tr>
+                        <th class="p-3.5">Staff Identity</th>
+                        <th class="p-3.5">Role & Station</th>
+                        <th class="p-3.5">Department</th>
+                        <th class="p-3.5">Account Status</th>
+                        <th class="p-3.5 text-right">Administrative Actions & Password Reset</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for user in staff %}
+                        <tr 
+                            class="hover:bg-slate-50 transition-colors"
+                            x-show="!searchTerm || '{{ user.full_name.lower() }}'.includes(searchTerm.toLowerCase()) || '{{ user.username.lower() }}'.includes(searchTerm.toLowerCase()) || '{{ user.staff_id.lower() }}'.includes(searchTerm.toLowerCase()) || '{{ user.role.lower() }}'.includes(searchTerm.toLowerCase())"
+                        >
+                            <!-- Identity -->
+                            <td class="p-3.5">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-mono font-extrabold text-xs shrink-0 shadow-xs">
+                                        {{ user.username[:2]|upper }}
+                                    </div>
+                                    <div>
+                                        <div class="font-extrabold text-slate-950 text-sm leading-tight">{{ user.full_name }}</div>
+                                        <div class="text-slate-600 font-mono text-xs flex items-center gap-1.5 mt-0.5">
+                                            <span class="font-bold text-slate-800 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-300 text-[10px]">{{ user.staff_id }}</span>
+                                            <span>&bull; @{{ user.username }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <!-- Role & Station -->
+                            <td class="p-3.5">
+                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-black border
+                                    {% if user.role == 'admin' %}bg-purple-100 text-purple-900 border-purple-300
+                                    {% elif user.role == 'doctor' %}bg-indigo-100 text-indigo-900 border-indigo-300
+                                    {% elif user.role == 'nurse' %}bg-teal-100 text-teal-900 border-teal-300
+                                    {% elif user.role == 'pharmacist' %}bg-emerald-100 text-emerald-900 border-emerald-300
+                                    {% elif user.role == 'cashier' %}bg-amber-100 text-amber-900 border-amber-300
+                                    {% else %}bg-stone-100 text-stone-900 border-stone-300{% endif %}">
+                                    {{ user.role.title() }}
+                                </span>
+                                <div class="text-[11px] text-slate-600 font-mono mt-1">Portal: <strong>{{ user.portal.title() }}</strong></div>
+                            </td>
+
+                            <!-- Department -->
+                            <td class="p-3.5 font-semibold text-slate-800">
+                                {{ user.department }}
+                            </td>
+
+                            <!-- Status -->
+                            <td class="p-3.5">
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold border
+                                    {% if user.status == 'active' %}bg-emerald-100 text-emerald-900 border-emerald-300
+                                    {% elif user.status == 'suspended' %}bg-rose-100 text-rose-900 border-rose-300
+                                    {% else %}bg-slate-100 text-slate-800 border-slate-300{% endif %}">
+                                    <span class="w-1.5 h-1.5 rounded-full {% if user.status == 'active' %}bg-emerald-600{% else %}bg-rose-600{% endif %}"></span>
+                                    <span>{{ user.status.title() }}</span>
+                                </span>
+                            </td>
+
+                            <!-- Administrative Action Form -->
+                            <td class="p-3.5 text-right">
+                                <form 
+                                    method="POST" 
+                                    action="{{ url_for('admin.update_staff', user_id=user.id) }}" 
+                                    class="inline-flex items-center justify-end gap-2 flex-wrap"
+                                >
+                                    <!-- Role Select -->
+                                    <select name="role" class="form-select py-1 px-2 text-xs font-bold w-28">
+                                        {% for r_key in roles.keys() %}
+                                            <option value="{{ r_key }}" {% if r_key == user.role %}selected{% endif %}>{{ r_key.title() }}</option>
+                                        {% endfor %}
+                                    </select>
+
+                                    <!-- Status Select -->
+                                    <select name="status" class="form-select py-1 px-2 text-xs font-bold w-24">
+                                        <option value="active" {% if user.status == 'active' %}selected{% endif %}>Active</option>
+                                        <option value="inactive" {% if user.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                                        <option value="suspended" {% if user.status == 'suspended' %}selected{% endif %}>Suspended</option>
+                                    </select>
+
+                                    <!-- New Password Input -->
+                                    <input 
+                                        type="password" 
+                                        name="new_password" 
+                                        placeholder="Reset Pass" 
+                                        class="form-input py-1 px-2 text-xs font-mono w-28"
+                                    >
+
+                                    <!-- Save Button -->
+                                    <button 
+                                        type="submit" 
+                                        class="btn-primary py-1 px-3 text-xs font-extrabold shadow-xs"
+                                        title="Save Staff Settings"
+                                    >
+                                        Save
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}

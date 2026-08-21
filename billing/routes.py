@@ -1,4 +1,5 @@
 import json
+import math
 from datetime import datetime, date, timedelta
 from flask import render_template, request, redirect, url_for, flash, jsonify
 from models.base import db
@@ -309,26 +310,44 @@ def process_settlement(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     patient = invoice.patient
 
-    # Read multi-tender input values
-    cash_amount = float(request.form.get('cash_amount') or 0.0)
-    cash_tendered = float(request.form.get('cash_tendered') or 0.0)
-    change_returned = float(request.form.get('change_returned') or 0.0)
+    if invoice.status in {'paid', 'waived', 'cancelled'} or invoice.balance_due <= 0:
+        flash('This invoice is already settled and cannot accept another payment.', 'warning')
+        return redirect(url_for('billing.pos', patient_id=patient.id))
 
-    mpesa_amount = float(request.form.get('mpesa_amount') or 0.0)
+    # Read multi-tender input values
+    try:
+        cash_amount = float(request.form.get('cash_amount') or 0.0)
+        cash_tendered = float(request.form.get('cash_tendered') or 0.0)
+        change_returned = float(request.form.get('change_returned') or 0.0)
+        mpesa_amount = float(request.form.get('mpesa_amount') or 0.0)
+        insurance_amount = float(request.form.get('insurance_amount') or 0.0)
+        card_amount = float(request.form.get('card_amount') or 0.0)
+        discount_amount = float(request.form.get('discount_amount') or 0.0)
+    except ValueError:
+        flash('Payment amounts must be valid numbers.', 'danger')
+        return redirect(url_for('billing.pos', patient_id=patient.id))
+
     mpesa_reference = request.form.get('mpesa_reference', '').strip().upper()
     mpesa_phone = request.form.get('mpesa_phone', '').strip()
-
-    insurance_amount = float(request.form.get('insurance_amount') or 0.0)
     insurance_company = request.form.get('insurance_company', '').strip()
     insurance_policy_number = request.form.get('insurance_policy_number', '').strip()
     insurance_claim_number = request.form.get('insurance_claim_number', '').strip()
-
-    card_amount = float(request.form.get('card_amount') or 0.0)
     card_auth_code = request.form.get('card_auth_code', '').strip()
-
-    discount_amount = float(request.form.get('discount_amount') or 0.0)
     cashier_name = request.form.get('cashier_name', 'Cashier Joyce Wambui')
     counseling_notes = request.form.get('notes', '').strip()
+
+    payment_values = [cash_amount, cash_tendered, change_returned, mpesa_amount, insurance_amount, card_amount, discount_amount]
+    if not all(math.isfinite(value) and value >= 0 for value in payment_values):
+        flash('Payment amounts and discounts must be finite positive numbers.', 'danger')
+        return redirect(url_for('billing.pos', patient_id=patient.id))
+
+    if cash_tendered and cash_tendered < cash_amount + change_returned:
+        flash('Cash tendered cannot be less than the cash payment plus change returned.', 'danger')
+        return redirect(url_for('billing.pos', patient_id=patient.id))
+
+    if discount_amount > invoice.subtotal:
+        flash('Discount cannot exceed the invoice subtotal.', 'danger')
+        return redirect(url_for('billing.pos', patient_id=patient.id))
 
     total_payment = cash_amount + mpesa_amount + insurance_amount + card_amount
 
@@ -337,8 +356,14 @@ def process_settlement(invoice_id):
         invoice.discount_amount = discount_amount
         invoice.total_due = max(0.0, invoice.subtotal - discount_amount)
 
+    remaining_balance = max(0.0, invoice.total_due - invoice.amount_paid)
+
     if total_payment <= 0:
         flash("Error: Payment amount must be greater than KES 0.00", 'danger')
+        return redirect(url_for('billing.pos', patient_id=patient.id))
+
+    if total_payment > remaining_balance:
+        flash(f'Payment exceeds the outstanding balance of KES {remaining_balance:,.2f}.', 'danger')
         return redirect(url_for('billing.pos', patient_id=patient.id))
 
     # Determine summary description of payment methods
@@ -391,9 +416,9 @@ def process_settlement(invoice_id):
     else:
         invoice.status = 'partially_paid'
 
-    # Mark all associated billing items as paid
-    for item in invoice.billing_items:
-        item.status = 'paid'
+    if invoice.status == 'paid':
+        for item in invoice.billing_items:
+            item.status = 'paid'
 
     # Update Active Shift Totals
     active_shift.cash_collected += cash_amount

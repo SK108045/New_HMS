@@ -7,7 +7,7 @@ from models import (
     db, Patient, QueueEntry, Appointment, VitalsRecord,
     ConsultationNote, LabOrder, Prescription, BillingItem,
     MedicationItem, DrugBatch, DispensationRecord, StockTransaction,
-    Invoice, Payment, ShiftRegister, User
+    Invoice, Payment, ShiftRegister, User, AuditLog
 )
 from auth import auth_bp
 from reception import reception_bp
@@ -15,6 +15,7 @@ from triage import triage_bp
 from doctor import doctor_bp
 from pharmacy import pharmacy_bp
 from billing import billing_bp
+from admin import admin_bp
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -36,6 +37,7 @@ def create_app(config_class=Config):
     app.register_blueprint(doctor_bp)
     app.register_blueprint(pharmacy_bp)
     app.register_blueprint(billing_bp)
+    app.register_blueprint(admin_bp)
 
     @app.route('/')
     def index():
@@ -43,7 +45,9 @@ def create_app(config_class=Config):
         if is_authenticated():
             user = get_current_user()
             if user:
-                if user.portal == 'doctor':
+                if user.role == 'admin':
+                    return redirect(url_for('admin.dashboard'))
+                elif user.portal == 'doctor':
                     return redirect(url_for('doctor.dashboard'))
                 elif user.portal == 'triage':
                     return redirect(url_for('triage.dashboard'))
@@ -214,7 +218,6 @@ def seed_initial_data():
             existing_user.portal = u_data["portal"]
             existing_user.department = u_data["department"]
             existing_user.status = 'active'
-            existing_user.set_password(raw_password)
 
     db.session.commit()
     print("Clinical staff user accounts verified and synchronized successfully.")

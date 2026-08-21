@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+
+{% block title %}Pharmacy Inventory & FEFO Batch Control - Hospital Administration{% endblock %}
+
+{% block content %}
+<div class="space-y-6 pb-12" x-data="{ medFilter: '' }">
+
+    <!-- Top Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-200 pb-5">
+        <div>
+            <div class="flex items-center gap-2 font-mono text-xs font-extrabold tracking-wider text-purple-700 uppercase mb-1">
+                <span>Pharmaceutical Supply Chain</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
+                Inventory & FEFO Batch Control
+            </h1>
+            <p class="text-sm font-semibold text-slate-700 mt-1">
+                Hospital formulary stock monitoring, batch-level expiry risk management, and valuation ledger.
+            </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <a 
+                href="{{ url_for('pharmacy.inventory') }}" 
+                class="btn-primary py-2.5 px-4 text-xs font-extrabold flex items-center gap-2"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
+                </svg>
+                <span>Open Pharmacy Inventory</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- 1. Medication Stock Table -->
+    <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+        <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">
+                    Hospital Formulary Catalog ({{ medications|length }} Items)
+                </h2>
+            </div>
+
+            <div class="w-full sm:w-72">
+                <input 
+                    type="text" 
+                    x-model="medFilter" 
+                    placeholder="Search formulary or category..." 
+                    class="form-input text-xs py-1.5 px-3 font-mono"
+                >
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs min-w-[850px]">
+                <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                    <tr>
+                        <th class="p-3.5">Medication & Strength</th>
+                        <th class="p-3.5">Category & Shelf</th>
+                        <th class="p-3.5 text-right">Current Stock</th>
+                        <th class="p-3.5 text-right">Reorder Threshold</th>
+                        <th class="p-3.5 text-right">Total Valuation</th>
+                        <th class="p-3.5 text-center">Stock Acuity</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for med in medications %}
+                        <tr 
+                            class="hover:bg-slate-50 transition-colors"
+                            x-show="!medFilter || '{{ med.name.lower() }}'.includes(medFilter.toLowerCase()) || '{{ med.category.lower() }}'.includes(medFilter.toLowerCase())"
+                        >
+                            <td class="p-3.5">
+                                <div class="font-extrabold text-slate-950 text-sm">{{ med.name }}</div>
+                                <div class="text-[11px] font-mono text-slate-600">{{ med.strength or 'Standard Unit' }} &bull; {{ med.dosage_form }}</div>
+                            </td>
+                            <td class="p-3.5">
+                                <div class="font-bold text-slate-800">{{ med.category }}</div>
+                                <div class="text-[11px] font-mono text-slate-500">Shelf: {{ med.location_shelf }}</div>
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-black text-slate-950 text-sm">
+                                {{ med.current_stock }} {{ med.unit_of_measure }}
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-bold text-slate-700">
+                                {{ med.reorder_level }} {{ med.unit_of_measure }}
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-black text-emerald-700">
+                                KES {{ "{:,.2f}".format(med.total_valuation) }}
+                            </td>
+                            <td class="p-3.5 text-center">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-black border
+                                    {% if med.is_low_stock %}bg-rose-100 text-rose-900 border-rose-300
+                                    {% else %}bg-emerald-100 text-emerald-900 border-emerald-300{% endif %}">
+                                    {{ med.stock_status.replace('_', ' ').upper() }}
+                                </span>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 2. Active Drug Batches with FEFO Expiry Risk -->
+    <div class="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden">
+        <div class="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-600"></span>
+                <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">
+                    Active Batches Ranked by FEFO Expiry (First-Expired-First-Out)
+                </h2>
+            </div>
+            <span class="text-xs font-mono font-bold text-slate-600">{{ batches|length }} Batches Tracked</span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs min-w-[800px]">
+                <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+                    <tr>
+                        <th class="p-3.5">Batch Number</th>
+                        <th class="p-3.5">Medication Name</th>
+                        <th class="p-3.5 text-right">Remaining Units</th>
+                        <th class="p-3.5 text-right">Expiry Date</th>
+                        <th class="p-3.5 text-right">Shelf Life Remaining</th>
+                        <th class="p-3.5 text-center">FEFO Risk Level</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for batch in batches %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="p-3.5 font-mono font-black text-slate-950">
+                                {{ batch.batch_number }}
+                            </td>
+                            <td class="p-3.5 font-extrabold text-slate-950">
+                                {{ batch.medication.name }}
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-black text-slate-950 text-sm">
+                                {{ batch.quantity_remaining }}
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-bold text-slate-700">
+                                {{ batch.expiry_date|date_format }}
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-bold text-slate-800">
+                                {{ batch.days_to_expiry }} Days
+                            </td>
+                            <td class="p-3.5 text-center">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-black border
+                                    {% if batch.days_to_expiry <= 30 %}bg-rose-100 text-rose-900 border-rose-300 animate-pulse
+                                    {% elif batch.days_to_expiry <= 60 %}bg-amber-100 text-amber-900 border-amber-300
+                                    {% elif batch.days_to_expiry <= 90 %}bg-yellow-100 text-yellow-900 border-yellow-300
+                                    {% else %}bg-emerald-100 text-emerald-900 border-emerald-300{% endif %}">
+                                    {{ batch.expiry_status.replace('_', ' ').upper() }}
+                                </span>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="p-6 text-center text-slate-500 font-semibold">
+                                No active medication batches on record.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

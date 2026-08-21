@@ -139,6 +139,7 @@
                         <span>Staff: <strong class="text-slate-950 font-extrabold">{{ meta.sample_name }}</strong></span>
                     </div>
 
+                    {% if config.DEMO_LOGIN_ENABLED %}
                     <div class="pt-1">
                         <a 
                             href="{{ url_for('auth.demo_login', portal_name=meta.key) }}" 
@@ -147,6 +148,7 @@
                             <span>⚡ One-Click Instant Sign In &rarr;</span>
                         </a>
                     </div>
+                    {% endif %}
                 </div>
 
                 <!-- Sign In Form -->
