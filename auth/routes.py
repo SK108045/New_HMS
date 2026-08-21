@@ -374,9 +374,29 @@ def setup_2fa(user_id=None, token=None):
     img.save(buf, format='PNG')
     qr_data_url = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
 
-    # Generate Shareable Token Link for this employee
+    # Generate Shareable Token Link for this employee using Network LAN URL
     onboarding_token = user.get_2fa_onboarding_token(current_app.config['SECRET_KEY'])
-    shareable_link = url_for('auth.setup_2fa', token=onboarding_token, _external=True)
+    env_base = os.getenv('HMS_BASE_URL')
+    if env_base:
+        base_url = env_base.rstrip('/')
+    else:
+        req_host = request.host if request else ''
+        if req_host and not req_host.startswith(('127.0.0.1', 'localhost')):
+            base_url = f"{request.scheme or 'http'}://{req_host}"
+        else:
+            import socket
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.connect(('8.8.8.8', 80))
+                lan_ip = s.getsockname()[0]
+            except Exception:
+                lan_ip = '127.0.0.1'
+            finally:
+                s.close()
+            port = req_host.split(':')[1] if ':' in req_host else '5000'
+            base_url = f"http://{lan_ip}:{port}"
+
+    shareable_link = f"{base_url}/auth/onboard-2fa/{onboarding_token}"
 
     if request.method == 'POST':
         verification_code = request.form.get('verification_code', '').strip().replace(' ', '').replace('-', '')

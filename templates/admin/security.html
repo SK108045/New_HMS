@@ -382,8 +382,6 @@
                                 </td>
 
                                 <td class="p-3.5 text-right">
-                                    {% set u_token = u.get_2fa_onboarding_token(config.SECRET_KEY) %}
-                                    {% set u_link = url_for('auth.setup_2fa', token=u_token, _external=True) %}
                                     <div class="flex items-center justify-end gap-2 flex-wrap" x-data="{ linkCopied: false }">
                                         <a href="{{ url_for('auth.setup_2fa_user', user_id=u.id) }}" class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 font-extrabold text-[11px] rounded-lg" title="View or generate QR code setup for this staff member">
                                             <span>🔐 Setup / QR</span>
@@ -391,9 +389,9 @@
 
                                         <button 
                                             type="button" 
-                                            @click="navigator.clipboard.writeText('{{ u_link }}'); linkCopied = true; setTimeout(() => linkCopied = false, 2500)"
+                                            @click="navigator.clipboard.writeText('{{ get_user_onboarding_url(u) }}'); linkCopied = true; setTimeout(() => linkCopied = false, 2500)"
                                             class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-extrabold text-[11px] rounded-lg"
-                                            title="Copy secure onboarding link to send to employee"
+                                            title="Copy network onboarding link to send to employee"
                                         >
                                             <span x-show="!linkCopied">📋 Copy Link</span>
                                             <span x-show="linkCopied" class="text-emerald-700 font-black" x-cloak>✓ Copied!</span>
@@ -408,9 +406,9 @@
                                         {% endif %}
 
                                         {% if u.is_2fa_enabled %}
-                                            <form method="POST" action="{{ url_for('admin.reset_user_2fa', user_id=u.id) }}" onsubmit="return confirm('Reset 2FA for {{ u.full_name }}? Staff will need to scan a new QR code.');">
-                                                <button type="submit" class="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-extrabold text-[11px] rounded-lg">
-                                                    Reset 2FA
+                                            <form method="POST" action="{{ url_for('admin.reset_user_2fa', user_id=u.id) }}" onsubmit="return confirm('Revoke & delete 2FA for {{ u.full_name }}? 2FA will be completely deleted from the database.');">
+                                                <button type="submit" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-900 border border-rose-300 font-extrabold text-[11px] rounded-lg" title="Revoke and delete 2FA from database">
+                                                    ✕ Revoke 2FA
                                                 </button>
                                             </form>
                                         {% endif %}

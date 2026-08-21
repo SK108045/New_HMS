@@ -196,6 +196,7 @@ def update_role_permissions():
     return redirect(url_for('admin.security'))
 
 
+@admin_bp.route('/staff/<int:user_id>/revoke-2fa', methods=['POST'])
 @admin_bp.route('/security/reset-2fa/<int:user_id>', methods=['POST'])
 def reset_user_2fa(user_id):
     user = User.query.get_or_404(user_id)
@@ -204,8 +205,12 @@ def reset_user_2fa(user_id):
     user.backup_codes_json = None
     db.session.commit()
 
-    log_action('admin_reset_user_2fa', 'user', user.id, f"Admin reset 2FA enrollment for {user.full_name} ({user.username}).", severity='critical')
-    flash(f"Two-Factor Authentication for {user.full_name} has been reset. Staff member can enroll again with a fresh QR code.", 'info')
+    log_action('admin_revoke_user_2fa', 'user', user.id, f"Admin revoked and deleted 2FA secret from DB for {user.full_name} ({user.username}).", severity='critical')
+    flash(f"Two-Factor Authentication for {user.full_name} has been revoked and deleted from the database.", 'warning')
+    
+    referrer = request.referrer
+    if referrer and '/admin/staff' in referrer:
+        return redirect(url_for('admin.staff'))
     return redirect(url_for('admin.security'))
 
 

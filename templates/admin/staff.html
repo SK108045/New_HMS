@@ -249,8 +249,6 @@
 
                             <!-- 2FA Security Column -->
                             <td class="p-3.5">
-                                {% set u_token = user.get_2fa_onboarding_token(config.SECRET_KEY) %}
-                                {% set u_link = url_for('auth.setup_2fa', token=u_token, _external=True) %}
                                 <div class="flex items-center gap-1.5 flex-wrap" x-data="{ copied: false }">
                                     {% if user.is_2fa_enabled %}
                                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-black bg-emerald-100 text-emerald-950 border border-emerald-300 uppercase">
@@ -259,6 +257,11 @@
                                         <a href="{{ url_for('auth.setup_2fa_user', user_id=user.id) }}" class="text-[11px] font-bold text-blue-700 hover:underline" title="View QR Code">
                                             QR &rarr;
                                         </a>
+                                        <form method="POST" action="{{ url_for('admin.reset_user_2fa', user_id=user.id) }}" class="inline" onsubmit="return confirm('Revoke & delete 2FA for {{ user.full_name }}? The 2FA secret will be completely removed from the database.');">
+                                            <button type="submit" class="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-900 border border-rose-300 rounded font-mono font-extrabold text-[10px] shadow-2xs" title="Revoke and delete 2FA from database">
+                                                ✕ Revoke 2FA
+                                            </button>
+                                        </form>
                                     {% else %}
                                         <a 
                                             href="{{ url_for('auth.setup_2fa_user', user_id=user.id) }}" 
@@ -269,9 +272,9 @@
                                         </a>
                                         <button 
                                             type="button" 
-                                            @click="navigator.clipboard.writeText('{{ u_link }}'); copied = true; setTimeout(() => copied = false, 2500)"
+                                            @click="navigator.clipboard.writeText('{{ get_user_onboarding_url(user) }}'); copied = true; setTimeout(() => copied = false, 2500)"
                                             class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-mono font-bold"
-                                            title="Copy secure onboarding link to send to employee"
+                                            title="Copy network onboarding link to send to employee"
                                         >
                                             <span x-show="!copied">📋 Link</span>
                                             <span x-show="copied" class="text-emerald-700 font-extrabold" x-cloak>✓ Copied!</span>

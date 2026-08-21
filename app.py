@@ -110,6 +110,43 @@ def create_app(config_class=Config):
         flash('This document has no uploaded file attachment.', 'info')
         return redirect(request.referrer or url_for('doctor.dashboard'))
 
+    def get_network_base_url():
+        """Detect LAN IP / base URL for network sharing of onboarding links."""
+        env_base = os.getenv('HMS_BASE_URL')
+        if env_base:
+            return env_base.rstrip('/')
+        
+        # Check if host in current request is already a network domain/IP
+        try:
+            from flask import request as req
+            host = req.host
+            if host and not host.startswith(('127.0.0.1', 'localhost')):
+                scheme = req.scheme or 'http'
+                return f"{scheme}://{host}"
+        except Exception:
+            pass
+        
+        # Auto-detect machine LAN IP on the local network (e.g. 192.168.x.x)
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(('8.8.8.8', 80))
+            lan_ip = s.getsockname()[0]
+        except Exception:
+            lan_ip = '127.0.0.1'
+        finally:
+            s.close()
+        
+        port = 5000
+        try:
+            from flask import request as req
+            if req and req.host and ':' in req.host:
+                port = req.host.split(':')[1]
+        except Exception:
+            pass
+
+        return f"http://{lan_ip}:{port}"
+
     # Context processors for global template helpers
     @app.context_processor
     def inject_global_data():
@@ -146,6 +183,11 @@ def create_app(config_class=Config):
             unpaid_invoices_count = 0
             today_app_count = 0
 
+        def get_user_onboarding_url(target_user):
+            token = target_user.get_2fa_onboarding_token(app.config['SECRET_KEY'])
+            base = get_network_base_url()
+            return f"{base}/auth/onboard-2fa/{token}"
+
         return {
             'now': datetime.utcnow(),
             'today': date.today(),
@@ -156,7 +198,9 @@ def create_app(config_class=Config):
             'global_waiting_consultation': consultation_waiting_count,
             'global_pharmacy_waiting': pharmacy_waiting_count,
             'global_unpaid_invoices': unpaid_invoices_count,
-            'global_today_app_count': today_app_count
+            'global_today_app_count': today_app_count,
+            'get_user_onboarding_url': get_user_onboarding_url,
+            'network_base_url': get_network_base_url()
         }
 
     # Custom Jinja filters
