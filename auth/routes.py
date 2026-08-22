@@ -1,3 +1,5 @@
+import os
+import socket
 import base64
 import io
 from datetime import datetime, timedelta
@@ -246,6 +248,7 @@ def handle_portal_login(portal_key):
 
 # ==================== 2FA GOOGLE AUTHENTICATOR VERIFICATION ====================
 @auth_bp.route('/verify-2fa', methods=['GET', 'POST'])
+@auth_bp.route('/auth/verify-2fa', methods=['GET', 'POST'])
 def verify_2fa():
     pending_uid = session.get('pending_2fa_user_id')
     if not pending_uid:
@@ -321,8 +324,13 @@ def verify_2fa():
 
 # ==================== 2FA SETUP WIZARD WITH QR CODE & ONBOARDING LINKS ====================
 @auth_bp.route('/setup-2fa', methods=['GET', 'POST'])
+@auth_bp.route('/auth/setup-2fa', methods=['GET', 'POST'])
 @auth_bp.route('/setup-2fa/<int:user_id>', methods=['GET', 'POST'])
+@auth_bp.route('/auth/setup-2fa/<int:user_id>', methods=['GET', 'POST'])
 @auth_bp.route('/onboard-2fa/<token>', methods=['GET', 'POST'])
+@auth_bp.route('/auth/onboard-2fa/<token>', methods=['GET', 'POST'])
+@auth_bp.route('/onboard-2fa', methods=['GET', 'POST'])
+@auth_bp.route('/auth/onboard-2fa', methods=['GET', 'POST'])
 def setup_2fa(user_id=None, token=None):
     token = token or request.args.get('token')
     current_u = get_current_user()
