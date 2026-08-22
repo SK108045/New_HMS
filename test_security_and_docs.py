@@ -515,8 +515,26 @@ def run_test_suite():
     with app.app_context():
         rec_user = User.query.filter_by(role='receptionist').first() or User.query.filter_by(role='admin').first()
         rec_id = rec_user.id
-        p = Patient.query.order_by(Patient.id.desc()).first()
-        p_id = p.id
+        
+        # Create dedicated unqueued patient
+        apt_patient = Patient(
+            hospital_id=Patient.generate_hospital_id(db.session),
+            first_name='Kipkoech',
+            last_name='Cheruiyot',
+            full_name='Kipkoech Cheruiyot',
+            national_id='39881122',
+            phone='+254 711 889 900',
+            date_of_birth=date(1991, 6, 20),
+            gender='Male',
+            blood_group='O+',
+            primary_payer='Cash',
+            next_of_kin_name='Gladys Cheruiyot',
+            next_of_kin_phone='+254 711 000 999',
+            next_of_kin_relation='Spouse'
+        )
+        db.session.add(apt_patient)
+        db.session.commit()
+        p_id = apt_patient.id
         target_date = (date.today() + timedelta(days=2)).strftime('%Y-%m-%d')
 
     with client.session_transaction() as sess:

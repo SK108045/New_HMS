@@ -172,17 +172,18 @@ def register():
         auto_checkin = request.form.get('auto_checkin') == 'on'
         priority = request.form.get('checkin_priority', 'normal')
         department = request.form.get('checkin_department', 'General OPD')
+        checkin_doctor = request.form.get('checkin_doctor', '').strip() or None
         chief_complaint = request.form.get('chief_complaint', '').strip()
 
         # Basic Validation
         if not first_name or not last_name or not phone or not dob_str or not next_of_kin_name or not next_of_kin_phone:
             flash("Please fill in all mandatory registration fields (Name, Phone, DOB, Next of Kin).", "error")
-            return render_template('reception/register.html', form_data=request.form)
+            return render_template('reception/register.html', form_data=request.form, available_doctors=DoctorSchedule.query.all())
 
         dob = parse_dob(dob_str)
         if not dob:
             flash("Invalid Date of Birth format. Please use YYYY-MM-DD.", "error")
-            return render_template('reception/register.html', form_data=request.form)
+            return render_template('reception/register.html', form_data=request.form, available_doctors=DoctorSchedule.query.all())
 
         # Check for photo payload (webcam base64 or file upload)
         webcam_data = request.form.get('webcam_image')
@@ -232,7 +233,8 @@ def register():
                 priority=priority,
                 status='waiting',
                 chief_complaint=chief_complaint,
-                destination_department=department
+                destination_department=department,
+                assigned_doctor=checkin_doctor
             )
             db.session.add(queue_entry)
 
@@ -247,7 +249,8 @@ def register():
 
     # Pre-calculate next hospital ID for display
     preview_id = Patient.generate_hospital_id(db.session)
-    return render_template('reception/register.html', preview_id=preview_id, form_data={})
+    available_doctors = DoctorSchedule.query.filter_by(is_available=True).all()
+    return render_template('reception/register.html', preview_id=preview_id, form_data={}, available_doctors=available_doctors)
 
 @reception_bp.route('/patients/<int:patient_id>')
 def patient_detail(patient_id):
@@ -387,18 +390,47 @@ def checkin(patient_id):
         flash(success_msg, "success")
         return redirect(url_for('reception.dashboard'))
 
+    # Prepare dynamic available doctors roster with live caseloads
+    doc_schedules = DoctorSchedule.query.all()
+    available_doctors = []
+    if doc_schedules:
+        for s in doc_schedules:
+            caseload = QueueEntry.query.filter(
+                QueueEntry.assigned_doctor == s.doctor_name,
+                QueueEntry.checked_in_at >= today_start,
+                QueueEntry.status.in_(['waiting', 'in_progress'])
+            ).count()
+            available_doctors.append({
+                'name': s.doctor_name,
+                'department': s.department,
+                'status': s.duty_status,
+                'caseload': caseload,
+                'capacity': s.max_patients_per_day,
+                'notes': s.notes
+            })
+    else:
+        available_doctors = [
+            {"name": "Dr. Sarah Kamau (General OPD)", "department": "General OPD", "status": "available", "caseload": 0, "capacity": 20},
+            {"name": "Dr. Arthur Ndwiga (Internal Medicine)", "department": "Internal Medicine", "status": "available", "caseload": 0, "capacity": 15},
+            {"name": "Dr. Grace Mwangi (Pediatrics)", "department": "Pediatrics", "status": "available", "caseload": 0, "capacity": 20},
+            {"name": "Dr. Njoroge (General Surgery)", "department": "General Surgery", "status": "available", "caseload": 0, "capacity": 10},
+            {"name": "Dr. Achieng (OB/GYN)", "department": "OB/GYN", "status": "available", "caseload": 0, "capacity": 18}
+        ]
+
     # GET request - return modal / form partial
     if is_htmx:
         return render_template(
             'reception/partials/checkin_modal.html', 
             patient=patient, 
-            active_ticket=existing_ticket
+            active_ticket=existing_ticket,
+            available_doctors=available_doctors
         )
 
     return render_template(
         'reception/checkin_page.html', 
         patient=patient, 
-        active_ticket=existing_ticket
+        active_ticket=existing_ticket,
+        available_doctors=available_doctors
     )
 
 @reception_bp.route('/queue/live')
