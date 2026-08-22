@@ -81,11 +81,12 @@ def staff():
                 status='active',
             )
             user.set_password(password)
+            user.force_password_change = True  # Force employee to establish private password on first login
             db.session.add(user)
             db.session.flush()
-            log_action('staff_created', 'user', user.id, f'Created {role} account for {full_name}.')
+            log_action('staff_created', 'user', user.id, f'Created {role} account for {full_name} with temporary password.')
             db.session.commit()
-            flash(f'{full_name} has been added as {role.title()}.', 'success')
+            flash(f'{full_name} has been added as {role.title()}. They will be prompted to update their password on first sign-in.', 'success')
             return redirect(url_for('admin.staff'))
     return render_template('admin/staff.html', staff=User.query.order_by(User.full_name).all(), roles=ROLE_PORTALS)
 

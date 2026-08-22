@@ -208,6 +208,14 @@ def handle_portal_login(portal_key):
             flash('Your account has been suspended or deactivated. Contact HMS Hospital Administrator.', 'error')
             return render_template('auth/login.html', meta=meta, portals=PORTAL_META, next_url=next_url, current_portal=portal_key)
 
+        # Determine Mandatory Password Reset (First login or Admin Flagged)
+        if user.force_password_change:
+            session['pending_force_pw_user_id'] = user.id
+            session['pending_target_portal'] = portal_key
+            session['pending_next_url'] = next_url
+            flash('Hospital Security Policy requires updating your temporary password before accessing clinical stations.', 'warning')
+            return redirect(url_for('auth.force_change_password'))
+
         # Determine 2FA Requirement (Google Authenticator)
         if user.is_2fa_enabled:
             # Stage 2FA challenge
@@ -493,6 +501,80 @@ def disable_2fa():
     return redirect(request.referrer or url_for('admin.dashboard'))
 
 
+# ==================== MANDATORY FIRST-LOGIN PASSWORD UPDATE ====================
+@auth_bp.route('/force-change-password', methods=['GET', 'POST'])
+def force_change_password():
+    pending_uid = session.get('pending_force_pw_user_id')
+    user = None
+    if pending_uid:
+        user = db.session.get(User, pending_uid)
+    if not user:
+        user = get_current_user()
+
+    if not user:
+        flash('Session expired. Please sign in.', 'warning')
+        return redirect(url_for('auth.login'))
+
+    settings = SecuritySetting.get_settings()
+
+    if request.method == 'POST':
+        current_pw = request.form.get('current_password', '')
+        new_pw = request.form.get('new_password', '')
+        confirm_pw = request.form.get('confirm_password', '')
+
+        if not user.check_password(current_pw):
+            flash('Your current / temporary password is incorrect.', 'error')
+            return render_template('auth/force_change_password.html', user=user, settings=settings)
+
+        if len(new_pw) < settings.password_min_length:
+            flash(f'New password must be at least {settings.password_min_length} characters long.', 'error')
+            return render_template('auth/force_change_password.html', user=user, settings=settings)
+
+        if new_pw != confirm_pw:
+            flash('New password and confirmation do not match.', 'error')
+            return render_template('auth/force_change_password.html', user=user, settings=settings)
+
+        if current_pw == new_pw:
+            flash('New password cannot be identical to your temporary password.', 'warning')
+            return render_template('auth/force_change_password.html', user=user, settings=settings)
+
+        # Set new password and clear forced flag
+        user.set_password(new_pw)
+        user.force_password_change = False
+        db.session.commit()
+
+        AuditLog.log_event(
+            'password_changed_forced',
+            'user',
+            user.id,
+            f"User {user.username} successfully updated their temporary password on first sign-in.",
+            actor=user,
+            severity='info'
+        )
+
+        session.pop('pending_force_pw_user_id', None)
+        target_portal = session.get('pending_target_portal', user.portal or 'reception')
+        next_url = session.get('pending_next_url')
+
+        # If 2FA is enabled, prompt for 2FA next
+        if user.is_2fa_enabled:
+            session['pending_2fa_user_id'] = user.id
+            flash('Password updated successfully! Please complete Google Authenticator verification.', 'success')
+            return redirect(url_for('auth.verify_2fa'))
+
+        # Direct login to workstation
+        login_user(user, is_2fa_verified=True)
+        flash(f'Password updated successfully! Welcome to your workstation, {user.full_name}.', 'success')
+        
+        if next_url and next_url.startswith('/') and not next_url.startswith('/login') and not next_url.startswith('/logout'):
+            return redirect(next_url)
+
+        meta = PORTAL_META.get(target_portal, PORTAL_META['reception'])
+        return redirect(url_for(meta['home_endpoint']))
+
+    return render_template('auth/force_change_password.html', user=user, settings=settings)
+
+
 # ==================== SELF-SERVICE PASSWORD CHANGE ====================
 @auth_bp.route('/change-password', methods=['GET', 'POST'])
 def change_password():
@@ -510,19 +592,19 @@ def change_password():
 
         if not user.check_password(current_pw):
             flash('Your current password does not match.', 'error')
-            return render_template('auth/change_password.html', user=user, settings=settings)
+            return redirect(request.referrer or url_for('admin.dashboard'))
 
         if len(new_pw) < settings.password_min_length:
             flash(f'New password must be at least {settings.password_min_length} characters in length.', 'error')
-            return render_template('auth/change_password.html', user=user, settings=settings)
+            return redirect(request.referrer or url_for('admin.dashboard'))
 
         if new_pw != confirm_pw:
             flash('New password and confirmation do not match.', 'error')
-            return render_template('auth/change_password.html', user=user, settings=settings)
+            return redirect(request.referrer or url_for('admin.dashboard'))
 
         if current_pw == new_pw:
             flash('New password cannot be the same as your current password.', 'warning')
-            return render_template('auth/change_password.html', user=user, settings=settings)
+            return redirect(request.referrer or url_for('admin.dashboard'))
 
         user.set_password(new_pw)
         db.session.commit()
@@ -531,14 +613,13 @@ def change_password():
             'password_changed',
             'user',
             user.id,
-            f"User {user.username} successfully updated their login password.",
+            f"User {user.username} successfully updated their login password via profile modal.",
             actor=user,
             severity='info'
         )
 
         flash('Your password has been changed successfully.', 'success')
-        portal_meta = PORTAL_META.get(user.portal, PORTAL_META['reception'])
-        return redirect(url_for(portal_meta['home_endpoint']))
+        return redirect(request.referrer or url_for('admin.dashboard'))
 
     return render_template('auth/change_password.html', user=user, settings=settings)
 

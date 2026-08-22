@@ -247,8 +247,67 @@ def run_test_suite():
     assert res_view.data == sample_file_content
     print(f"   ✓ Document attachment uploaded, registered, and streamed via /documents/view/{doc_view_id} (200 OK)")
 
-    # 12. Immutable Audit Trail Verification
-    print("12. Verifying Immutable Audit Trail Telemetry...")
+    # 13. Mandatory First-Login Password Reset Intercept
+    print("13. Testing First-Time Login Forced Password Change Workflow...")
+    with app.app_context():
+        new_staff = User.query.filter_by(username='intern.doc').first()
+        if not new_staff:
+            new_staff = User(
+                username='intern.doc', full_name='Dr. Intern Kevin', staff_id='STF-INT-01',
+                role='doctor', portal='doctor', department='Emergency OPD', status='active'
+            )
+            db.session.add(new_staff)
+        new_staff.set_password('TempPass@2026')
+        new_staff.force_password_change = True
+        db.session.commit()
+
+    # Clear active session
+    client.get('/logout')
+
+    # Attempt login with temporary password -> Should be intercepted and redirected to /force-change-password
+    res_login = client.post('/login/doctor', data={
+        'username': 'intern.doc',
+        'password': 'TempPass@2026'
+    }, follow_redirects=False)
+    assert res_login.status_code == 302
+    assert '/force-change-password' in res_login.headers['Location']
+    print("   ✓ Temporary password login intercepted and routed to /force-change-password")
+
+    # Complete forced password update
+    res_force = client.post('/force-change-password', data={
+        'current_password': 'TempPass@2026',
+        'new_password': 'StrongPersonal@2026',
+        'confirm_password': 'StrongPersonal@2026'
+    }, follow_redirects=True)
+    assert res_force.status_code == 200
+    with app.app_context():
+        updated_intern = User.query.filter_by(username='intern.doc').first()
+        assert updated_intern.force_password_change is False
+        assert updated_intern.check_password('StrongPersonal@2026') is True
+    print("   ✓ Forced password update verified, force_password_change flag cleared")
+
+    # 14. Universal Self-Service Profile Password Change
+    print("14. Testing Universal Self-Service Password Change...")
+    with client.session_transaction() as sess:
+        sess['user_id'] = updated_intern.id
+        sess['username'] = 'intern.doc'
+        sess['role'] = 'doctor'
+        sess['portal'] = 'doctor'
+        sess['2fa_verified'] = True
+
+    res_change = client.post('/change-password', data={
+        'current_password': 'StrongPersonal@2026',
+        'new_password': 'NewUpdatedPersonal@2026',
+        'confirm_password': 'NewUpdatedPersonal@2026'
+    }, follow_redirects=True)
+    assert res_change.status_code == 200
+    with app.app_context():
+        final_intern = User.query.filter_by(username='intern.doc').first()
+        assert final_intern.check_password('NewUpdatedPersonal@2026') is True
+    print("   ✓ Self-service profile password change executed successfully")
+
+    # 15. Immutable Audit Trail Verification
+    print("15. Verifying Immutable Audit Trail Telemetry...")
     with app.app_context():
         audit_events = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(10).all()
         assert len(audit_events) > 0
@@ -256,7 +315,7 @@ def run_test_suite():
         print(f"   ✓ Recent Audit Actions: {', '.join(actions[:5])}")
 
     print("\n" + "="*70)
-    print("🎉 ALL 12 TEST MODULES PASSED 100%! RBAC, 2FA & DOCUMENTS FULLY OPERATIONAL")
+    print("🎉 ALL 14 TEST MODULES PASSED 100%! RBAC, 2FA, IAM & DOCUMENTS FULLY OPERATIONAL")
     print("="*70 + "\n")
 
 if __name__ == '__main__':
