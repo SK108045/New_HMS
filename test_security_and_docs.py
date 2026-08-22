@@ -9,7 +9,7 @@ from models import (
     Patient, Prescription, AuditLog, Invoice, Payment,
     InsuranceScheme, InsuranceClaim, CreditNote, FeeWaiver,
     Supplier, PurchaseOrder, PurchaseOrderItem, ControlledDrugLog, QuarantineRecord,
-    MedicationItem, DrugBatch
+    MedicationItem, DrugBatch, Appointment, DoctorSchedule, QueueEntry
 )
 
 def run_test_suite():
@@ -349,7 +349,7 @@ def run_test_suite():
     }, follow_redirects=True)
     assert res_claim.status_code == 200
     with app.app_context():
-        claim = InsuranceClaim.query.filter_by(member_number='SHA-88991122').first()
+        claim = InsuranceClaim.query.filter_by(member_number='SHA-88991122').order_by(InsuranceClaim.id.desc()).first()
         assert claim is not None
         assert claim.status == 'preauth_approved'
         assert claim.preauth_code is not None
@@ -378,7 +378,7 @@ def run_test_suite():
     }, follow_redirects=True)
     assert res_cn.status_code == 200
     with app.app_context():
-        cn = CreditNote.query.filter_by(invoice_id=inv_id).first()
+        cn = CreditNote.query.filter_by(invoice_id=inv_id).order_by(CreditNote.id.desc()).first()
         assert cn is not None
         assert cn.status == 'pending_approval'
         cn_id = cn.id
@@ -400,7 +400,7 @@ def run_test_suite():
     }, follow_redirects=True)
     assert res_wv.status_code == 200
     with app.app_context():
-        wv = FeeWaiver.query.filter_by(invoice_id=inv_id).first()
+        wv = FeeWaiver.query.filter_by(invoice_id=inv_id).order_by(FeeWaiver.id.desc()).first()
         assert wv is not None
         wv_id = wv.id
 
@@ -510,8 +510,98 @@ def run_test_suite():
         assert q_rec.disposition == 'returned_to_supplier'
     print("   ✓ Drug batch quarantined and disposition (return to vendor) completed")
 
-    # 20. Immutable Audit Trail Verification
-    print("20. Verifying Immutable Audit Trail Telemetry...")
+    # 20. Appointments, Doctor Slot Capacity & Multi-Channel Reminders
+    print("20. Testing Appointments, Doctor Slot Capacity & SMS/WhatsApp Reminders...")
+    with app.app_context():
+        rec_user = User.query.filter_by(role='receptionist').first() or User.query.filter_by(role='admin').first()
+        rec_id = rec_user.id
+        p = Patient.query.order_by(Patient.id.desc()).first()
+        p_id = p.id
+        target_date = (date.today() + timedelta(days=2)).strftime('%Y-%m-%d')
+
+    with client.session_transaction() as sess:
+        sess['user_id'] = rec_id
+        sess['username'] = 'reception'
+        sess['role'] = 'receptionist'
+        sess['portal'] = 'reception'
+        sess['2fa_verified'] = True
+
+    # Book new appointment
+    res_app = client.post('/reception/appointments', data={
+        'patient_id': str(p_id),
+        'scheduled_date': target_date,
+        'scheduled_time': '10:30',
+        'department': 'General OPD',
+        'doctor_name': 'Dr. Sarah Kamau (General OPD)',
+        'reason': 'Routine clinical follow-up & BP check'
+    }, follow_redirects=True)
+    assert res_app.status_code == 200
+    with app.app_context():
+        new_app = Appointment.query.filter_by(patient_id=p_id).order_by(Appointment.id.desc()).first()
+        assert new_app is not None
+        assert new_app.appointment_number is not None
+        assert new_app.status == 'scheduled'
+        app_id = new_app.id
+    print(f"   ✓ Appointment booked with auto-numbering: {new_app.appointment_number}")
+
+    # Confirm appointment
+    res_conf = client.post(f'/reception/appointments/{app_id}/confirm', follow_redirects=True)
+    assert res_conf.status_code == 200
+    with app.app_context():
+        assert Appointment.query.get(app_id).status == 'confirmed'
+    print("   ✓ Appointment confirmed successfully")
+
+    # Dispatch SMS & WhatsApp reminder
+    res_rem = client.post(f'/reception/appointments/{app_id}/send-reminder', data={
+        'channel': 'both'
+    }, follow_redirects=True)
+    assert res_rem.status_code == 200
+    with app.app_context():
+        app_entry = Appointment.query.get(app_id)
+        assert app_entry.reminder_sent_sms is True
+        assert app_entry.reminder_sent_whatsapp is True
+        assert app_entry.last_reminder_at is not None
+    print("   ✓ SMS & WhatsApp reminders dispatched and logged in database")
+
+    # 1-Click Triage Check-in
+    res_chk = client.post(f'/reception/appointments/{app_id}/checkin', follow_redirects=True)
+    assert res_chk.status_code == 200
+    with app.app_context():
+        assert Appointment.query.get(app_id).status == 'checked_in'
+        tkt = QueueEntry.query.filter_by(patient_id=p_id).order_by(QueueEntry.id.desc()).first()
+        assert tkt is not None
+        assert tkt.status == 'waiting'
+    print(f"   ✓ 1-Click Triage Check-in generated ticket {tkt.ticket_number}")
+
+    # Test Doctor Schedule update in Doctor Portal
+    with app.app_context():
+        doc_user = User.query.filter_by(role='doctor').first() or User.query.filter_by(role='admin').first()
+        doc_id = doc_user.id
+
+    with client.session_transaction() as sess:
+        sess['user_id'] = doc_id
+        sess['username'] = 'doctor'
+        sess['role'] = 'doctor'
+        sess['portal'] = 'doctor'
+        sess['2fa_verified'] = True
+
+    res_doc_sched = client.post('/doctor/schedule', data={
+        'day_of_week': 'Monday, Tuesday, Wednesday, Friday',
+        'start_time': '08:30',
+        'end_time': '16:30',
+        'max_patients_per_day': '25',
+        'slot_duration_minutes': '20',
+        'duty_status': 'available',
+        'notes': 'Room 101 - Primary Care'
+    }, follow_redirects=True)
+    assert res_doc_sched.status_code == 200
+    with app.app_context():
+        sched = DoctorSchedule.query.first()
+        assert sched.max_patients_per_day == 25
+    print("   ✓ Doctor duty roster & slot capacity updated via Doctor Portal")
+
+    # 21. Immutable Audit Trail Verification
+    print("21. Verifying Immutable Audit Trail Telemetry...")
     with app.app_context():
         audit_events = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(10).all()
         assert len(audit_events) > 0
@@ -519,7 +609,7 @@ def run_test_suite():
         print(f"   ✓ Recent Audit Actions: {', '.join(actions[:5])}")
 
     print("\n" + "="*70)
-    print("🎉 ALL 19 TEST MODULES PASSED 100%! RBAC, 2FA, IAM, CLAIMS, PHARMACY & FINANCE OPERATIONAL")
+    print("🎉 ALL 20 TEST MODULES PASSED 100%! APPOINTMENTS, SMS/WA REMINDERS, ROSTER & RBAC FULLY OPERATIONAL")
     print("="*70 + "\n")
 
 if __name__ == '__main__':

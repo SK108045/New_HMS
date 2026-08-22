@@ -2,7 +2,7 @@ from datetime import datetime, date, timedelta
 from flask import render_template, request, redirect, url_for, flash, jsonify, current_app
 from sqlalchemy import or_, and_, desc, func
 
-from models import db, Patient, QueueEntry, Appointment
+from models import db, Patient, QueueEntry, Appointment, DoctorSchedule, AuditLog
 from . import reception_bp
 from .utils import save_webcam_or_uploaded_photo, parse_dob
 
@@ -449,7 +449,18 @@ def cancel_queue(queue_id):
 
 @reception_bp.route('/appointments', methods=['GET', 'POST'])
 def appointments():
+    """
+    Reception Appointments Hub:
+    - Doctor Availability, Shifts & Slot Capacity Matrix
+    - Interactive Booking Engine with Auto-Numbering
+    - Multi-Channel Reminders (SMS & WhatsApp dispatch)
+    - Cancellation & Rescheduling Governance
+    - 1-Click Fast-Track Queue Check-In
+    """
     selected_date_str = request.args.get('date', date.today().strftime('%Y-%m-%d'))
+    status_filter = request.args.get('status', 'all')
+    doctor_filter = request.args.get('doctor', 'all')
+
     try:
         filter_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
     except ValueError:
@@ -477,7 +488,21 @@ def appointments():
             flash("Patient record not found.", "error")
             return redirect(url_for('reception.appointments', date=selected_date_str))
 
+        # Check doctor slot capacity if doctor specified
+        if doctor_name:
+            doc_schedule = DoctorSchedule.query.filter_by(doctor_name=doctor_name).first()
+            if doc_schedule:
+                current_booked = Appointment.query.filter(
+                    Appointment.doctor_name == doctor_name,
+                    Appointment.scheduled_date == parsed_date,
+                    Appointment.status.in_(['scheduled', 'confirmed', 'checked_in'])
+                ).count()
+                if current_booked >= doc_schedule.max_patients_per_day:
+                    flash(f"Slot capacity reached! {doctor_name} already has {current_booked}/{doc_schedule.max_patients_per_day} patients booked on {parsed_date}.", "error")
+                    return redirect(url_for('reception.appointments', date=selected_date_str))
+
         new_app = Appointment(
+            appointment_number=Appointment.generate_appointment_number(db.session),
             patient_id=patient.id,
             scheduled_date=parsed_date,
             scheduled_time=scheduled_time,
@@ -489,35 +514,149 @@ def appointments():
         db.session.add(new_app)
         db.session.commit()
 
-        flash(f"Appointment booked for {patient.full_name} on {parsed_date} at {scheduled_time}.", "success")
+        AuditLog.log_event(
+            'appointment_booked',
+            'appointment',
+            new_app.id,
+            f"Appointment {new_app.appointment_number} booked for {patient.full_name} with {doctor_name or 'General OPD'} on {parsed_date} at {scheduled_time}."
+        )
+
+        flash(f"Appointment {new_app.appointment_number} booked for {patient.full_name} on {parsed_date} at {scheduled_time}.", "success")
         return redirect(url_for('reception.appointments', date=parsed_date.strftime('%Y-%m-%d')))
 
     # Fetch appointments for the filtered date
-    day_appointments = Appointment.query.filter(
-        Appointment.scheduled_date == filter_date
-    ).order_by(Appointment.scheduled_time.asc()).all()
+    query = Appointment.query.filter(Appointment.scheduled_date == filter_date)
+    if status_filter != 'all':
+        query = query.filter(Appointment.status == status_filter)
+    if doctor_filter != 'all':
+        query = query.filter(Appointment.doctor_name == doctor_filter)
+
+    day_appointments = query.order_by(Appointment.scheduled_time.asc()).all()
 
     # Upcoming appointments (next 7 days)
     upcoming_appointments = Appointment.query.filter(
         Appointment.scheduled_date > date.today(),
         Appointment.scheduled_date <= date.today() + timedelta(days=7),
-        Appointment.status == 'scheduled'
+        Appointment.status.in_(['scheduled', 'confirmed'])
     ).order_by(Appointment.scheduled_date.asc(), Appointment.scheduled_time.asc()).all()
+
+    # Doctor Roster & Slot Capacity Matrix for the selected date
+    all_schedules = DoctorSchedule.query.filter_by(is_available=True).all()
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    
+    doctor_capacity_cards = []
+    for sched in all_schedules:
+        booked_for_date = Appointment.query.filter(
+            Appointment.doctor_name == sched.doctor_name,
+            Appointment.scheduled_date == filter_date,
+            Appointment.status.in_(['scheduled', 'confirmed', 'checked_in', 'completed'])
+        ).count()
+
+        # Live caseload today in waiting/consultation room
+        live_caseload = QueueEntry.query.filter(
+            QueueEntry.assigned_doctor == sched.doctor_name,
+            QueueEntry.checked_in_at >= today_start,
+            QueueEntry.status.in_(['waiting', 'in_progress'])
+        ).count()
+
+        remaining_slots = max(0, sched.max_patients_per_day - booked_for_date)
+        is_full = booked_for_date >= sched.max_patients_per_day
+
+        doctor_capacity_cards.append({
+            'schedule': sched,
+            'booked_count': booked_for_date,
+            'max_capacity': sched.max_patients_per_day,
+            'remaining_slots': remaining_slots,
+            'is_full': is_full,
+            'live_caseload': live_caseload
+        })
 
     all_patients = Patient.query.order_by(Patient.full_name.asc()).all()
     selected_patient_id = request.args.get('patient_id', type=int)
+
+    # Key metrics
+    total_day_appointments = len(day_appointments)
+    confirmed_count = sum(1 for a in day_appointments if a.status == 'confirmed')
+    checked_in_count = sum(1 for a in day_appointments if a.status == 'checked_in')
+    cancelled_count = sum(1 for a in day_appointments if a.status == 'cancelled')
 
     return render_template(
         'reception/appointments.html',
         filter_date=filter_date,
         day_appointments=day_appointments,
         upcoming_appointments=upcoming_appointments,
+        doctor_capacity_cards=doctor_capacity_cards,
         all_patients=all_patients,
         selected_patient_id=selected_patient_id,
+        status_filter=status_filter,
+        doctor_filter=doctor_filter,
+        total_day_appointments=total_day_appointments,
+        confirmed_count=confirmed_count,
+        checked_in_count=checked_in_count,
+        cancelled_count=cancelled_count,
         today=date.today(),
         prev_date=filter_date - timedelta(days=1),
         next_date=filter_date + timedelta(days=1)
     )
+
+
+@reception_bp.route('/appointments/<int:appointment_id>/confirm', methods=['POST'])
+def confirm_appointment(appointment_id):
+    app_entry = Appointment.query.get_or_404(appointment_id)
+    app_entry.status = 'confirmed'
+    db.session.commit()
+    flash(f"Appointment {app_entry.appointment_number or app_entry.id} confirmed for {app_entry.patient.full_name}.", "success")
+    return redirect(url_for('reception.appointments', date=app_entry.scheduled_date.strftime('%Y-%m-%d')))
+
+
+@reception_bp.route('/appointments/<int:appointment_id>/cancel', methods=['POST'])
+def cancel_appointment(appointment_id):
+    app_entry = Appointment.query.get_or_404(appointment_id)
+    reason = request.form.get('cancellation_reason', 'Patient requested cancellation').strip()
+    
+    app_entry.status = 'cancelled'
+    app_entry.cancellation_reason = reason
+    app_entry.cancelled_at = datetime.utcnow()
+    app_entry.cancelled_by = 'Reception Desk'
+    db.session.commit()
+
+    AuditLog.log_event(
+        'appointment_cancelled',
+        'appointment',
+        app_entry.id,
+        f"Appointment {app_entry.appointment_number or app_entry.id} cancelled. Reason: {reason}",
+        severity='warning'
+    )
+    flash(f"Appointment cancelled for {app_entry.patient.full_name}.", "info")
+    return redirect(url_for('reception.appointments', date=app_entry.scheduled_date.strftime('%Y-%m-%d')))
+
+
+@reception_bp.route('/appointments/<int:appointment_id>/send-reminder', methods=['POST'])
+def send_appointment_reminder(appointment_id):
+    """
+    Multi-Channel Reminder Engine: Dispatches simulated SMS & WhatsApp reminders.
+    """
+    app_entry = Appointment.query.get_or_404(appointment_id)
+    channel = request.form.get('channel', 'both')  # 'sms', 'whatsapp', 'both'
+    patient = app_entry.patient
+
+    app_entry.last_reminder_at = datetime.utcnow()
+    if channel in ['sms', 'both']:
+        app_entry.reminder_sent_sms = True
+    if channel in ['whatsapp', 'both']:
+        app_entry.reminder_sent_whatsapp = True
+
+    AuditLog.log_event(
+        'appointment_reminder_dispatched',
+        'appointment',
+        app_entry.id,
+        f"Dispatched {channel.upper()} reminder to {patient.phone} for appointment on {app_entry.scheduled_date} at {app_entry.scheduled_time}."
+    )
+    db.session.commit()
+
+    msg = f"✓ Reminder successfully sent to {patient.full_name} ({patient.phone}) via {channel.upper()}!"
+    flash(msg, "success")
+    return redirect(url_for('reception.appointments', date=app_entry.scheduled_date.strftime('%Y-%m-%d')))
 
 
 @reception_bp.route('/appointments/<int:appointment_id>/checkin', methods=['POST'])
@@ -551,5 +690,13 @@ def checkin_from_appointment(appointment_id):
     app_entry.status = 'checked_in'
     db.session.commit()
 
+    AuditLog.log_event(
+        'appointment_checked_in',
+        'appointment',
+        app_entry.id,
+        f"Checked in patient {patient.full_name} from appointment {app_entry.appointment_number or app_entry.id} as ticket {ticket_number} (Assigned: {app_entry.doctor_name or 'General OPD'})."
+    )
+
     flash(f"Checked in {patient.full_name} from appointment as ticket {ticket_number}.", "success")
     return redirect(url_for('reception.dashboard'))
+

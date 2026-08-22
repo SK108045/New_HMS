@@ -384,9 +384,15 @@
                                 Assigned Doctor / Clinician
                             </label>
                             <select name="assigned_doctor" id="assigned_doctor" class="form-select text-xs">
-                                <option value="">-- Available Duty Doctor --</option>
+                                <option value="">-- Auto-Route to First Available Doctor --</option>
                                 {% for doc in available_doctors %}
-                                    <option value="{{ doc }}" {% if queue_entry and queue_entry.assigned_doctor == doc %}selected{% endif %}>{{ doc }}</option>
+                                    {% if doc is mapping %}
+                                        <option value="{{ doc.name }}" {% if queue_entry and queue_entry.assigned_doctor == doc.name %}selected{% endif %}>
+                                            {{ doc.name }} &bull; {{ doc.caseload }} waiting (Cap: {{ doc.capacity }})
+                                        </option>
+                                    {% else %}
+                                        <option value="{{ doc }}" {% if queue_entry and queue_entry.assigned_doctor == doc %}selected{% endif %}>{{ doc }}</option>
+                                    {% endif %}
                                 {% endfor %}
                             </select>
                         </div>

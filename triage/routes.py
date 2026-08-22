@@ -1,6 +1,6 @@
 from datetime import datetime, date, timedelta
 from flask import render_template, request, redirect, url_for, flash, jsonify
-from models import db, Patient, QueueEntry, Appointment, VitalsRecord
+from models import db, Patient, QueueEntry, Appointment, VitalsRecord, DoctorSchedule, AuditLog
 from . import triage_bp
 
 @triage_bp.route('/', methods=['GET'])
@@ -266,14 +266,30 @@ def vitals_intake(queue_id):
     # Historical vitals for trends
     past_vitals = VitalsRecord.query.filter_by(patient_id=patient.id).order_by(VitalsRecord.created_at.desc()).limit(10).all()
 
-    available_doctors = [
-        "Dr. Sarah Kamau (General OPD)",
-        "Dr. Njoroge (Cardiology)",
-        "Dr. Otieno (Orthopedic)",
-        "Dr. Grace Mwangi (Pediatrics)",
-        "Dr. Achieng (OB/GYN)",
-        "Duty Clinical Officer"
-    ]
+    # Dynamic Doctor Roster with Live Caseloads
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    doc_schedules = DoctorSchedule.query.all()
+    available_doctors = []
+    if doc_schedules:
+        for s in doc_schedules:
+            caseload = QueueEntry.query.filter(
+                QueueEntry.assigned_doctor == s.doctor_name,
+                QueueEntry.checked_in_at >= today_start,
+                QueueEntry.status.in_(['waiting', 'in_progress'])
+            ).count()
+            available_doctors.append({
+                'name': s.doctor_name,
+                'department': s.department,
+                'status': s.duty_status,
+                'caseload': caseload,
+                'capacity': s.max_patients_per_day
+            })
+    else:
+        available_doctors = [
+            {"name": "Dr. Sarah Kamau (General OPD)", "department": "General OPD", "status": "available", "caseload": 0, "capacity": 20},
+            {"name": "Dr. Arthur Ndwiga (Internal Medicine)", "department": "Internal Medicine", "status": "available", "caseload": 0, "capacity": 15},
+            {"name": "Dr. Grace Mwangi (Pediatrics)", "department": "Pediatrics", "status": "available", "caseload": 0, "capacity": 20}
+        ]
 
     clinics = [
         "General OPD",

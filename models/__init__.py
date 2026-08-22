@@ -1,7 +1,7 @@
 from .base import db
 from .patient import Patient
 from .queue import QueueEntry
-from .appointment import Appointment
+from .appointment import Appointment, DoctorSchedule
 from .vitals import VitalsRecord
 from .emr import ConsultationNote, LabOrder, Prescription, BillingItem
 from .pharmacy import (
@@ -23,6 +23,7 @@ __all__ = [
     'Patient',
     'QueueEntry',
     'Appointment',
+    'DoctorSchedule',
     'VitalsRecord',
     'ConsultationNote',
     'LabOrder',

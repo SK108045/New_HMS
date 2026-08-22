@@ -3,238 +3,303 @@
 {% block title %}Appointments & Clinic Schedule - Front Desk{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6" x-data="{ 
+    showBookModal: false, 
+    showCancelModal: false, 
+    showReminderModal: false, 
+    selectedApp: null,
+    reminderChannel: 'both',
+    cancelReason: 'Patient requested cancellation'
+}">
 
-    <!-- Header & Date Navigation -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
+    <!-- Top Navigation & Action Banner -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border-2 border-slate-300 shadow-xs">
         <div>
-            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
-                <a href="{{ url_for('reception.dashboard') }}" class="hover:text-slate-900">Reception Desk</a>
-                <span>/</span>
-                <span class="text-slate-800 font-semibold">Appointments</span>
+            <div class="flex items-center gap-2 text-xs font-mono font-bold text-blue-900 uppercase">
+                <span>FRONT DESK & CLINIC SCHEDULING</span>
+                <span>&bull;</span>
+                <span>DOCTOR ROSTER & REMINDERS</span>
             </div>
-            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Clinic Schedule & Appointments</h1>
-            <p class="text-xs text-slate-500 mt-0.5">Manage patient consultation bookings, arrivals, and 1-click triage routing</p>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-950 mt-1">Appointments & Doctor Capacity Schedule</h1>
+            <p class="text-xs text-slate-600 font-medium">Manage doctor duty hours, patient consultation bookings, SMS/WhatsApp reminders, and fast-track triage check-in.</p>
         </div>
 
-        <!-- Date Stepper Navigator -->
-        <div class="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-300 shadow-xs">
-            <a href="{{ url_for('reception.appointments', date=prev_date.strftime('%Y-%m-%d')) }}" class="p-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors" title="Previous Day">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                </svg>
-            </a>
+        <!-- Date Stepper Navigator & Book Button -->
+        <div class="flex items-center gap-2.5 flex-wrap">
+            <div class="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border-2 border-slate-300">
+                <a href="{{ url_for('reception.appointments', date=prev_date.strftime('%Y-%m-%d'), status=status_filter, doctor=doctor_filter) }}" class="p-1.5 text-slate-700 hover:text-slate-950 hover:bg-slate-200 rounded-lg transition-colors" title="Previous Day">
+                    &larr;
+                </a>
 
-            <form method="GET" action="{{ url_for('reception.appointments') }}" class="flex items-center gap-2">
-                <input 
-                    type="date" 
-                    name="date" 
-                    value="{{ filter_date.strftime('%Y-%m-%d') }}" 
-                    onchange="this.form.submit()"
-                    class="py-1 px-2.5 text-xs font-mono font-bold border-slate-300 rounded focus:ring-slate-900 focus:border-slate-900"
-                >
-            </form>
+                <form method="GET" action="{{ url_for('reception.appointments') }}" class="flex items-center">
+                    <input type="hidden" name="status" value="{{ status_filter }}">
+                    <input type="hidden" name="doctor" value="{{ doctor_filter }}">
+                    <input 
+                        type="date" 
+                        name="date" 
+                        value="{{ filter_date.strftime('%Y-%m-%d') }}" 
+                        onchange="this.form.submit()"
+                        class="py-1 px-2 text-xs font-mono font-bold border-slate-300 rounded-lg"
+                    >
+                </form>
 
-            <a href="{{ url_for('reception.appointments', date=next_date.strftime('%Y-%m-%d')) }}" class="p-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors" title="Next Day">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-            </a>
+                <a href="{{ url_for('reception.appointments', date=next_date.strftime('%Y-%m-%d'), status=status_filter, doctor=doctor_filter) }}" class="p-1.5 text-slate-700 hover:text-slate-950 hover:bg-slate-200 rounded-lg transition-colors" title="Next Day">
+                    &rarr;
+                </a>
+            </div>
 
             {% if filter_date != today %}
-                <a href="{{ url_for('reception.appointments', date=today.strftime('%Y-%m-%d')) }}" class="px-2.5 py-1 text-xs font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300">
-                    Jump Today
+                <a href="{{ url_for('reception.appointments', date=today.strftime('%Y-%m-%d')) }}" class="px-3 py-2 text-xs font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-300">
+                    Today
                 </a>
             {% endif %}
+
+            <button 
+                type="button" 
+                @click="showBookModal = true" 
+                class="px-4 py-2 bg-blue-900 hover:bg-blue-950 text-white text-xs font-black rounded-xl shadow-md flex items-center gap-1.5"
+            >
+                <span>+ Book Appointment</span>
+            </button>
         </div>
     </div>
 
-    <!-- Main 12-Col Workspace: Schedule Table vs Booking Drawer -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        <!-- Left 8-Cols: Day's Appointments List -->
-        <div class="lg:col-span-8 space-y-6">
-            
-            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div class="p-4 sm:px-6 border-b border-slate-200 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div class="flex items-center gap-2.5">
-                        <div class="w-3 h-3 rounded-full bg-slate-800"></div>
-                        <h2 class="text-base font-bold text-slate-900">
-                            Bookings for {{ filter_date.strftime('%A, %d %B %Y') }}
-                        </h2>
-                        <span class="text-xs font-mono font-bold text-slate-700 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
-                            {{ day_appointments|length }} Scheduled
+    <!-- Doctor Roster & Slot Capacity Matrix for the Day -->
+    <div>
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-mono font-bold uppercase text-slate-600">Doctor Availability & Slot Capacity Matrix ({{ filter_date.strftime('%a, %d %b %Y') }})</h3>
+            <span class="text-[11px] text-slate-500 font-mono">Live Roster & Room Caseloads</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            {% for doc in doctor_capacity_cards %}
+                <div class="p-3.5 rounded-2xl border-2 shadow-xs transition-all
+                    {% if doc.is_full %}bg-rose-50 border-rose-300
+                    {% elif doc.schedule.duty_status != 'available' %}bg-slate-100 border-slate-300 opacity-75
+                    {% else %}bg-white border-slate-300 hover:border-blue-400{% endif %}">
+                    <div class="flex items-center justify-between">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase
+                            {% if doc.schedule.duty_status == 'available' %}bg-emerald-100 text-emerald-900
+                            {% elif doc.schedule.duty_status == 'in_surgery' %}bg-purple-100 text-purple-900
+                            {% elif doc.schedule.duty_status == 'on_leave' %}bg-rose-100 text-rose-900
+                            {% else %}bg-slate-200 text-slate-800{% endif %}">
+                            {{ doc.schedule.duty_status.replace('_', ' ').title() }}
                         </span>
+                        <span class="text-[10px] font-mono font-bold text-slate-500">{{ doc.schedule.start_time }}-{{ doc.schedule.end_time }}</span>
                     </div>
 
-                    {% if filter_date == today %}
-                        <span class="text-xs font-mono font-bold px-2.5 py-1 bg-slate-100 text-slate-900 border border-slate-300 rounded">
-                            Today's Active Schedule
-                        </span>
-                    {% endif %}
-                </div>
-
-                {% if day_appointments %}
-                    <div class="w-full overflow-hidden">
-                        <table class="w-full text-left text-sm table-auto">
-                            <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
-                                <tr>
-                                    <th class="py-3.5 px-4 w-[18%]">Time Slot</th>
-                                    <th class="py-3.5 px-4 w-[32%]">Patient Name</th>
-                                    <th class="py-3.5 px-4 w-[26%]">Clinic / Clinician</th>
-                                    <th class="py-3.5 px-4 text-right w-[24%]">Status & Action</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-200 bg-white">
-                                {% for app in day_appointments %}
-                                    <tr class="hover:bg-slate-50/80 transition-colors">
-                                        
-                                        <!-- Time -->
-                                        <td class="py-3.5 px-4 whitespace-nowrap">
-                                            <span class="font-mono font-bold text-xs px-2 py-1 bg-slate-100 text-slate-900 border border-slate-300 rounded">
-                                                {{ app.scheduled_time }}
-                                            </span>
-                                        </td>
-
-                                        <!-- Patient Name -->
-                                        <td class="py-3.5 px-4 whitespace-nowrap">
-                                            <a href="{{ url_for('reception.patient_detail', patient_id=app.patient.id) }}" class="font-bold text-slate-900 hover:text-slate-700 text-sm hover:underline">
-                                                {{ app.patient.full_name }}
-                                            </a>
-                                            <div class="text-xs font-mono text-slate-500">
-                                                {{ app.patient.hospital_id }} &bull; {{ app.patient.phone }}
-                                            </div>
-                                        </td>
-
-                                        <!-- Clinic & Doctor -->
-                                        <td class="py-3.5 px-4 whitespace-nowrap">
-                                            <div class="font-semibold text-slate-900 text-sm">{{ app.department }}</div>
-                                            <div class="text-xs text-slate-500">{{ app.doctor_name or 'Assigned On Arrival' }}</div>
-                                        </td>
-
-                                        <!-- Status & Action -->
-                                        <td class="py-3.5 px-4 text-right whitespace-nowrap">
-                                            <div class="flex items-center justify-end gap-2">
-                                                <span class="px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-300">
-                                                    {{ app.status }}
-                                                </span>
-
-                                                {% if app.status == 'scheduled' %}
-                                                    <form method="POST" action="{{ url_for('reception.checkin_from_appointment', appointment_id=app.id) }}" class="inline">
-                                                        <button type="submit" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded shadow-xs inline-flex items-center gap-1">
-                                                            Check In
-                                                        </button>
-                                                    </form>
-                                                {% elif app.status == 'checked_in' %}
-                                                    <span class="px-2 py-0.5 bg-slate-200 text-slate-800 border border-slate-300 rounded font-bold text-xs font-mono">
-                                                        In Triage
-                                                    </span>
-                                                {% endif %}
-                                            </div>
-                                        </td>
-
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div class="font-extrabold text-slate-950 text-xs mt-2 truncate" title="{{ doc.schedule.doctor_name }}">
+                        {{ doc.schedule.doctor_name }}
                     </div>
-                {% else %}
-                    <div class="text-center py-12 px-4">
-                        <div class="w-10 h-10 mx-auto rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-2">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                            </svg>
+                    <div class="text-[10px] text-slate-500 font-mono">{{ doc.schedule.notes or doc.schedule.department }}</div>
+
+                    <!-- Capacity Progress Bar -->
+                    <div class="mt-2.5 space-y-1">
+                        <div class="flex items-center justify-between text-[10px] font-mono">
+                            <span class="font-bold text-slate-700">Slots Booked:</span>
+                            <span class="font-black {% if doc.is_full %}text-rose-900{% else %}text-slate-900{% endif %}">
+                                {{ doc.booked_count }} / {{ doc.max_capacity }}
+                            </span>
                         </div>
-                        <h3 class="text-sm font-bold text-slate-800">No Appointments Scheduled for this Date</h3>
-                        <p class="text-xs text-slate-500 mt-1">Use the booking form on the right to schedule patient visits.</p>
+                        <div class="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full {% if doc.is_full %}bg-rose-600{% else %}bg-blue-600{% endif %}"
+                                 style="width: {{ [(doc.booked_count / doc.max_capacity * 100)|round, 100]|min }}%"></div>
+                        </div>
+                        <div class="flex items-center justify-between text-[9px] text-slate-500 pt-0.5">
+                            <span>Rem: <strong>{{ doc.remaining_slots }}</strong></span>
+                            <span>Live Caseload: <strong>{{ doc.live_caseload }}</strong></span>
+                        </div>
                     </div>
-                {% endif %}
-            </div>
-
-            <!-- Upcoming 7 Days Appointments -->
-            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                <div class="flex items-center justify-between pb-3.5 mb-3.5 border-b border-slate-200">
-                    <div>
-                        <h3 class="text-sm font-bold text-slate-900">Upcoming Clinic Forecast (Next 7 Days)</h3>
-                        <p class="text-xs text-slate-500">Upcoming scheduled consultations</p>
-                    </div>
-                    <span class="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded border border-slate-200">{{ upcoming_appointments|length }} Total</span>
                 </div>
+            {% endfor %}
+        </div>
+    </div>
 
-                {% if upcoming_appointments %}
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        {% for u_app in upcoming_appointments %}
-                            <div class="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 flex items-start justify-between text-xs">
-                                <div class="space-y-1">
-                                    <div class="font-bold text-slate-900 text-sm">{{ u_app.patient.full_name }}</div>
-                                    <div class="text-slate-500 font-mono text-xs">{{ u_app.patient.hospital_id }} &bull; {{ u_app.department }}</div>
-                                    <div class="text-slate-600 italic text-xs">{{ u_app.reason or 'Consultation' }}</div>
-                                </div>
-                                <div class="text-right">
-                                    <div class="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-300">
-                                        {{ u_app.scheduled_date.strftime('%d %b') }}
-                                    </div>
-                                    <div class="text-xs text-slate-500 font-mono mt-0.5">{{ u_app.scheduled_time }}</div>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <div class="text-center py-6 text-slate-400 text-xs">
-                        No upcoming appointments in the next 7 days.
-                    </div>
-                {% endif %}
-            </div>
-
+    <!-- Filter Bar & Metrics -->
+    <div class="bg-white p-3.5 rounded-2xl border-2 border-slate-300 shadow-xs flex flex-col md:flex-row justify-between items-center gap-3">
+        <div class="flex items-center gap-2 flex-wrap w-full md:w-auto text-xs font-bold">
+            <a href="{{ url_for('reception.appointments', date=filter_date.strftime('%Y-%m-%d'), status='all', doctor=doctor_filter) }}"
+               class="px-3 py-1.5 rounded-lg {% if status_filter == 'all' %}bg-slate-900 text-white{% else %}bg-slate-100 text-slate-700 hover:bg-slate-200{% endif %}">
+                All ({{ total_day_appointments }})
+            </a>
+            <a href="{{ url_for('reception.appointments', date=filter_date.strftime('%Y-%m-%d'), status='confirmed', doctor=doctor_filter) }}"
+               class="px-3 py-1.5 rounded-lg {% if status_filter == 'confirmed' %}bg-emerald-800 text-white{% else %}bg-emerald-50 text-emerald-900 hover:bg-emerald-100{% endif %}">
+                Confirmed ({{ confirmed_count }})
+            </a>
+            <a href="{{ url_for('reception.appointments', date=filter_date.strftime('%Y-%m-%d'), status='checked_in', doctor=doctor_filter) }}"
+               class="px-3 py-1.5 rounded-lg {% if status_filter == 'checked_in' %}bg-blue-800 text-white{% else %}bg-blue-50 text-blue-900 hover:bg-blue-100{% endif %}">
+                Checked In ({{ checked_in_count }})
+            </a>
+            <a href="{{ url_for('reception.appointments', date=filter_date.strftime('%Y-%m-%d'), status='cancelled', doctor=doctor_filter) }}"
+               class="px-3 py-1.5 rounded-lg {% if status_filter == 'cancelled' %}bg-rose-800 text-white{% else %}bg-rose-50 text-rose-900 hover:bg-rose-100{% endif %}">
+                Cancelled ({{ cancelled_count }})
+            </a>
         </div>
 
-        <!-- Right 4-Cols: Schedule New Visit Form -->
-        <div class="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4 sticky top-20">
-            <div class="pb-3 border-b border-slate-200">
-                <h3 class="text-sm font-bold text-slate-900">Book New Appointment</h3>
-                <p class="text-xs text-slate-500">Schedule future clinic consultation</p>
+        <div class="text-xs font-mono font-bold text-slate-600">
+            Selected: <span class="text-slate-950 font-black">{{ filter_date.strftime('%A, %d %B %Y') }}</span>
+        </div>
+    </div>
+
+    <!-- Appointments Table -->
+    <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-100 border-b-2 border-slate-300 text-slate-800 font-mono uppercase text-[11px]">
+                        <th class="p-3.5">App # & Time</th>
+                        <th class="p-3.5">Patient Details</th>
+                        <th class="p-3.5">Clinician & Room</th>
+                        <th class="p-3.5">Clinical Reason</th>
+                        <th class="p-3.5 text-center">Status</th>
+                        <th class="p-3.5 text-center">Reminders Dispatched</th>
+                        <th class="p-3.5 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for a in day_appointments %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="p-3.5">
+                                <div class="font-black text-slate-950 font-mono text-sm">{{ a.scheduled_time }}</div>
+                                <div class="text-[10px] text-slate-500 font-mono">{{ a.appointment_number or 'APT-' ~ a.id }}</div>
+                            </td>
+
+                            <td class="p-3.5">
+                                <div class="font-extrabold text-slate-950 text-sm">{{ a.patient.full_name }}</div>
+                                <div class="text-[11px] text-slate-600 font-mono">{{ a.patient.hospital_id }} &bull; {{ a.patient.phone }}</div>
+                            </td>
+
+                            <td class="p-3.5">
+                                <div class="font-bold text-slate-900">{{ a.doctor_name or 'General OPD' }}</div>
+                                <div class="text-[10px] text-slate-500 font-mono">{{ a.department }}</div>
+                            </td>
+
+                            <td class="p-3.5 text-slate-700">
+                                <div class="max-w-xs truncate font-medium">{{ a.reason or 'General Clinical Review' }}</div>
+                                {% if a.cancellation_reason %}
+                                    <div class="text-[10px] text-rose-700 italic mt-0.5">Cancelled: {{ a.cancellation_reason }}</div>
+                                {% endif %}
+                            </td>
+
+                            <td class="p-3.5 text-center">
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase border {{ a.status_badge_class }}">
+                                    {{ a.status.replace('_', ' ').title() }}
+                                </span>
+                            </td>
+
+                            <td class="p-3.5 text-center">
+                                <div class="inline-flex items-center gap-1.5">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase border
+                                        {% if a.reminder_sent_sms %}bg-emerald-50 text-emerald-900 border-emerald-300{% else %}bg-slate-100 text-slate-400 border-slate-200{% endif %}" title="SMS Notification Status">
+                                        SMS {% if a.reminder_sent_sms %}✓{% else %}-{% endif %}
+                                    </span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase border
+                                        {% if a.reminder_sent_whatsapp %}bg-emerald-50 text-emerald-900 border-emerald-300{% else %}bg-slate-100 text-slate-400 border-slate-200{% endif %}" title="WhatsApp Notification Status">
+                                        WhatsApp {% if a.reminder_sent_whatsapp %}✓{% else %}-{% endif %}
+                                    </span>
+                                </div>
+                            </td>
+
+                            <td class="p-3.5 text-right">
+                                <div class="inline-flex items-center gap-1.5">
+                                    {% if a.status in ['scheduled', 'confirmed'] %}
+                                        <!-- Fast-track checkin to triage queue -->
+                                        <form method="POST" action="{{ url_for('reception.checkin_from_appointment', appointment_id=a.id) }}">
+                                            <button type="submit" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[10px] shadow-xs flex items-center gap-1" title="Check-in to Live OPD Queue">
+                                                <span>🚀 Check-in</span>
+                                            </button>
+                                        </form>
+
+                                        {% if a.status == 'scheduled' %}
+                                            <form method="POST" action="{{ url_for('reception.confirm_appointment', appointment_id=a.id) }}">
+                                                <button type="submit" class="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-[10px]" title="Confirm Appointment">
+                                                    ✓ Confirm
+                                                </button>
+                                            </form>
+                                        {% endif %}
+
+                                        <!-- Multi-channel reminder trigger -->
+                                        <button 
+                                            type="button" 
+                                            @click="selectedApp = {
+                                                id: {{ a.id }},
+                                                number: '{{ a.appointment_number or a.id }}',
+                                                patient: '{{ a.patient.full_name }}',
+                                                phone: '{{ a.patient.phone }}',
+                                                doctor: '{{ a.doctor_name or 'General OPD' }}',
+                                                date: '{{ a.scheduled_date.strftime('%d %b %Y') }}',
+                                                time: '{{ a.scheduled_time }}'
+                                            }; showReminderModal = true"
+                                            class="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-950 font-bold rounded-lg text-[10px] border border-blue-300 flex items-center gap-1"
+                                            title="Send SMS & WhatsApp Reminder"
+                                        >
+                                            <span>📱 Remind</span>
+                                        </button>
+
+                                        <!-- Cancel modal trigger -->
+                                        <button 
+                                            type="button" 
+                                            @click="selectedApp = { id: {{ a.id }}, patient: '{{ a.patient.full_name }}' }; showCancelModal = true"
+                                            class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold rounded-lg text-[10px] border border-rose-200"
+                                            title="Cancel Appointment"
+                                        >
+                                            ✕
+                                        </button>
+                                    {% elif a.status == 'checked_in' %}
+                                        <span class="text-[10px] font-mono font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">In OPD Queue</span>
+                                    {% else %}
+                                        <span class="text-[10px] text-slate-400 font-mono">{{ a.status }}</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="p-8 text-center text-slate-500">
+                                No appointments found on {{ filter_date.strftime('%d %b %Y') }}. Click "+ Book Appointment" above to schedule a patient consultation.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- MODAL 1: NEW APPOINTMENT BOOKING WIZARD -->
+    <div x-show="showBookModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+        <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-2xl max-w-lg w-full p-6 space-y-4" @click.stop>
+            <div class="flex items-center justify-between border-b pb-3">
+                <div>
+                    <h3 class="text-base font-black text-slate-950">Book New Patient Appointment</h3>
+                    <p class="text-xs text-slate-500">Select patient, clinician, and desired time slot.</p>
+                </div>
+                <button type="button" @click="showBookModal = false" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
             </div>
 
-            <form method="POST" action="{{ url_for('reception.appointments') }}" class="space-y-4">
-                
-                <!-- Patient Selector -->
+            <form method="POST" action="{{ url_for('reception.appointments') }}" class="space-y-3">
                 <div>
-                    <label for="patient_id" class="block text-xs font-bold text-slate-700 mb-1">
-                        Select Patient <span class="text-rose-600">*</span>
-                    </label>
-                    <select name="patient_id" id="patient_id" class="form-select text-xs" required>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Select Patient *</label>
+                    <select name="patient_id" required class="form-select text-xs w-full rounded-xl border-slate-300 font-bold">
                         <option value="">-- Choose Registered Patient --</option>
                         {% for p in all_patients %}
                             <option value="{{ p.id }}" {% if selected_patient_id == p.id %}selected{% endif %}>
-                                {{ p.full_name }} ({{ p.hospital_id }}) - {{ p.phone }}
+                                {{ p.full_name }} &bull; {{ p.hospital_id }} &bull; {{ p.phone }} ({{ p.gender }}, {{ p.age }}yo)
                             </option>
                         {% endfor %}
                     </select>
-                    <div class="mt-1 text-right">
-                        <a href="{{ url_for('reception.register') }}" class="text-xs text-slate-900 hover:text-slate-700 font-bold">
-                            + Register New Patient
-                        </a>
-                    </div>
                 </div>
 
-                <!-- Date & Time -->
-                <div class="grid grid-cols-2 gap-2.5">
+                <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label for="scheduled_date" class="block text-xs font-bold text-slate-700 mb-1">
-                            Visit Date <span class="text-rose-600">*</span>
-                        </label>
-                        <input type="date" name="scheduled_date" id="scheduled_date" value="{{ filter_date.strftime('%Y-%m-%d') }}" required class="form-input text-xs">
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Scheduled Date *</label>
+                        <input type="date" name="scheduled_date" value="{{ filter_date.strftime('%Y-%m-%d') }}" required class="form-input text-xs w-full rounded-xl border-slate-300 font-mono font-bold">
                     </div>
-
                     <div>
-                        <label for="scheduled_time" class="block text-xs font-bold text-slate-700 mb-1">
-                            Time Slot <span class="text-rose-600">*</span>
-                        </label>
-                        <select name="scheduled_time" id="scheduled_time" class="form-select text-xs" required>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Time Slot *</label>
+                        <select name="scheduled_time" required class="form-select text-xs w-full rounded-xl border-slate-300 font-mono font-bold">
                             <option value="08:00">08:00 AM</option>
                             <option value="08:30">08:30 AM</option>
                             <option value="09:00">09:00 AM</option>
-                            <option value="09:30" selected>09:30 AM</option>
+                            <option value="09:30">09:30 AM</option>
                             <option value="10:00">10:00 AM</option>
                             <option value="10:30">10:30 AM</option>
                             <option value="11:00">11:00 AM</option>
@@ -245,55 +310,136 @@
                             <option value="15:00">03:00 PM</option>
                             <option value="15:30">03:30 PM</option>
                             <option value="16:00">04:00 PM</option>
+                            <option value="16:30">04:30 PM</option>
                         </select>
                     </div>
                 </div>
 
-                <!-- Department -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Department</label>
+                        <select name="department" class="form-select text-xs w-full rounded-xl border-slate-300 font-bold">
+                            <option value="General OPD">General OPD</option>
+                            <option value="Internal Medicine">Internal Medicine</option>
+                            <option value="Pediatrics">Pediatrics</option>
+                            <option value="OB/GYN">OB/GYN & Antenatal</option>
+                            <option value="General Surgery">General Surgery</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Assigned Doctor</label>
+                        <select name="doctor_name" class="form-select text-xs w-full rounded-xl border-slate-300 font-bold">
+                            {% for doc in doctor_capacity_cards %}
+                                <option value="{{ doc.schedule.doctor_name }}">
+                                    {{ doc.schedule.doctor_name }} ({{ doc.remaining_slots }} slots rem)
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
                 <div>
-                    <label for="department" class="block text-xs font-bold text-slate-700 mb-1">
-                        Clinic / Department <span class="text-rose-600">*</span>
-                    </label>
-                    <select name="department" id="department" class="form-select text-xs" required>
-                        <option value="General OPD" selected>General OPD</option>
-                        <option value="Cardiology Clinic">Cardiology Clinic</option>
-                        <option value="Pediatrics Clinic">Pediatrics Clinic</option>
-                        <option value="OB / GYN Clinic">OB / GYN Clinic</option>
-                        <option value="Orthopedic Clinic">Orthopedic Clinic</option>
-                        <option value="Dental Clinic">Dental Clinic</option>
-                        <option value="Eye Clinic">Eye Clinic</option>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Clinical Indication / Chief Complaint</label>
+                    <textarea name="reason" rows="2" placeholder="e.g. 3-month hypertension follow-up, routine checkup" class="form-input text-xs w-full rounded-xl border-slate-300"></textarea>
+                </div>
+
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" @click="showBookModal = false" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-900 hover:bg-blue-950 text-white font-black rounded-xl text-xs">Confirm Booking &rarr;</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: SMS & WHATSAPP NOTIFICATION DISPATCHER -->
+    <div x-show="showReminderModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+        <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-2xl max-w-lg w-full p-6 space-y-4" @click.stop>
+            <div class="flex items-center justify-between border-b pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-lg">📱</span>
+                    <div>
+                        <h3 class="text-base font-black text-slate-950">Dispatch Appointment Reminder</h3>
+                        <p class="text-xs text-slate-500">Preview and trigger automated SMS & WhatsApp notification.</p>
+                    </div>
+                </div>
+                <button type="button" @click="showReminderModal = false" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+            </div>
+
+            <!-- Reminder Message Preview Card -->
+            <div class="p-3.5 bg-slate-900 text-emerald-400 rounded-2xl font-mono text-xs space-y-1.5 border border-slate-700">
+                <div class="text-[10px] uppercase text-slate-400 font-bold flex justify-between">
+                    <span>Message Preview</span>
+                    <span class="text-emerald-300">Apex Medical HMS</span>
+                </div>
+                <div class="text-slate-200 text-[11px] leading-relaxed">
+                    "Dear <span class="font-bold text-white" x-text="selectedApp?.patient"></span>, this is a reminder of your medical appointment at Apex Regional Medical Center on <span class="font-bold text-amber-300" x-text="selectedApp?.date"></span> at <span class="font-bold text-amber-300" x-text="selectedApp?.time"></span> with <span class="font-bold text-white" x-text="selectedApp?.doctor"></span>. Ref: <span class="text-cyan-300" x-text="selectedApp?.number"></span>. Helpline: +254 700 000 100."
+                </div>
+            </div>
+
+            <form :action="'/reception/appointments/' + (selectedApp?.id || 0) + '/send-reminder'" method="POST" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Dispatch Channels *</label>
+                    <div class="grid grid-cols-3 gap-2 text-xs font-bold">
+                        <label class="p-2.5 rounded-xl border-2 cursor-pointer flex items-center gap-2" :class="reminderChannel === 'both' ? 'border-blue-600 bg-blue-50 text-blue-900' : 'border-slate-300'">
+                            <input type="radio" name="channel" value="both" x-model="reminderChannel" class="hidden">
+                            <span>⚡ Both (SMS + WA)</span>
+                        </label>
+                        <label class="p-2.5 rounded-xl border-2 cursor-pointer flex items-center gap-2" :class="reminderChannel === 'whatsapp' ? 'border-emerald-600 bg-emerald-50 text-emerald-900' : 'border-slate-300'">
+                            <input type="radio" name="channel" value="whatsapp" x-model="reminderChannel" class="hidden">
+                            <span>💬 WhatsApp Only</span>
+                        </label>
+                        <label class="p-2.5 rounded-xl border-2 cursor-pointer flex items-center gap-2" :class="reminderChannel === 'sms' ? 'border-indigo-600 bg-indigo-50 text-indigo-900' : 'border-slate-300'">
+                            <input type="radio" name="channel" value="sms" x-model="reminderChannel" class="hidden">
+                            <span>✉️ SMS Only</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="pt-2 flex items-center justify-between">
+                    <!-- Direct WhatsApp Web link -->
+                    <a 
+                        :href="'https://wa.me/' + (selectedApp?.phone ? selectedApp.phone.replace(/[^0-9]/g, '') : '') + '?text=' + encodeURIComponent('Dear ' + (selectedApp?.patient || '') + ', reminder for your appointment at Apex Regional Medical Center on ' + (selectedApp?.date || '') + ' at ' + (selectedApp?.time || '') + ' with ' + (selectedApp?.doctor || '') + '. Ref: ' + (selectedApp?.number || '') + '.')"
+                        target="_blank"
+                        class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm"
+                    >
+                        <span>Open WhatsApp Web &rarr;</span>
+                    </a>
+
+                    <div class="flex items-center gap-2">
+                        <button type="button" @click="showReminderModal = false" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-900 hover:bg-blue-950 text-white font-black rounded-xl text-xs">Dispatch Reminder &rarr;</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 3: CANCELLATION MODAL -->
+    <div x-show="showCancelModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+        <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-2xl max-w-md w-full p-6 space-y-4" @click.stop>
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="text-base font-black text-rose-950">Cancel Patient Appointment</h3>
+                <button type="button" @click="showCancelModal = false" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+            </div>
+
+            <form :action="'/reception/appointments/' + (selectedApp?.id || 0) + '/cancel'" method="POST" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Reason for Cancellation *</label>
+                    <select name="cancellation_reason" class="form-select text-xs w-full rounded-xl border-slate-300 font-bold">
+                        <option value="Patient requested cancellation">Patient requested cancellation</option>
+                        <option value="Patient rescheduled to another date">Patient rescheduled</option>
+                        <option value="Doctor unavailable / emergency surgery">Doctor unavailable</option>
+                        <option value="Duplicate booking">Duplicate booking</option>
+                        <option value="No-show">Patient No-Show</option>
                     </select>
                 </div>
 
-                <!-- Doctor -->
-                <div>
-                    <label for="doctor_name" class="block text-xs font-bold text-slate-700 mb-1">
-                        Specific Doctor <span class="text-slate-400 font-normal">(Optional)</span>
-                    </label>
-                    <input type="text" name="doctor_name" id="doctor_name" placeholder="e.g. Dr. Njoroge" class="form-input text-xs">
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" @click="showCancelModal = false" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">Dismiss</button>
+                    <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl text-xs">Confirm Cancellation &rarr;</button>
                 </div>
-
-                <!-- Reason -->
-                <div>
-                    <label for="reason" class="block text-xs font-bold text-slate-700 mb-1">
-                        Reason for Visit / Clinical Notes
-                    </label>
-                    <textarea name="reason" id="reason" rows="2" placeholder="e.g. Bi-annual review, follow up..." class="form-input text-xs"></textarea>
-                </div>
-
-                <!-- Submit -->
-                <div class="pt-2">
-                    <button type="submit" class="btn-primary text-xs w-full py-2.5 shadow-sm">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                        </svg>
-                        Confirm & Schedule Booking
-                    </button>
-                </div>
-
             </form>
         </div>
-
     </div>
 
 </div>

@@ -4,7 +4,7 @@ from datetime import datetime, date, timedelta
 from flask import render_template, request, redirect, url_for, flash, jsonify, current_app, send_from_directory
 from werkzeug.utils import secure_filename
 from models import (
-    db, Patient, QueueEntry, Appointment, VitalsRecord,
+    db, Patient, QueueEntry, Appointment, DoctorSchedule, VitalsRecord,
     ConsultationNote, LabOrder, Prescription, BillingItem,
     ClinicalDocument, AuditLog
 )
@@ -873,4 +873,87 @@ def upload_attachment(patient_id):
 
     flash(f"Attachment '{title}' uploaded to patient records successfully.", 'success')
     return redirect(request.referrer or url_for('doctor.patient_chart', patient_id=patient.id))
+
+
+# =================== 15. DOCTOR AVAILABILITY & DUTY SCHEDULE ===================
+@doctor_bp.route('/schedule', methods=['GET', 'POST'])
+def schedule():
+    """
+    Doctor's Personal Availability, Shift Hours & Slot Capacity Control.
+    """
+    actor = get_current_user()
+    doc_name = actor.full_name if actor else 'Dr. Sarah Kamau (General OPD)'
+
+    my_schedule = DoctorSchedule.query.filter(
+        db.or_(
+            DoctorSchedule.doctor_id == getattr(actor, 'id', None),
+            DoctorSchedule.doctor_name.ilike(f'%{getattr(actor, "username", "sarah")}%')
+        )
+    ).first()
+
+    if not my_schedule:
+        my_schedule = DoctorSchedule.query.first()
+
+    if request.method == 'POST':
+        day_of_week = request.form.get('day_of_week', 'All Days').strip()
+        start_time = request.form.get('start_time', '08:00').strip()
+        end_time = request.form.get('end_time', '17:00').strip()
+        max_patients = int(request.form.get('max_patients_per_day') or 20)
+        slot_duration = int(request.form.get('slot_duration_minutes') or 20)
+        duty_status = request.form.get('duty_status', 'available')
+        notes = request.form.get('notes', '').strip()
+
+        if my_schedule:
+            my_schedule.day_of_week = day_of_week
+            my_schedule.start_time = start_time
+            my_schedule.end_time = end_time
+            my_schedule.max_patients_per_day = max_patients
+            my_schedule.slot_duration_minutes = slot_duration
+            my_schedule.duty_status = duty_status
+            my_schedule.is_available = (duty_status == 'available')
+            my_schedule.notes = notes
+        else:
+            my_schedule = DoctorSchedule(
+                doctor_id=getattr(actor, 'id', None),
+                doctor_name=doc_name,
+                department='General OPD',
+                day_of_week=day_of_week,
+                start_time=start_time,
+                end_time=end_time,
+                max_patients_per_day=max_patients,
+                slot_duration_minutes=slot_duration,
+                duty_status=duty_status,
+                is_available=(duty_status == 'available'),
+                notes=notes
+            )
+            db.session.add(my_schedule)
+
+        AuditLog.log_event(
+            'doctor_schedule_updated',
+            'doctor_schedule',
+            my_schedule.id if my_schedule else None,
+            f"Duty schedule updated: {day_of_week} ({start_time}-{end_time}), Max capacity: {max_patients} patients/day. Status: {duty_status}.",
+            actor=actor
+        )
+        db.session.commit()
+        flash("Your availability & clinic duty schedule has been updated successfully!", "success")
+        return redirect(url_for('doctor.schedule'))
+
+    # Load upcoming appointments assigned to this doctor
+    today = date.today()
+    my_appointments = Appointment.query.filter(
+        Appointment.doctor_name.ilike(f'%{getattr(actor, "last_name", "Kamau")}%') if actor else True,
+        Appointment.scheduled_date >= today
+    ).order_by(Appointment.scheduled_date.asc(), Appointment.scheduled_time.asc()).limit(30).all()
+
+    all_schedules = DoctorSchedule.query.all()
+
+    return render_template(
+        'doctor/schedule.html',
+        my_schedule=my_schedule,
+        my_appointments=my_appointments,
+        all_schedules=all_schedules,
+        today=today
+    )
+
 

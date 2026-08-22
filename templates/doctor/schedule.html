@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Doctor Duty Schedule & Availability - Apex Medical HMS{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header Banner -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border-2 border-slate-300 shadow-xs">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono font-bold text-blue-900 uppercase">
+                <span>CLINICAL ROSTER & AVAILABILITY</span>
+                <span>&bull;</span>
+                <span>DUTY SHIFT CONFIGURATION</span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-950 mt-1">My Duty Hours & Clinic Capacity</h1>
+            <p class="text-xs text-slate-600 font-medium">Configure your clinic consultation days, working hours, maximum daily patient slot limit, and out-of-office/surgery status.</p>
+        </div>
+        <div class="p-3 bg-blue-50 border-2 border-blue-200 rounded-2xl text-right">
+            <div class="text-[10px] font-mono font-bold text-blue-900 uppercase">Current Duty Status</div>
+            <div class="text-sm font-black text-blue-950 uppercase">{{ my_schedule.duty_status.replace('_', ' ') if my_schedule else 'Available' }}</div>
+        </div>
+    </div>
+
+    <!-- 2-Column Layout: My Duty Config vs Department Roster -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Left 5-Cols: Duty Configuration Form -->
+        <div class="lg:col-span-5 bg-white p-5 rounded-3xl border-2 border-slate-300 shadow-xs space-y-4">
+            <div class="border-b pb-3">
+                <h3 class="text-sm font-black text-slate-950 uppercase font-mono">My Clinic Schedule & Capacity</h3>
+                <p class="text-xs text-slate-500">Changes here directly control how receptionists book patient slots.</p>
+            </div>
+
+            <form method="POST" action="{{ url_for('doctor.schedule') }}" class="space-y-3.5 text-xs">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Available Clinic Days *</label>
+                    <input 
+                        type="text" 
+                        name="day_of_week" 
+                        value="{{ my_schedule.day_of_week if my_schedule else 'Monday, Wednesday, Friday' }}" 
+                        placeholder="e.g. Monday, Wednesday, Friday or All Days" 
+                        required 
+                        class="form-input text-xs w-full rounded-xl border-slate-300 font-bold"
+                    >
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Clinic Start Time *</label>
+                        <input 
+                            type="time" 
+                            name="start_time" 
+                            value="{{ my_schedule.start_time if my_schedule else '08:00' }}" 
+                            required 
+                            class="form-input text-xs w-full rounded-xl border-slate-300 font-mono font-bold"
+                        >
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Clinic End Time *</label>
+                        <input 
+                            type="time" 
+                            name="end_time" 
+                            value="{{ my_schedule.end_time if my_schedule else '17:00' }}" 
+                            required 
+                            class="form-input text-xs w-full rounded-xl border-slate-300 font-mono font-bold"
+                        >
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Max Patients / Day *</label>
+                        <input 
+                            type="number" 
+                            name="max_patients_per_day" 
+                            value="{{ my_schedule.max_patients_per_day if my_schedule else 20 }}" 
+                            required 
+                            min="1" 
+                            max="60" 
+                            class="form-input text-xs w-full rounded-xl border-slate-300 font-mono font-bold"
+                        >
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Slot Duration (Mins) *</label>
+                        <input 
+                            type="number" 
+                            name="slot_duration_minutes" 
+                            value="{{ my_schedule.slot_duration_minutes if my_schedule else 20 }}" 
+                            required 
+                            min="5" 
+                            max="60" 
+                            class="form-input text-xs w-full rounded-xl border-slate-300 font-mono font-bold"
+                        >
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Duty Availability Status *</label>
+                    <select name="duty_status" class="form-select text-xs w-full rounded-xl border-slate-300 font-bold">
+                        <option value="available" {% if my_schedule and my_schedule.duty_status == 'available' %}selected{% endif %}>🟢 Available / On Duty</option>
+                        <option value="in_surgery" {% if my_schedule and my_schedule.duty_status == 'in_surgery' %}selected{% endif %}>🟣 In Major OT / Surgery</option>
+                        <option value="on_leave" {% if my_schedule and my_schedule.duty_status == 'on_leave' %}selected{% endif %}>🔴 On Leave / Out of Office</option>
+                        <option value="off_duty" {% if my_schedule and my_schedule.duty_status == 'off_duty' %}selected{% endif %}>⚪ Off Duty</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Consultation Room / Notes</label>
+                    <input 
+                        type="text" 
+                        name="notes" 
+                        value="{{ my_schedule.notes if my_schedule else 'Room 101 - Primary Consultation' }}" 
+                        placeholder="e.g. Room 101 - General OPD" 
+                        class="form-input text-xs w-full rounded-xl border-slate-300 font-medium"
+                    >
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" class="w-full py-2.5 bg-blue-900 hover:bg-blue-950 text-white font-black rounded-xl text-xs shadow-md transition-all">
+                        Update Duty Availability &rarr;
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Right 7-Cols: Department Roster & Upcoming Booked Patients -->
+        <div class="lg:col-span-7 space-y-6">
+            
+            <!-- All Clinicians Roster -->
+            <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-xs overflow-hidden">
+                <div class="p-4 border-b-2 border-slate-300 bg-slate-50 flex items-center justify-between">
+                    <h3 class="text-xs font-black text-slate-950 uppercase font-mono">Department Clinicians Roster</h3>
+                    <span class="text-xs text-slate-500 font-mono">{{ all_schedules|length }} Specialists</span>
+                </div>
+                <div class="divide-y divide-slate-200">
+                    {% for s in all_schedules %}
+                        <div class="p-3.5 flex items-center justify-between hover:bg-slate-50">
+                            <div>
+                                <div class="font-extrabold text-slate-950 text-xs">{{ s.doctor_name }}</div>
+                                <div class="text-[10px] text-slate-500 font-mono">{{ s.department }} &bull; {{ s.day_of_week }} ({{ s.start_time }}-{{ s.end_time }})</div>
+                                <div class="text-[10px] text-slate-600 italic">{{ s.notes }}</div>
+                            </div>
+                            <div class="text-right">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase
+                                    {% if s.duty_status == 'available' %}bg-emerald-100 text-emerald-900
+                                    {% elif s.duty_status == 'in_surgery' %}bg-purple-100 text-purple-900
+                                    {% elif s.duty_status == 'on_leave' %}bg-rose-100 text-rose-900
+                                    {% else %}bg-slate-200 text-slate-800{% endif %}">
+                                    {{ s.duty_status.replace('_', ' ') }}
+                                </span>
+                                <div class="text-[10px] text-slate-500 font-mono mt-1">Cap: {{ s.max_patients_per_day }} pts/day</div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Upcoming Booked Patients Table -->
+            <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-xs overflow-hidden">
+                <div class="p-4 border-b-2 border-slate-300 bg-slate-50 flex items-center justify-between">
+                    <h3 class="text-xs font-black text-slate-950 uppercase font-mono">My Upcoming Patient Appointments</h3>
+                    <span class="text-xs text-slate-500 font-mono">{{ my_appointments|length }} Bookings</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-100 border-b text-slate-700 font-mono text-[10px] uppercase">
+                                <th class="p-2.5">Date & Time</th>
+                                <th class="p-2.5">Patient Details</th>
+                                <th class="p-2.5">Clinical Indication</th>
+                                <th class="p-2.5 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200">
+                            {% for app in my_appointments %}
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-2.5 font-mono font-bold text-slate-950">
+                                        {{ app.scheduled_date.strftime('%d %b') }} &bull; {{ app.scheduled_time }}
+                                    </td>
+                                    <td class="p-2.5">
+                                        <div class="font-bold text-slate-900">{{ app.patient.full_name }}</div>
+                                        <div class="text-[10px] text-slate-500 font-mono">{{ app.patient.hospital_id }}</div>
+                                    </td>
+                                    <td class="p-2.5 text-slate-600">{{ app.reason or 'Consultation' }}</td>
+                                    <td class="p-2.5 text-center">
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border {{ app.status_badge_class }}">
+                                            {{ app.status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="4" class="p-4 text-center text-slate-500 text-xs">No upcoming appointments booked for your clinic.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}
