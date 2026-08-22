@@ -80,13 +80,12 @@ def staff():
                 email=request.form.get('email', '').strip() or None, phone=request.form.get('phone', '').strip() or None,
                 status='active',
             )
-            user.set_password(password)
-            user.force_password_change = True  # Force employee to establish private password on first login
+            user.set_password(password, force_change=True)  # Force employee to establish private password on first login
             db.session.add(user)
             db.session.flush()
             log_action('staff_created', 'user', user.id, f'Created {role} account for {full_name} with temporary password.')
             db.session.commit()
-            flash(f'{full_name} has been added as {role.title()}. They will be prompted to update their password on first sign-in.', 'success')
+            flash(f'{full_name} has been added as {role.title()}. They will be prompted to update their temporary password on first sign-in.', 'success')
             return redirect(url_for('admin.staff'))
     return render_template('admin/staff.html', staff=User.query.order_by(User.full_name).all(), roles=ROLE_PORTALS)
 
@@ -109,11 +108,23 @@ def update_staff(user_id):
     user.department = request.form.get('department', user.department).strip() or user.department
     new_password = request.form.get('new_password', '')
     if new_password:
-        user.set_password(new_password)
+        user.set_password(new_password, force_change=True)
+        flash(f'Reset password for {user.full_name}. Staff member will be prompted to change it on next login.', 'info')
+    else:
+        flash(f'Updated {user.full_name}.', 'success')
     log_action('staff_updated', 'user', user.id, f'Role: {role}; status: {status}.')
     db.session.commit()
-    flash(f'Updated {user.full_name}.', 'success')
     return redirect(url_for('admin.staff'))
+
+
+@admin_bp.route('/staff/<int:user_id>/force-password-change', methods=['POST'])
+def force_staff_password_change(user_id):
+    user = User.query.get_or_404(user_id)
+    user.force_password_change = True
+    db.session.commit()
+    log_action('staff_force_password_reset', 'user', user.id, f'Forced password change for {user.username}.')
+    flash(f'{user.full_name} will be required to change their password on next sign-in.', 'info')
+    return redirect(request.referrer or url_for('admin.staff'))
 
 
 # ==================== SECURITY COMMAND CENTER & RBAC ====================

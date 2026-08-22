@@ -285,53 +285,77 @@
 
                             <!-- Status -->
                             <td class="p-3.5">
-                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold border
-                                    {% if user.status == 'active' %}bg-emerald-100 text-emerald-900 border-emerald-300
-                                    {% elif user.status == 'suspended' %}bg-rose-100 text-rose-900 border-rose-300
-                                    {% else %}bg-slate-100 text-slate-800 border-slate-300{% endif %}">
-                                    <span class="w-1.5 h-1.5 rounded-full {% if user.status == 'active' %}bg-emerald-600{% else %}bg-rose-600{% endif %}"></span>
-                                    <span>{{ user.status.title() }}</span>
-                                </span>
+                                <div class="space-y-1">
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold border
+                                        {% if user.status == 'active' %}bg-emerald-100 text-emerald-900 border-emerald-300
+                                        {% elif user.status == 'suspended' %}bg-rose-100 text-rose-900 border-rose-300
+                                        {% else %}bg-slate-100 text-slate-800 border-slate-300{% endif %}">
+                                        <span class="w-1.5 h-1.5 rounded-full {% if user.status == 'active' %}bg-emerald-600{% else %}bg-rose-600{% endif %}"></span>
+                                        <span>{{ user.status.title() }}</span>
+                                    </span>
+                                    {% if user.force_password_change %}
+                                        <div>
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-950 border border-amber-300">
+                                                🔑 Must Change PW
+                                            </span>
+                                        </div>
+                                    {% endif %}
+                                </div>
                             </td>
 
                             <!-- Administrative Action Form -->
                             <td class="p-3.5 text-right">
-                                <form 
-                                    method="POST" 
-                                    action="{{ url_for('admin.update_staff', user_id=user.id) }}" 
-                                    class="inline-flex items-center justify-end gap-2 flex-wrap"
-                                >
-                                    <!-- Role Select -->
-                                    <select name="role" class="form-select py-1 px-2 text-xs font-bold w-28">
-                                        {% for r_key in roles.keys() %}
-                                            <option value="{{ r_key }}" {% if r_key == user.role %}selected{% endif %}>{{ r_key.title() }}</option>
-                                        {% endfor %}
-                                    </select>
-
-                                    <!-- Status Select -->
-                                    <select name="status" class="form-select py-1 px-2 text-xs font-bold w-24">
-                                        <option value="active" {% if user.status == 'active' %}selected{% endif %}>Active</option>
-                                        <option value="inactive" {% if user.status == 'inactive' %}selected{% endif %}>Inactive</option>
-                                        <option value="suspended" {% if user.status == 'suspended' %}selected{% endif %}>Suspended</option>
-                                    </select>
-
-                                    <!-- New Password Input -->
-                                    <input 
-                                        type="password" 
-                                        name="new_password" 
-                                        placeholder="Reset Pass" 
-                                        class="form-input py-1 px-2 text-xs font-mono w-28"
+                                <div class="inline-flex items-center justify-end gap-2 flex-wrap">
+                                    <form 
+                                        method="POST" 
+                                        action="{{ url_for('admin.update_staff', user_id=user.id) }}" 
+                                        class="inline-flex items-center justify-end gap-2 flex-wrap"
                                     >
+                                        <!-- Role Select -->
+                                        <select name="role" class="form-select py-1 px-2 text-xs font-bold w-28">
+                                            {% for r_key in roles.keys() %}
+                                                <option value="{{ r_key }}" {% if r_key == user.role %}selected{% endif %}>{{ r_key.title() }}</option>
+                                            {% endfor %}
+                                        </select>
 
-                                    <!-- Save Button -->
-                                    <button 
-                                        type="submit" 
-                                        class="btn-primary py-1 px-3 text-xs font-extrabold shadow-xs"
-                                        title="Save Staff Settings"
-                                    >
-                                        Save
-                                    </button>
-                                </form>
+                                        <!-- Status Select -->
+                                        <select name="status" class="form-select py-1 px-2 text-xs font-bold w-24">
+                                            <option value="active" {% if user.status == 'active' %}selected{% endif %}>Active</option>
+                                            <option value="inactive" {% if user.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                                            <option value="suspended" {% if user.status == 'suspended' %}selected{% endif %}>Suspended</option>
+                                        </select>
+
+                                        <!-- New Password Input -->
+                                        <input 
+                                            type="password" 
+                                            name="new_password" 
+                                            placeholder="Reset Pass" 
+                                            class="form-input py-1 px-2 text-xs font-mono w-28"
+                                            title="Enter new temporary password (will force user to change it on next login)"
+                                        >
+
+                                        <!-- Save Button -->
+                                        <button 
+                                            type="submit" 
+                                            class="btn-primary py-1 px-3 text-xs font-extrabold shadow-xs"
+                                            title="Save Staff Settings"
+                                        >
+                                            Save
+                                        </button>
+                                    </form>
+
+                                    {% if not user.force_password_change and user.role != 'admin' %}
+                                        <form method="POST" action="{{ url_for('admin.force_staff_password_change', user_id=user.id) }}" onsubmit="return confirm('Force {{ user.full_name }} to reset their password on next sign-in?')">
+                                            <button 
+                                                type="submit" 
+                                                class="px-2 py-1 rounded bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-mono font-bold"
+                                                title="Force Password Reset on Next Login"
+                                            >
+                                                ⚡ Force PW
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                     {% endfor %}

@@ -37,10 +37,10 @@ class User(db.Model):
     # Granular Custom Permissions Override (JSON array of permission codes)
     custom_permissions_json = db.Column(db.Text, nullable=True)
 
-    def set_password(self, password):
+    def set_password(self, password, force_change=False):
         self.password_hash = generate_password_hash(password)
         self.password_changed_at = datetime.utcnow()
-        self.force_password_change = False
+        self.force_password_change = force_change
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
