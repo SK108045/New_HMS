@@ -17,6 +17,7 @@ PHARMACISTS_LIST = [
 ]
 
 # =================== 1. PHARMACY DASHBOARD & DISPENSING COMMAND ===================
+@pharmacy_bp.route('/', methods=['GET'])
 @pharmacy_bp.route('/dashboard', methods=['GET'])
 def dashboard():
     """

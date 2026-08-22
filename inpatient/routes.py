@@ -43,6 +43,7 @@ def log_inpatient_audit(action, entity_type, entity_id=None, details=None):
 
 
 # =================== 1. INPATIENT EXECUTIVE DASHBOARD & BED RACK ===================
+@inpatient_bp.route('/', methods=['GET'])
 @inpatient_bp.route('/dashboard', methods=['GET'])
 def dashboard():
     today_start = datetime.combine(date.today(), datetime.min.time())

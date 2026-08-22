@@ -3,6 +3,7 @@ from flask import render_template, request, redirect, url_for, flash, jsonify
 from models import db, Patient, QueueEntry, Appointment, VitalsRecord
 from . import triage_bp
 
+@triage_bp.route('/', methods=['GET'])
 @triage_bp.route('/dashboard', methods=['GET'])
 def dashboard():
     """

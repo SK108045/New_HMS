@@ -54,6 +54,7 @@ def get_or_create_open_shift():
 
 
 # =================== 1. FINANCIAL DASHBOARD & COMMAND ===================
+@billing_bp.route('/', methods=['GET'])
 @billing_bp.route('/dashboard', methods=['GET'])
 def dashboard():
     """

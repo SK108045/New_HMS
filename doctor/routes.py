@@ -67,6 +67,7 @@ DOCTORS_LIST = [
 ]
 
 # =================== 1. DOCTOR DASHBOARD & CLINICAL COMMAND ===================
+@doctor_bp.route('/', methods=['GET'])
 @doctor_bp.route('/dashboard', methods=['GET'])
 def dashboard():
     """
