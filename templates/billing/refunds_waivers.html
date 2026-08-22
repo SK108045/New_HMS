@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% block title %}Refunds, Credit Notes & Waivers - Apex Medical HMS{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ activeTab: 'credit_notes', showCreditModal: false, showWaiverModal: false }">
+
+    <!-- Header Banner -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border-2 border-slate-300 shadow-xs">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono font-bold text-amber-900 uppercase">
+                <span>FINANCIAL GOVERNANCE & REVENUE AUDIT</span>
+                <span>&bull;</span>
+                <span>DUAL AUTHORIZATION</span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-950 mt-1">Credit Notes, Patient Refunds & Fee Waivers</h1>
+            <p class="text-xs text-slate-600 font-medium">Issue credit adjustments, process refund disbursements, and request fee waivers for indigent or emergency cases with administrative sign-off.</p>
+        </div>
+        <div class="flex items-center gap-2.5">
+            <button 
+                type="button" 
+                @click="showCreditModal = true" 
+                class="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-950 text-white text-xs font-black rounded-xl shadow-md flex items-center gap-1.5"
+            >
+                <span>+ Issue Credit Note</span>
+            </button>
+            <button 
+                type="button" 
+                @click="showWaiverModal = true" 
+                class="px-3.5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl shadow-md flex items-center gap-1.5"
+            >
+                <span>+ Request Fee Waiver</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 3 KPI Stat Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="p-4 bg-white rounded-2xl border-2 border-slate-300 shadow-xs">
+            <div class="text-[11px] font-mono font-bold text-slate-500 uppercase">Approved Credit Notes / Refunds</div>
+            <div class="text-xl font-black text-slate-950 mt-1">KES {{ "{:,.2f}".format(total_refunds) }}</div>
+            <div class="text-[10px] text-slate-500 mt-0.5">Applied to Patient Folios</div>
+        </div>
+
+        <div class="p-4 bg-amber-50 rounded-2xl border-2 border-amber-300 shadow-xs">
+            <div class="text-[11px] font-mono font-bold text-amber-900 uppercase">Authorized Fee Waivers</div>
+            <div class="text-xl font-black text-amber-950 mt-1">KES {{ "{:,.2f}".format(total_waivers) }}</div>
+            <div class="text-[10px] text-amber-800 mt-0.5">Hospital Charity & Emergency Care</div>
+        </div>
+
+        <div class="p-4 bg-blue-50 rounded-2xl border-2 border-blue-300 shadow-xs">
+            <div class="text-[11px] font-mono font-bold text-blue-900 uppercase">Pending Dual Approvals</div>
+            <div class="text-xl font-black text-blue-950 mt-1">{{ pending_approvals }}</div>
+            <div class="text-[10px] text-blue-800 mt-0.5">Awaiting Administrator Decision</div>
+        </div>
+    </div>
+
+    <!-- Tab Bar -->
+    <div class="flex border-b-2 border-slate-300 bg-white rounded-t-2xl px-4 pt-2 gap-2 text-xs font-black">
+        <button 
+            type="button" 
+            @click="activeTab = 'credit_notes'"
+            :class="activeTab === 'credit_notes' ? 'border-b-4 border-slate-950 text-slate-950' : 'text-slate-500 hover:text-slate-800'"
+            class="py-3 px-4 transition-all"
+        >
+            Credit Notes & Refunds ({{ credit_notes|length }})
+        </button>
+        <button 
+            type="button" 
+            @click="activeTab = 'waivers'"
+            :class="activeTab === 'waivers' ? 'border-b-4 border-slate-950 text-slate-950' : 'text-slate-500 hover:text-slate-800'"
+            class="py-3 px-4 transition-all"
+        >
+            Fee Waivers ({{ fee_waivers|length }})
+        </button>
+    </div>
+
+    <!-- Tab 1: Credit Notes Table -->
+    <div x-show="activeTab === 'credit_notes'" class="bg-white rounded-b-3xl border-2 border-t-0 border-slate-300 shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-100 border-b-2 border-slate-300 text-slate-800 font-mono uppercase text-[11px]">
+                        <th class="p-3.5">Credit Note #</th>
+                        <th class="p-3.5">Patient & Invoice</th>
+                        <th class="p-3.5">Reason</th>
+                        <th class="p-3.5 text-right">Amount</th>
+                        <th class="p-3.5 text-center">Status</th>
+                        <th class="p-3.5 text-right">Authorization</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for cn in credit_notes %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3.5 font-mono font-black text-slate-950">{{ cn.credit_note_number }}</td>
+                            <td class="p-3.5">
+                                <div class="font-extrabold text-slate-900">{{ cn.patient.full_name }}</div>
+                                <div class="text-[10px] text-slate-500 font-mono">Inv: {{ cn.invoice.invoice_number }}</div>
+                            </td>
+                            <td class="p-3.5">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-200 text-slate-800">
+                                    {{ cn.reason.replace('_', ' ') }}
+                                </span>
+                            </td>
+                            <td class="p-3.5 text-right font-black text-slate-950">KES {{ "{:,.2f}".format(cn.amount) }}</td>
+                            <td class="p-3.5 text-center">
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border
+                                    {% if cn.status == 'approved' %}bg-emerald-100 text-emerald-900 border-emerald-300
+                                    {% elif cn.status == 'rejected' %}bg-rose-100 text-rose-900 border-rose-300
+                                    {% else %}bg-amber-100 text-amber-900 border-amber-300{% endif %}">
+                                    {{ cn.status.replace('_', ' ') }}
+                                </span>
+                            </td>
+                            <td class="p-3.5 text-right">
+                                {% if cn.status == 'pending_approval' %}
+                                    <div class="inline-flex items-center gap-1">
+                                        <form method="POST" action="{{ url_for('billing.action_credit_note', cn_id=cn.id) }}">
+                                            <input type="hidden" name="action" value="approve">
+                                            <button type="submit" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold">✓ Approve</button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('billing.action_credit_note', cn_id=cn.id) }}">
+                                            <input type="hidden" name="action" value="reject">
+                                            <button type="submit" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold">✕ Reject</button>
+                                        </form>
+                                    </div>
+                                {% else %}
+                                    <span class="text-[10px] text-slate-500 font-mono">{{ cn.approved_by or 'System' }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="p-8 text-center text-slate-500">No credit notes recorded.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Tab 2: Waivers Table -->
+    <div x-show="activeTab === 'waivers'" class="bg-white rounded-b-3xl border-2 border-t-0 border-slate-300 shadow-xs overflow-hidden" x-cloak>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-100 border-b-2 border-slate-300 text-slate-800 font-mono uppercase text-[11px]">
+                        <th class="p-3.5">Waiver #</th>
+                        <th class="p-3.5">Patient & Invoice</th>
+                        <th class="p-3.5">Category & Justification</th>
+                        <th class="p-3.5 text-right">Waived Amount</th>
+                        <th class="p-3.5 text-center">Status</th>
+                        <th class="p-3.5 text-right">Authorization</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for w in fee_waivers %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3.5 font-mono font-black text-slate-950">{{ w.waiver_number }}</td>
+                            <td class="p-3.5">
+                                <div class="font-extrabold text-slate-900">{{ w.patient.full_name }}</div>
+                                <div class="text-[10px] text-slate-500 font-mono">Inv: {{ w.invoice.invoice_number }}</div>
+                            </td>
+                            <td class="p-3.5">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-900 border border-amber-200">
+                                    {{ w.category.replace('_', ' ') }}
+                                </span>
+                                <div class="text-[11px] text-slate-600 mt-1 italic max-w-xs truncate">{{ w.justification }}</div>
+                            </td>
+                            <td class="p-3.5 text-right font-black text-rose-900">KES {{ "{:,.2f}".format(w.amount) }}</td>
+                            <td class="p-3.5 text-center">
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border
+                                    {% if w.status == 'approved' %}bg-emerald-100 text-emerald-900 border-emerald-300
+                                    {% elif w.status == 'rejected' %}bg-rose-100 text-rose-900 border-rose-300
+                                    {% else %}bg-amber-100 text-amber-900 border-amber-300{% endif %}">
+                                    {{ w.status.replace('_', ' ') }}
+                                </span>
+                            </td>
+                            <td class="p-3.5 text-right">
+                                {% if w.status == 'pending_approval' %}
+                                    <div class="inline-flex items-center gap-1">
+                                        <form method="POST" action="{{ url_for('billing.action_fee_waiver', wv_id=w.id) }}">
+                                            <input type="hidden" name="action" value="approve">
+                                            <button type="submit" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold">✓ Approve</button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('billing.action_fee_waiver', wv_id=w.id) }}">
+                                            <input type="hidden" name="action" value="reject">
+                                            <button type="submit" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold">✕ Reject</button>
+                                        </form>
+                                    </div>
+                                {% else %}
+                                    <span class="text-[10px] text-slate-500 font-mono">{{ w.approved_by or 'Superintendent' }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="p-8 text-center text-slate-500">No fee waivers recorded.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- NEW CREDIT NOTE MODAL -->
+    <div x-show="showCreditModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+        <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-2xl max-w-md w-full p-6 space-y-4" @click.stop>
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="text-base font-black text-slate-950">Issue Patient Credit Note</h3>
+                <button type="button" @click="showCreditModal = false" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+            </div>
+            <form method="POST" action="{{ url_for('billing.create_credit_note') }}" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Select Invoice *</label>
+                    <select name="invoice_id" required class="form-select text-xs w-full rounded-xl border-slate-300">
+                        {% for inv in invoices %}
+                            <option value="{{ inv.id }}">{{ inv.invoice_number }} &bull; {{ inv.patient.full_name }} (KES {{ "{:,.2f}".format(inv.total_due) }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Credit / Refund Amount (KES) *</label>
+                    <input type="number" step="0.01" name="amount" required class="form-input text-xs w-full rounded-xl border-slate-300 font-mono font-bold">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Reason for Credit *</label>
+                    <select name="reason" class="form-select text-xs w-full rounded-xl border-slate-300 font-bold">
+                        <option value="billing_error">Billing Error / Incorrect Charge</option>
+                        <option value="medication_returned">Medication Returned to Pharmacy</option>
+                        <option value="service_cancelled">Clinical Service Cancelled</option>
+                        <option value="overpayment">Patient Overpayment</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Notes</label>
+                    <textarea name="notes" rows="2" class="form-input text-xs w-full rounded-xl border-slate-300"></textarea>
+                </div>
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" @click="showCreditModal = false" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-slate-900 hover:bg-slate-950 text-white font-black rounded-xl text-xs">Submit Request &rarr;</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- NEW FEE WAIVER MODAL -->
+    <div x-show="showWaiverModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+        <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-2xl max-w-md w-full p-6 space-y-4" @click.stop>
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="text-base font-black text-slate-950">Request Patient Fee Waiver</h3>
+                <button type="button" @click="showWaiverModal = false" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+            </div>
+            <form method="POST" action="{{ url_for('billing.create_fee_waiver') }}" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Select Invoice *</label>
+                    <select name="invoice_id" required class="form-select text-xs w-full rounded-xl border-slate-300">
+                        {% for inv in invoices %}
+                            <option value="{{ inv.id }}">{{ inv.invoice_number }} &bull; {{ inv.patient.full_name }} (KES {{ "{:,.2f}".format(inv.total_due) }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Waived Amount (KES) *</label>
+                    <input type="number" step="0.01" name="amount" required class="form-input text-xs w-full rounded-xl border-slate-300 font-mono font-bold">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Waiver Category *</label>
+                    <select name="category" class="form-select text-xs w-full rounded-xl border-slate-300 font-bold">
+                        <option value="indigent_patient">Indigent / Vulnerable Citizen</option>
+                        <option value="clinical_emergency">Emergency Life Support</option>
+                        <option value="staff_discount">Hospital Staff & Family Discount</option>
+                        <option value="board_approved">Board of Directors Approved</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Clinical / Social Justification *</label>
+                    <textarea name="justification" required rows="2" placeholder="Explain why waiver is recommended" class="form-input text-xs w-full rounded-xl border-slate-300"></textarea>
+                </div>
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" @click="showWaiverModal = false" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-xs">Submit Waiver &rarr;</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Expiry & Defect Quarantine Bin - Apex Medical HMS{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ showNewQuarantineModal: false }">
+
+    <!-- Header Banner -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border-2 border-slate-300 shadow-xs">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono font-bold text-amber-900 uppercase">
+                <span>PHARMACEUTICAL QUALITY ASSURANCE</span>
+                <span>&bull;</span>
+                <span>EXPIRY & DEFECT QUARANTINE BIN</span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-950 mt-1">Expiry Quarantine & Defective Stock</h1>
+            <p class="text-xs text-slate-600 font-medium">Segregate near-expiry, damaged packaging, or recalled medication batches from active dispensing queues and record vendor returns or incineration.</p>
+        </div>
+        <div class="flex items-center gap-2.5">
+            <button 
+                type="button" 
+                @click="showNewQuarantineModal = true" 
+                class="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl shadow-md flex items-center gap-2 transition-all"
+            >
+                <span>+ Quarantine Drug Batch</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- KPI Card -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="p-4 bg-amber-50 rounded-2xl border-2 border-amber-300 shadow-xs">
+            <div class="text-[11px] font-mono font-bold text-amber-900 uppercase">Total Units in Quarantine Bin</div>
+            <div class="text-xl font-black text-amber-950 mt-1">{{ total_quarantined_units }} Units</div>
+            <div class="text-[10px] text-amber-800 mt-0.5">Segregated from Active Patient Dispensing</div>
+        </div>
+
+        <div class="p-4 bg-white rounded-2xl border-2 border-slate-300 shadow-xs">
+            <div class="text-[11px] font-mono font-bold text-slate-500 uppercase">Total Quarantine Records</div>
+            <div class="text-xl font-black text-slate-950 mt-1">{{ records|length }}</div>
+            <div class="text-[10px] text-slate-500 mt-0.5">Historical and Active Dispositions</div>
+        </div>
+    </div>
+
+    <!-- Quarantine Records Table -->
+    <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-100 border-b-2 border-slate-300 text-slate-800 font-mono uppercase text-[11px]">
+                        <th class="p-3.5">Record #</th>
+                        <th class="p-3.5">Medication & Batch</th>
+                        <th class="p-3.5 text-center">Quarantined Qty</th>
+                        <th class="p-3.5">Reason</th>
+                        <th class="p-3.5 text-center">Disposition Status</th>
+                        <th class="p-3.5 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for r in records %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3.5 font-mono font-black text-slate-950">
+                                {{ r.record_number }}
+                                <div class="text-[10px] text-slate-500">{{ r.created_at.strftime('%d %b %Y') }}</div>
+                            </td>
+
+                            <td class="p-3.5">
+                                <div class="font-extrabold text-slate-900">{{ r.medication.name }}</div>
+                                <div class="text-[10px] text-slate-500 font-mono">Batch: {{ r.batch.batch_number }} &bull; Exp: {{ r.batch.expiry_date.strftime('%d %b %Y') }}</div>
+                            </td>
+
+                            <td class="p-3.5 text-center font-black text-amber-950 font-mono">
+                                {{ r.quantity }}
+                            </td>
+
+                            <td class="p-3.5">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-900 border border-amber-300">
+                                    {{ r.reason.replace('_', ' ') }}
+                                </span>
+                                {% if r.notes %}
+                                    <div class="text-[11px] text-slate-600 italic mt-0.5">{{ r.notes }}</div>
+                                {% endif %}
+                            </td>
+
+                            <td class="p-3.5 text-center">
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border
+                                    {% if r.disposition == 'returned_to_supplier' %}bg-blue-100 text-blue-900 border-blue-300
+                                    {% elif r.disposition == 'destroyed' %}bg-rose-100 text-rose-900 border-rose-300
+                                    {% else %}bg-amber-100 text-amber-900 border-amber-300{% endif %}">
+                                    {{ r.disposition.replace('_', ' ') }}
+                                </span>
+                            </td>
+
+                            <td class="p-3.5 text-right">
+                                {% if r.disposition == 'quarantined' %}
+                                    <div class="inline-flex items-center gap-1">
+                                        <form method="POST" action="{{ url_for('pharmacy.action_quarantine', rec_id=r.id) }}">
+                                            <input type="hidden" name="disposition" value="returned_to_supplier">
+                                            <button type="submit" class="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold">Return to Vendor</button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('pharmacy.action_quarantine', rec_id=r.id) }}">
+                                            <input type="hidden" name="disposition" value="destroyed">
+                                            <button type="submit" class="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold">Incinerate / Destroy</button>
+                                        </form>
+                                    </div>
+                                {% else %}
+                                    <span class="text-[10px] text-slate-400 font-mono">Resolved</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="p-8 text-center text-slate-500">No quarantined medication batches recorded.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- NEW QUARANTINE MODAL -->
+    <div x-show="showNewQuarantineModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+        <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-2xl max-w-lg w-full p-6 space-y-4" @click.stop>
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="text-base font-black text-slate-950">Quarantine Drug Batch</h3>
+                <button type="button" @click="showNewQuarantineModal = false" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+            </div>
+            <form method="POST" action="{{ url_for('pharmacy.create_quarantine_record') }}" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Select Batch to Quarantine *</label>
+                    <select name="batch_id" required class="form-select text-xs w-full rounded-xl border-slate-300 font-bold">
+                        {% for b in batches %}
+                            <option value="{{ b.id }}">
+                                {{ b.medication.name }} &bull; Batch: {{ b.batch_number }} (Rem: {{ b.quantity_remaining }}) &bull; Exp: {{ b.expiry_date.strftime('%d %b %Y') }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Quantity to Quarantine *</label>
+                    <input type="number" name="quantity" required min="1" value="10" class="form-input text-xs w-full rounded-xl border-slate-300 font-mono font-bold">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Reason for Quarantine *</label>
+                    <select name="reason" class="form-select text-xs w-full rounded-xl border-slate-300 font-bold">
+                        <option value="near_expiry">Near Expiry (< 30 Days)</option>
+                        <option value="damaged_packaging">Damaged Packaging / Broken Seal</option>
+                        <option value="recall">Manufacturer / PPB Recall</option>
+                        <option value="quality_defect">Discoloration / Quality Defect</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Audit Notes</label>
+                    <textarea name="notes" rows="2" placeholder="Describe physical condition or recall notice" class="form-input text-xs w-full rounded-xl border-slate-300"></textarea>
+                </div>
+
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" @click="showNewQuarantineModal = false" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-xs">Move to Quarantine &rarr;</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

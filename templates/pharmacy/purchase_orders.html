@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Pharmacy Purchase Orders (LPOs) - Apex Medical HMS{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ showNewPOModal: false, showReceiveModal: false, selectedPO: null }">
+
+    <!-- Header Banner -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border-2 border-slate-300 shadow-xs">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono font-bold text-emerald-900 uppercase">
+                <span>PHARMACY PROCUREMENT & SUPPLY CHAIN</span>
+                <span>&bull;</span>
+                <span>LOCAL PURCHASE ORDERS (LPO)</span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-950 mt-1">Pharmacy Procurement & Purchase Orders</h1>
+            <p class="text-xs text-slate-600 font-medium">Issue local purchase orders to verified medical distributors (KEMSA, MEDS, Novartis), receive stock into inventory batches, and maintain purchasing ledgers.</p>
+        </div>
+        <div class="flex items-center gap-2.5">
+            <button 
+                type="button" 
+                @click="showNewPOModal = true" 
+                class="px-4 py-2.5 bg-slate-950 hover:bg-slate-800 text-white text-xs font-black rounded-xl shadow-md flex items-center gap-2 transition-all"
+            >
+                <span>+ Create New LPO</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 2 KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="p-4 bg-white rounded-2xl border-2 border-slate-300 shadow-xs">
+            <div class="text-[11px] font-mono font-bold text-slate-500 uppercase">Total Procurement Commitments</div>
+            <div class="text-xl font-black text-slate-950 mt-1">KES {{ "{:,.2f}".format(total_po_value) }}</div>
+            <div class="text-[10px] text-slate-500 mt-0.5">{{ purchase_orders|length }} Total Purchase Orders Issued</div>
+        </div>
+
+        <div class="p-4 bg-amber-50 rounded-2xl border-2 border-amber-300 shadow-xs">
+            <div class="text-[11px] font-mono font-bold text-amber-900 uppercase">Pending Supplier Deliveries</div>
+            <div class="text-xl font-black text-amber-950 mt-1">{{ pending_pos_count }}</div>
+            <div class="text-[10px] text-amber-800 mt-0.5">Awaiting Receiving & Stock Intake</div>
+        </div>
+    </div>
+
+    <!-- Purchase Orders Table -->
+    <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-100 border-b-2 border-slate-300 text-slate-800 font-mono uppercase text-[11px]">
+                        <th class="p-3.5">LPO Number</th>
+                        <th class="p-3.5">Supplier & Vendor</th>
+                        <th class="p-3.5">Items Ordered</th>
+                        <th class="p-3.5 text-right">Total Cost</th>
+                        <th class="p-3.5 text-center">Status</th>
+                        <th class="p-3.5 text-right">Intake Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for po in purchase_orders %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3.5 font-mono font-black text-slate-950">
+                                {{ po.po_number }}
+                                <div class="text-[10px] text-slate-500 font-normal">{{ po.order_date.strftime('%d %b %Y') }}</div>
+                            </td>
+
+                            <td class="p-3.5">
+                                <div class="font-extrabold text-slate-900">{{ po.supplier.name }}</div>
+                                <div class="text-[10px] text-slate-500 font-mono">Code: {{ po.supplier.code }} &bull; {{ po.supplier.phone }}</div>
+                            </td>
+
+                            <td class="p-3.5">
+                                {% for itm in po.items %}
+                                    <div class="text-slate-800 font-semibold">
+                                        &bull; {{ itm.medication.name }} (x{{ itm.quantity_ordered }})
+                                    </div>
+                                {% endfor %}
+                            </td>
+
+                            <td class="p-3.5 text-right font-black text-slate-950">
+                                KES {{ "{:,.2f}".format(po.total_amount) }}
+                            </td>
+
+                            <td class="p-3.5 text-center">
+                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border
+                                    {% if po.status == 'received' %}bg-emerald-100 text-emerald-900 border-emerald-300
+                                    {% elif po.status == 'cancelled' %}bg-rose-100 text-rose-900 border-rose-300
+                                    {% else %}bg-amber-100 text-amber-900 border-amber-300{% endif %}">
+                                    {{ po.status }}
+                                </span>
+                            </td>
+
+                            <td class="p-3.5 text-right">
+                                {% if po.status != 'received' %}
+                                    <form method="POST" action="{{ url_for('pharmacy.receive_purchase_order', po_id=po.id) }}" class="inline-flex items-center gap-2">
+                                        <input type="text" name="batch_number" placeholder="Batch #" required class="form-input py-1 px-2 text-[10px] font-mono w-24 rounded-lg">
+                                        <button type="submit" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[10px]">
+                                            Receive Stock &rarr;
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <span class="text-[10px] text-emerald-800 font-mono font-bold">✓ In Stock</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="p-8 text-center text-slate-500">No purchase orders created yet. Click "+ Create New LPO" to issue an order.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- NEW LPO MODAL -->
+    <div x-show="showNewPOModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+        <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-2xl max-w-lg w-full p-6 space-y-4" @click.stop>
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="text-base font-black text-slate-950">Issue Local Purchase Order (LPO)</h3>
+                <button type="button" @click="showNewPOModal = false" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+            </div>
+            <form method="POST" action="{{ url_for('pharmacy.create_purchase_order') }}" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Select Supplier *</label>
+                    <select name="supplier_id" required class="form-select text-xs w-full rounded-xl border-slate-300 font-bold">
+                        {% for s in suppliers %}
+                            <option value="{{ s.id }}">{{ s.name }} ({{ s.code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Medication / Drug Item *</label>
+                    <select name="medication_id" required class="form-select text-xs w-full rounded-xl border-slate-300 font-bold">
+                        {% for m in medications %}
+                            <option value="{{ m.id }}">{{ m.name }} &bull; Current Stock: {{ m.current_stock }} &bull; Shelf: {{ m.location_shelf }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Quantity to Order *</label>
+                        <input type="number" name="quantity_ordered" required min="1" value="100" class="form-input text-xs w-full rounded-xl border-slate-300 font-mono font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Unit Cost Price (KES) *</label>
+                        <input type="number" step="0.01" name="unit_cost" required value="20.00" class="form-input text-xs w-full rounded-xl border-slate-300 font-mono font-bold">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Expected Delivery Date</label>
+                    <input type="date" name="expected_delivery_date" class="form-input text-xs w-full rounded-xl border-slate-300 font-mono">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Procurement Notes</label>
+                    <textarea name="notes" rows="2" placeholder="Urgent stock replenishment, contract reference, etc." class="form-input text-xs w-full rounded-xl border-slate-300"></textarea>
+                </div>
+
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" @click="showNewPOModal = false" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-slate-950 hover:bg-slate-800 text-white font-black rounded-xl text-xs">Create & Issue LPO &rarr;</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -6,7 +6,10 @@ from datetime import date, datetime, timedelta
 from app import create_app
 from models import (
     db, User, SecuritySetting, Permission, RolePermission, ClinicalDocument,
-    Patient, Prescription, AuditLog
+    Patient, Prescription, AuditLog, Invoice, Payment,
+    InsuranceScheme, InsuranceClaim, CreditNote, FeeWaiver,
+    Supplier, PurchaseOrder, PurchaseOrderItem, ControlledDrugLog, QuarantineRecord,
+    MedicationItem, DrugBatch
 )
 
 def run_test_suite():
@@ -306,8 +309,209 @@ def run_test_suite():
         assert final_intern.check_password('NewUpdatedPersonal@2026') is True
     print("   ✓ Self-service profile password change executed successfully")
 
-    # 15. Immutable Audit Trail Verification
-    print("15. Verifying Immutable Audit Trail Telemetry...")
+    # 16. Insurance & SHA Pre-Authorisation Claim Workflow
+    print("16. Testing Insurance & SHA Pre-Auth Claims Workflow...")
+    with app.app_context():
+        cashier_user = User.query.filter_by(role='cashier').first() or User.query.filter_by(role='admin').first()
+        cashier_id = cashier_user.id
+        p = Patient.query.first()
+        inv = Invoice.query.filter_by(patient_id=p.id).first()
+        if not inv:
+            inv = Invoice(
+                invoice_number=Invoice.generate_invoice_number(db.session),
+                patient_id=p.id,
+                subtotal=5000.0,
+                total_due=5000.0,
+                amount_paid=0.0,
+                balance_due=5000.0,
+                status='unpaid',
+                cashier_name='Cashier Joyce Wambui'
+            )
+            db.session.add(inv)
+            db.session.commit()
+        inv_id = inv.id
+        scheme = InsuranceScheme.query.filter_by(code='SHA-PUB').first()
+        scheme_id = scheme.id if scheme else 1
+
+    with client.session_transaction() as sess:
+        sess['user_id'] = cashier_id
+        sess['username'] = 'joyce'
+        sess['role'] = 'cashier'
+        sess['portal'] = 'billing'
+        sess['2fa_verified'] = True
+
+    res_claim = client.post('/billing/claims/create-preauth', data={
+        'invoice_id': inv_id,
+        'scheme_id': scheme_id,
+        'member_number': 'SHA-88991122',
+        'claimed_amount': '4500.00',
+        'notes': 'Pre-auth requested for diagnostic tests'
+    }, follow_redirects=True)
+    assert res_claim.status_code == 200
+    with app.app_context():
+        claim = InsuranceClaim.query.filter_by(member_number='SHA-88991122').first()
+        assert claim is not None
+        assert claim.status == 'preauth_approved'
+        assert claim.preauth_code is not None
+        claim_id = claim.id
+    print(f"   ✓ SHA Pre-Authorisation claim created & approved: Code {claim.preauth_code}")
+
+    # Submit and reimburse claim
+    res_claim_update = client.post(f'/billing/claims/{claim_id}/update-status', data={
+        'status': 'reimbursed',
+        'approved_amount': '4500.00'
+    }, follow_redirects=True)
+    assert res_claim_update.status_code == 200
+    with app.app_context():
+        claim = InsuranceClaim.query.get(claim_id)
+        assert claim.status == 'reimbursed'
+        assert claim.approved_amount == 4500.00
+    print("   ✓ Insurance claim reimbursed and settled successfully")
+
+    # 17. Credit Notes & Fee Waivers Dual Authorization
+    print("17. Testing Credit Notes & Fee Waivers Dual Authorization...")
+    res_cn = client.post('/billing/credit-notes/create', data={
+        'invoice_id': inv_id,
+        'amount': '500.00',
+        'reason': 'billing_error',
+        'notes': 'Overcharge discount applied'
+    }, follow_redirects=True)
+    assert res_cn.status_code == 200
+    with app.app_context():
+        cn = CreditNote.query.filter_by(invoice_id=inv_id).first()
+        assert cn is not None
+        assert cn.status == 'pending_approval'
+        cn_id = cn.id
+
+    res_cn_appr = client.post(f'/billing/credit-notes/{cn_id}/action', data={
+        'action': 'approve'
+    }, follow_redirects=True)
+    assert res_cn_appr.status_code == 200
+    with app.app_context():
+        cn = CreditNote.query.get(cn_id)
+        assert cn.status == 'approved'
+    print("   ✓ Credit note created and authorized by administrator")
+
+    res_wv = client.post('/billing/waivers/create', data={
+        'invoice_id': inv_id,
+        'amount': '1000.00',
+        'category': 'indigent_patient',
+        'justification': 'Vulnerable citizen social welfare support'
+    }, follow_redirects=True)
+    assert res_wv.status_code == 200
+    with app.app_context():
+        wv = FeeWaiver.query.filter_by(invoice_id=inv_id).first()
+        assert wv is not None
+        wv_id = wv.id
+
+    res_wv_appr = client.post(f'/billing/waivers/{wv_id}/action', data={
+        'action': 'approve'
+    }, follow_redirects=True)
+    assert res_wv_appr.status_code == 200
+    with app.app_context():
+        wv = FeeWaiver.query.get(wv_id)
+        assert wv.status == 'approved'
+    print("   ✓ Indigent fee waiver authorized by Medical Superintendent")
+
+    # 18. Pharmacy LPO Procurement & Inventory Intake
+    print("18. Testing Pharmacy Local Purchase Orders (LPO) & Stock Intake...")
+    with app.app_context():
+        pharm_user = User.query.filter_by(role='pharmacy').first() or User.query.filter_by(role='admin').first()
+        pharm_id = pharm_user.id
+        supp = Supplier.query.first()
+        med = MedicationItem.query.first()
+        supp_id = supp.id
+        med_id = med.id
+        initial_stock = med.current_stock
+
+    with client.session_transaction() as sess:
+        sess['user_id'] = pharm_id
+        sess['username'] = 'evans'
+        sess['role'] = 'pharmacy'
+        sess['portal'] = 'pharmacy'
+        sess['2fa_verified'] = True
+
+    res_po = client.post('/pharmacy/purchase-orders/create', data={
+        'supplier_id': supp_id,
+        'medication_id': med_id,
+        'quantity_ordered': '50',
+        'unit_cost': '18.50',
+        'notes': 'Urgent dispensary restock'
+    }, follow_redirects=True)
+    assert res_po.status_code == 200
+    with app.app_context():
+        po = PurchaseOrder.query.order_by(PurchaseOrder.id.desc()).first()
+        assert po is not None
+        assert po.status == 'ordered'
+        po_id = po.id
+
+    res_po_recv = client.post(f'/pharmacy/purchase-orders/{po_id}/receive', data={
+        'batch_number': 'TEST-BAT-2026',
+        'expiry_date': '2028-12-31'
+    }, follow_redirects=True)
+    assert res_po_recv.status_code == 200
+    with app.app_context():
+        po = PurchaseOrder.query.get(po_id)
+        assert po.status == 'received'
+        new_batch = DrugBatch.query.filter_by(batch_number='TEST-BAT-2026').first()
+        assert new_batch is not None
+        med = MedicationItem.query.get(med_id)
+        assert med.current_stock == initial_stock + 50
+    print("   ✓ LPO created, received, new DrugBatch registered, stock incremented (+50)")
+
+    # 19. Controlled Drug Register & Expiry Quarantine Bin
+    print("19. Testing Controlled Drug Register & Expiry Quarantine Bin...")
+    with app.app_context():
+        ctrl_med = MedicationItem.query.filter_by(is_controlled=True).first()
+        ctrl_id = ctrl_med.id
+        ctrl_initial = ctrl_med.current_stock
+
+    res_ctrl = client.post('/pharmacy/controlled-drugs', data={
+        'medication_id': ctrl_id,
+        'quantity_dispensed': '2',
+        'patient_name': 'Mary Achieng',
+        'prescribing_doctor': 'Dr. Sarah Kamau',
+        'witness_pharmacist': 'Pharm. Brenda Wanjiku',
+        'indication_notes': 'Post-op analgesia',
+        'prescription_ref': 'RX-TEST-001'
+    }, follow_redirects=True)
+    assert res_ctrl.status_code == 200
+    with app.app_context():
+        ctrl_med = MedicationItem.query.get(ctrl_id)
+        assert ctrl_med.current_stock == ctrl_initial - 2
+        ctrl_log = ControlledDrugLog.query.order_by(ControlledDrugLog.id.desc()).first()
+        assert ctrl_log.quantity_dispensed == 2
+    print("   ✓ Controlled drug logged in regulatory register with witness verification")
+
+    # Quarantine Drug Batch
+    with app.app_context():
+        batch_to_q = DrugBatch.query.filter(DrugBatch.quantity_remaining > 5).first()
+        batch_q_id = batch_to_q.id
+
+    res_q = client.post('/pharmacy/quarantine/create', data={
+        'batch_id': batch_q_id,
+        'quantity': '5',
+        'reason': 'near_expiry',
+        'notes': 'Quarantined due to <30 days expiry'
+    }, follow_redirects=True)
+    assert res_q.status_code == 200
+    with app.app_context():
+        q_rec = QuarantineRecord.query.order_by(QuarantineRecord.id.desc()).first()
+        assert q_rec is not None
+        assert q_rec.quantity == 5
+        q_rec_id = q_rec.id
+
+    res_q_act = client.post(f'/pharmacy/quarantine/{q_rec_id}/action', data={
+        'disposition': 'returned_to_supplier'
+    }, follow_redirects=True)
+    assert res_q_act.status_code == 200
+    with app.app_context():
+        q_rec = QuarantineRecord.query.get(q_rec_id)
+        assert q_rec.disposition == 'returned_to_supplier'
+    print("   ✓ Drug batch quarantined and disposition (return to vendor) completed")
+
+    # 20. Immutable Audit Trail Verification
+    print("20. Verifying Immutable Audit Trail Telemetry...")
     with app.app_context():
         audit_events = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(10).all()
         assert len(audit_events) > 0
@@ -315,7 +519,7 @@ def run_test_suite():
         print(f"   ✓ Recent Audit Actions: {', '.join(actions[:5])}")
 
     print("\n" + "="*70)
-    print("🎉 ALL 14 TEST MODULES PASSED 100%! RBAC, 2FA, IAM & DOCUMENTS FULLY OPERATIONAL")
+    print("🎉 ALL 19 TEST MODULES PASSED 100%! RBAC, 2FA, IAM, CLAIMS, PHARMACY & FINANCE OPERATIONAL")
     print("="*70 + "\n")
 
 if __name__ == '__main__':

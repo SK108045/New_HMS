@@ -3,7 +3,9 @@ from datetime import datetime, date, timedelta
 from flask import render_template, request, redirect, url_for, flash, jsonify
 from models import (
     db, Patient, QueueEntry, ConsultationNote, Prescription, BillingItem,
-    MedicationItem, DrugBatch, DispensationRecord, StockTransaction
+    MedicationItem, DrugBatch, DispensationRecord, StockTransaction,
+    Supplier, PurchaseOrder, PurchaseOrderItem, ControlledDrugLog, QuarantineRecord,
+    AuditLog
 )
 from . import pharmacy_bp
 
@@ -590,4 +592,298 @@ def print_prescription(prescription_id):
     prescription = Prescription.query.get_or_404(prescription_id)
     patient = prescription.patient
     return render_template('clinical/print_prescription.html', prescription=prescription, patient=patient)
+
+
+# =================== 10. LOCAL PURCHASE ORDERS (LPOs) & SUPPLIERS ===================
+@pharmacy_bp.route('/purchase-orders', methods=['GET'])
+def purchase_orders():
+    """
+    Pharmacy Procurement: Local Purchase Orders, Vendor Tracking, and Inventory Receiving.
+    """
+    pos = PurchaseOrder.query.order_by(PurchaseOrder.created_at.desc()).all()
+    suppliers = Supplier.query.filter_by(status='active').all()
+    medications = MedicationItem.query.order_by(MedicationItem.name.asc()).all()
+
+    total_po_value = sum(po.total_amount for po in pos)
+    pending_pos_count = sum(1 for po in pos if po.status in ['draft', 'ordered'])
+
+    return render_template(
+        'pharmacy/purchase_orders.html',
+        purchase_orders=pos,
+        suppliers=suppliers,
+        medications=medications,
+        total_po_value=total_po_value,
+        pending_pos_count=pending_pos_count
+    )
+
+
+@pharmacy_bp.route('/purchase-orders/create', methods=['POST'])
+def create_purchase_order():
+    supplier_id = int(request.form.get('supplier_id'))
+    medication_id = int(request.form.get('medication_id'))
+    quantity = int(request.form.get('quantity_ordered') or 1)
+    unit_cost = float(request.form.get('unit_cost') or 0.0)
+    expected_delivery = request.form.get('expected_delivery_date')
+    notes = request.form.get('notes', '').strip()
+
+    deliv_date = None
+    if expected_delivery:
+        try:
+            deliv_date = datetime.strptime(expected_delivery, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    total_amount = quantity * unit_cost
+
+    po = PurchaseOrder(
+        po_number=PurchaseOrder.generate_po_number(db.session),
+        supplier_id=supplier_id,
+        order_date=date.today(),
+        expected_delivery_date=deliv_date,
+        status='ordered',
+        total_amount=total_amount,
+        notes=notes,
+        created_by='Pharm. Evans Omondi'
+    )
+    db.session.add(po)
+    db.session.flush()
+
+    po_item = PurchaseOrderItem(
+        po_id=po.id,
+        medication_id=medication_id,
+        quantity_ordered=quantity,
+        unit_cost=unit_cost,
+        total_cost=total_amount
+    )
+    db.session.add(po_item)
+    db.session.commit()
+
+    flash(f"Purchase Order {po.po_number} created for KES {total_amount:.2f}.", "success")
+    return redirect(url_for('pharmacy.purchase_orders'))
+
+
+@pharmacy_bp.route('/purchase-orders/<int:po_id>/receive', methods=['POST'])
+def receive_purchase_order(po_id):
+    po = PurchaseOrder.query.get_or_404(po_id)
+    batch_number = request.form.get('batch_number', '').strip().upper()
+    expiry_str = request.form.get('expiry_date')
+
+    if not batch_number:
+        batch_number = f"BAT-{date.today().strftime('%Y%m')}-{po.id:02d}"
+
+    try:
+        expiry_date = datetime.strptime(expiry_str, '%Y-%m-%d').date() if expiry_str else (date.today() + timedelta(days=730))
+    except ValueError:
+        expiry_date = date.today() + timedelta(days=730)
+
+    for item in po.items:
+        item.quantity_received = item.quantity_ordered
+        item.batch_number = batch_number
+        item.expiry_date = expiry_date
+
+        # Auto-create DrugBatch
+        batch = DrugBatch(
+            medication_id=item.medication_id,
+            batch_number=batch_number,
+            quantity_received=item.quantity_received,
+            quantity_remaining=item.quantity_received,
+            expiry_date=expiry_date,
+            supplier=po.supplier.name,
+            status='active'
+        )
+        db.session.add(batch)
+        db.session.flush()
+
+        # Update medication stock
+        med = item.medication
+        prev_stock = med.current_stock
+        med.current_stock += item.quantity_received
+
+        # Log stock transaction
+        tx = StockTransaction(
+            medication_id=med.id,
+            batch_id=batch.id,
+            transaction_type='restock',
+            quantity_change=item.quantity_received,
+            previous_stock=prev_stock,
+            new_stock=med.current_stock,
+            reference_id=po.po_number,
+            notes=f"LPO Delivery Received from {po.supplier.name} (Batch: {batch_number})",
+            recorded_by='Pharm. Evans Omondi'
+        )
+        db.session.add(tx)
+
+    po.status = 'received'
+    po.received_by = 'Pharm. Evans Omondi'
+    po.received_at = datetime.utcnow()
+
+    AuditLog.log_event(
+        'po_received',
+        'purchase_order',
+        po.id,
+        f"LPO {po.po_number} received from {po.supplier.name}. Stock updated into inventory.",
+        severity='info'
+    )
+    db.session.commit()
+    flash(f"LPO {po.po_number} successfully received. Batch {batch_number} added and stock updated!", "success")
+    return redirect(url_for('pharmacy.purchase_orders'))
+
+
+# =================== 11. CONTROLLED DRUGS REGISTER (SCHEDULE II/IV) ===================
+@pharmacy_bp.route('/controlled-drugs', methods=['GET', 'POST'])
+def controlled_drugs():
+    """
+    Official Controlled Substances & Dangerous Drugs Register (Pharmacy & Poisons Board compliance).
+    """
+    if request.method == 'POST':
+        medication_id = int(request.form.get('medication_id'))
+        quantity = int(request.form.get('quantity_dispensed') or 1)
+        patient_name = request.form.get('patient_name', '').strip()
+        doctor_name = request.form.get('prescribing_doctor', '').strip()
+        witness_name = request.form.get('witness_pharmacist', '').strip()
+        indication = request.form.get('indication_notes', '').strip()
+        prescription_ref = request.form.get('prescription_ref', '').strip()
+
+        med = MedicationItem.query.get_or_404(medication_id)
+        if quantity > med.current_stock:
+            flash(f"Cannot dispense {quantity} units. Available stock is {med.current_stock}.", "error")
+            return redirect(url_for('pharmacy.controlled_drugs'))
+
+        prev_stock = med.current_stock
+        med.current_stock -= quantity
+
+        # Log controlled register entry
+        log_entry = ControlledDrugLog(
+            entry_number=ControlledDrugLog.generate_entry_number(db.session),
+            medication_id=med.id,
+            prescribing_doctor=doctor_name or 'Dr. Sarah Kamau',
+            dispensing_pharmacist='Pharm. Evans Omondi',
+            witness_pharmacist=witness_name or 'Pharm. Brenda Wanjiku',
+            quantity_dispensed=quantity,
+            balance_in_hand=med.current_stock,
+            indication_notes=indication or f"Patient: {patient_name}",
+            prescription_ref=prescription_ref or 'MANUAL-LOG'
+        )
+        db.session.add(log_entry)
+
+        # Record stock movement
+        tx = StockTransaction(
+            medication_id=med.id,
+            transaction_type='dispense',
+            quantity_change=-quantity,
+            previous_stock=prev_stock,
+            new_stock=med.current_stock,
+            reference_id=log_entry.entry_number,
+            notes=f"Controlled Substance Dispensed (Witness: {witness_name})",
+            recorded_by='Pharm. Evans Omondi'
+        )
+        db.session.add(tx)
+
+        AuditLog.log_event(
+            'controlled_drug_dispensed',
+            'controlled_drug_log',
+            log_entry.id,
+            f"Dispensed {quantity} units of {med.name} (Schedule: {med.controlled_schedule}). Prescriber: {doctor_name}, Witness: {witness_name}.",
+            severity='critical'
+        )
+        db.session.commit()
+        flash(f"Controlled Drug Entry {log_entry.entry_number} logged successfully. Remaining stock: {med.current_stock}", "success")
+        return redirect(url_for('pharmacy.controlled_drugs'))
+
+    controlled_meds = MedicationItem.query.filter_by(is_controlled=True).all()
+    logs = ControlledDrugLog.query.order_by(ControlledDrugLog.created_at.desc()).all()
+
+    return render_template(
+        'pharmacy/controlled_drugs.html',
+        controlled_meds=controlled_meds,
+        logs=logs
+    )
+
+
+# =================== 12. PHARMACEUTICAL EXPIRY QUARANTINE BIN ===================
+@pharmacy_bp.route('/quarantine', methods=['GET'])
+def quarantine():
+    """
+    Expiry, Damaged, and Recall Quarantine Holding Bin.
+    """
+    records = QuarantineRecord.query.order_by(QuarantineRecord.created_at.desc()).all()
+    active_batches = DrugBatch.query.filter(DrugBatch.quantity_remaining > 0).all()
+
+    total_quarantined_units = sum(r.quantity for r in records if r.disposition == 'quarantined')
+
+    return render_template(
+        'pharmacy/quarantine.html',
+        records=records,
+        batches=active_batches,
+        total_quarantined_units=total_quarantined_units
+    )
+
+
+@pharmacy_bp.route('/quarantine/create', methods=['POST'])
+def create_quarantine_record():
+    batch_id = int(request.form.get('batch_id'))
+    quantity = int(request.form.get('quantity') or 1)
+    reason = request.form.get('reason', 'near_expiry')
+    notes = request.form.get('notes', '').strip()
+
+    batch = DrugBatch.query.get_or_404(batch_id)
+    if quantity > batch.quantity_remaining:
+        flash(f"Cannot quarantine {quantity} units. Batch only has {batch.quantity_remaining} remaining.", "error")
+        return redirect(url_for('pharmacy.quarantine'))
+
+    batch.quantity_remaining -= quantity
+    if batch.quantity_remaining == 0:
+        batch.status = 'quarantined'
+
+    med = batch.medication
+    prev_stock = med.current_stock
+    med.current_stock = max(0, med.current_stock - quantity)
+
+    rec = QuarantineRecord(
+        record_number=QuarantineRecord.generate_record_number(db.session),
+        batch_id=batch.id,
+        medication_id=med.id,
+        quantity=quantity,
+        reason=reason,
+        disposition='quarantined',
+        quarantined_by='Pharm. Evans Omondi',
+        notes=notes
+    )
+    db.session.add(rec)
+
+    tx = StockTransaction(
+        medication_id=med.id,
+        batch_id=batch.id,
+        transaction_type='quarantine',
+        quantity_change=-quantity,
+        previous_stock=prev_stock,
+        new_stock=med.current_stock,
+        reference_id=rec.record_number,
+        notes=f"Stock moved to Quarantine Bin (Reason: {reason.replace('_', ' ').title()})",
+        recorded_by='Pharm. Evans Omondi'
+    )
+    db.session.add(tx)
+
+    AuditLog.log_event(
+        'stock_quarantined',
+        'quarantine_record',
+        rec.id,
+        f"Quarantined {quantity} units of {med.name} (Batch: {batch.batch_number}). Reason: {reason}.",
+        severity='warning'
+    )
+    db.session.commit()
+    flash(f"Quarantine record {rec.record_number} created for {quantity} units of {med.name}.", "warning")
+    return redirect(url_for('pharmacy.quarantine'))
+
+
+@pharmacy_bp.route('/quarantine/<int:rec_id>/action', methods=['POST'])
+def action_quarantine(rec_id):
+    disposition = request.form.get('disposition') # returned_to_supplier, destroyed
+    rec = QuarantineRecord.query.get_or_404(rec_id)
+    rec.disposition = disposition
+    rec.resolved_at = datetime.utcnow()
+    db.session.commit()
+    flash(f"Quarantine record {rec.record_number} marked as {disposition.replace('_', ' ').title()}.", "info")
+    return redirect(url_for('pharmacy.quarantine'))
+
 

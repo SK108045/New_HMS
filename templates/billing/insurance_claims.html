@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}Insurance & SHA Claims Desk - Apex Medical HMS{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="{ showNewClaimModal: false, showUpdateModal: false, selectedClaim: null, newStatus: 'submitted' }">
+
+    <!-- Header with Quick Action -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border-2 border-slate-300 shadow-xs">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono font-bold text-blue-900 uppercase">
+                <span>INSURANCE & SOCIAL HEALTH AUTHORITY (SHA)</span>
+                <span>&bull;</span>
+                <span>CLAIMS RECONCILIATION</span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-950 mt-1">Insurance Claims & Pre-Authorisations</h1>
+            <p class="text-xs text-slate-600 font-medium">Verify insurer tariffs, track pre-authorisation codes, calculate co-pays, and log claim reimbursements/rejections.</p>
+        </div>
+        <div class="flex items-center gap-2.5">
+            <button 
+                type="button" 
+                @click="showNewClaimModal = true" 
+                class="px-4 py-2.5 bg-blue-900 hover:bg-blue-950 text-white text-xs font-extrabold rounded-xl shadow-md flex items-center gap-2 transition-all"
+            >
+                <span>+ New Pre-Auth Claim</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 4 KPI Stat Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="p-4 bg-white rounded-2xl border-2 border-slate-300 shadow-xs">
+            <div class="text-[11px] font-mono font-bold text-slate-500 uppercase">Total Claims Value</div>
+            <div class="text-xl font-black text-slate-950 mt-1">KES {{ "{:,.2f}".format(total_claimed_value) }}</div>
+            <div class="text-[10px] text-slate-500 mt-0.5">{{ total_claims_count }} Total Active Claims</div>
+        </div>
+
+        <div class="p-4 bg-amber-50 rounded-2xl border-2 border-amber-300 shadow-xs">
+            <div class="text-[11px] font-mono font-bold text-amber-900 uppercase">Pending Pre-Auths</div>
+            <div class="text-xl font-black text-amber-950 mt-1">{{ pending_preauth_count }}</div>
+            <div class="text-[10px] text-amber-800 mt-0.5">Awaiting Insurer Approval</div>
+        </div>
+
+        <div class="p-4 bg-emerald-50 rounded-2xl border-2 border-emerald-300 shadow-xs">
+            <div class="text-[11px] font-mono font-bold text-emerald-900 uppercase">Reimbursed Settled</div>
+            <div class="text-xl font-black text-emerald-950 mt-1">KES {{ "{:,.2f}".format(reimbursed_value) }}</div>
+            <div class="text-[10px] text-emerald-800 mt-0.5">Paid into Hospital Accounts</div>
+        </div>
+
+        <div class="p-4 bg-rose-50 rounded-2xl border-2 border-rose-300 shadow-xs">
+            <div class="text-[11px] font-mono font-bold text-rose-900 uppercase">Rejected / Disputed</div>
+            <div class="text-xl font-black text-rose-950 mt-1">{{ rejected_count }}</div>
+            <div class="text-[10px] text-rose-800 mt-0.5">Requiring Resubmission</div>
+        </div>
+    </div>
+
+    <!-- Filter Toolbar -->
+    <div class="bg-white p-4 rounded-2xl border-2 border-slate-300 shadow-xs flex flex-col md:flex-row justify-between items-center gap-3">
+        <div class="flex items-center gap-2 flex-wrap w-full md:w-auto">
+            <a 
+                href="{{ url_for('billing.insurance_claims', status='all', scheme=scheme_filter, q=search_q) }}" 
+                class="px-3 py-1.5 rounded-lg text-xs font-bold {% if status_filter == 'all' %}bg-slate-900 text-white{% else %}bg-slate-100 text-slate-700 hover:bg-slate-200{% endif %}"
+            >
+                All ({{ total_claims_count }})
+            </a>
+            <a 
+                href="{{ url_for('billing.insurance_claims', status='preauth_approved', scheme=scheme_filter, q=search_q) }}" 
+                class="px-3 py-1.5 rounded-lg text-xs font-bold {% if status_filter == 'preauth_approved' %}bg-blue-900 text-white{% else %}bg-blue-50 text-blue-900 hover:bg-blue-100{% endif %}"
+            >
+                Pre-Auth Approved
+            </a>
+            <a 
+                href="{{ url_for('billing.insurance_claims', status='submitted', scheme=scheme_filter, q=search_q) }}" 
+                class="px-3 py-1.5 rounded-lg text-xs font-bold {% if status_filter == 'submitted' %}bg-indigo-900 text-white{% else %}bg-indigo-50 text-indigo-900 hover:bg-indigo-100{% endif %}"
+            >
+                Submitted to Insurer
+            </a>
+            <a 
+                href="{{ url_for('billing.insurance_claims', status='reimbursed', scheme=scheme_filter, q=search_q) }}" 
+                class="px-3 py-1.5 rounded-lg text-xs font-bold {% if status_filter == 'reimbursed' %}bg-emerald-900 text-white{% else %}bg-emerald-50 text-emerald-900 hover:bg-emerald-100{% endif %}"
+            >
+                Reimbursed
+            </a>
+            <a 
+                href="{{ url_for('billing.insurance_claims', status='rejected', scheme=scheme_filter, q=search_q) }}" 
+                class="px-3 py-1.5 rounded-lg text-xs font-bold {% if status_filter == 'rejected' %}bg-rose-900 text-white{% else %}bg-rose-50 text-rose-900 hover:bg-rose-100{% endif %}"
+            >
+                Rejected ({{ rejected_count }})
+            </a>
+        </div>
+
+        <form method="GET" action="{{ url_for('billing.insurance_claims') }}" class="w-full md:w-72">
+            <input type="hidden" name="status" value="{{ status_filter }}">
+            <input 
+                type="text" 
+                name="q" 
+                value="{{ search_q }}" 
+                placeholder="Search claim, patient, member #..." 
+                class="form-input text-xs rounded-xl py-1.5 w-full border-slate-300"
+            >
+        </form>
+    </div>
+
+    <!-- Claims Table -->
+    <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-100 border-b-2 border-slate-300 text-slate-800 font-mono uppercase text-[11px]">
+                        <th class="p-3.5">Claim Details</th>
+                        <th class="p-3.5">Patient & Member ID</th>
+                        <th class="p-3.5">Scheme & Pre-Auth Code</th>
+                        <th class="p-3.5 text-right">Claimed</th>
+                        <th class="p-3.5 text-right">Co-Pay</th>
+                        <th class="p-3.5 text-center">Status</th>
+                        <th class="p-3.5 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for c in claims %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="p-3.5">
+                                <div class="font-black text-slate-950 font-mono">{{ c.claim_number }}</div>
+                                <div class="text-[10px] text-slate-500 font-mono">Inv: {{ c.invoice.invoice_number }} &bull; {{ c.created_at.strftime('%d %b %Y') }}</div>
+                            </td>
+
+                            <td class="p-3.5">
+                                <div class="font-extrabold text-slate-900">{{ c.patient.full_name }}</div>
+                                <div class="text-[10px] text-slate-600 font-mono">Mem #: {{ c.member_number }}</div>
+                            </td>
+
+                            <td class="p-3.5">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-blue-50 text-blue-900 border border-blue-200">
+                                    {{ c.scheme_name }}
+                                </span>
+                                <div class="text-xs font-mono font-bold text-slate-900 mt-1">Auth: {{ c.preauth_code or 'N/A' }}</div>
+                            </td>
+
+                            <td class="p-3.5 text-right font-black text-slate-950">
+                                KES {{ "{:,.2f}".format(c.claimed_amount) }}
+                            </td>
+
+                            <td class="p-3.5 text-right font-bold text-amber-900">
+                                KES {{ "{:,.2f}".format(c.copay_amount) }}
+                            </td>
+
+                            <td class="p-3.5 text-center">
+                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase border
+                                    {% if c.status == 'reimbursed' %}bg-emerald-100 text-emerald-900 border-emerald-300
+                                    {% elif c.status == 'rejected' %}bg-rose-100 text-rose-900 border-rose-300
+                                    {% elif c.status == 'submitted' %}bg-indigo-100 text-indigo-900 border-indigo-300
+                                    {% else %}bg-blue-100 text-blue-950 border-blue-300{% endif %}">
+                                    <span>{{ c.status.replace('_', ' ').title() }}</span>
+                                </span>
+                                {% if c.rejection_reason %}
+                                    <div class="text-[10px] text-rose-700 font-medium mt-1 truncate max-w-xs">
+                                        {{ c.rejection_reason }}
+                                    </div>
+                                {% endif %}
+                            </td>
+
+                            <td class="p-3.5 text-right">
+                                <button 
+                                    type="button" 
+                                    @click="selectedClaim = {{ c.id }}; showUpdateModal = true"
+                                    class="px-2.5 py-1 bg-slate-950 hover:bg-slate-800 text-white font-black text-[11px] rounded-lg shadow-xs"
+                                >
+                                    Update Status &rarr;
+                                </button>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="p-8 text-center text-slate-500">
+                                No insurance claims registered for the selected filter. Click "+ New Pre-Auth Claim" to initialize a patient claim.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- NEW PRE-AUTH CLAIM MODAL -->
+    <div x-show="showNewClaimModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+        <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-2xl max-w-lg w-full p-6 space-y-4" @click.stop>
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="text-base font-black text-slate-950">New Insurance / SHA Pre-Authorisation</h3>
+                <button type="button" @click="showNewClaimModal = false" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+            </div>
+
+            <form method="POST" action="{{ url_for('billing.create_preauth_claim') }}" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Select Patient Invoice *</label>
+                    <select name="invoice_id" required class="form-select text-xs w-full rounded-xl border-slate-300">
+                        {% for inv in unsettled_invoices %}
+                            <option value="{{ inv.id }}">
+                                {{ inv.invoice_number }} &bull; {{ inv.patient.full_name }} (KES {{ "{:,.2f}".format(inv.total_due) }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Insurance / SHA Scheme *</label>
+                    <select name="scheme_id" required class="form-select text-xs w-full rounded-xl border-slate-300">
+                        {% for s in schemes %}
+                            <option value="{{ s.id }}">{{ s.name }} ({{ s.code }}) &bull; Co-pay: KES {{ s.copay_fixed_amount }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Member Number *</label>
+                        <input type="text" name="member_number" required placeholder="e.g. SHA-9081245" class="form-input text-xs w-full rounded-xl border-slate-300">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Pre-Auth Approval Code</label>
+                        <input type="text" name="preauth_code" placeholder="Auto-generated if blank" class="form-input text-xs w-full rounded-xl border-slate-300">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Claimed Amount (KES) *</label>
+                    <input type="number" step="0.01" name="claimed_amount" required placeholder="Amount to claim" class="form-input text-xs w-full rounded-xl border-slate-300 font-mono font-bold">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Notes & Diagnosis Code</label>
+                    <textarea name="notes" rows="2" placeholder="Clinical notes, ICD-10 indication, or policy terms" class="form-input text-xs w-full rounded-xl border-slate-300"></textarea>
+                </div>
+
+                <div class="pt-2 flex items-center justify-end gap-2">
+                    <button type="button" @click="showNewClaimModal = false" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-900 hover:bg-blue-950 text-white font-black rounded-xl text-xs">Generate Pre-Auth &rarr;</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

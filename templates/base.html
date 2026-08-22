@@ -347,10 +347,51 @@
                             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
+                        <!-- 5. Dispensation Audit Logs -->
+                        <a 
+                            href="{{ url_for('pharmacy.history') }}" 
+                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.history' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                        >
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
                             <span>Dispensation Logs</span>
                         </a>
 
-                        <!-- 6. Batch Registry & Stock Movement -->
+                        <!-- 6. Purchase Orders & Procurement -->
+                        <a 
+                            href="{{ url_for('pharmacy.purchase_orders') }}" 
+                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.purchase_orders' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                        >
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                            </svg>
+                            <span>Purchase Orders (LPO)</span>
+                        </a>
+
+                        <!-- 7. Controlled Drugs Register -->
+                        <a 
+                            href="{{ url_for('pharmacy.controlled_drugs') }}" 
+                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.controlled_drugs' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                        >
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                            <span>Controlled Drugs Reg</span>
+                        </a>
+
+                        <!-- 8. Expiry Quarantine Bin -->
+                        <a 
+                            href="{{ url_for('pharmacy.quarantine') }}" 
+                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.quarantine' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                        >
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                            <span>Expiry Quarantine</span>
+                        </a>
+
+                        <!-- 9. Batch Registry & Stock Movement -->
                         <a 
                             href="{{ url_for('pharmacy.batches') }}" 
                             class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.batches' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
@@ -359,28 +400,6 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
                             </svg>
                             <span>Batch & Stock Ledger</span>
-                        </a>
-
-                        <!-- 7. Hospital Formulary Guide -->
-                        <a 
-                            href="{{ url_for('doctor.formulary') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'doctor.formulary' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
-                        >
-                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477-4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
-                            </svg>
-                            <span>Drug Formulary</span>
-                        </a>
-
-                        <!-- 8. Patient Directory Lookup -->
-                        <a 
-                            href="{{ url_for('reception.search') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-                        >
-                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
-                            </svg>
-                            <span>Patient Lookup</span>
                         </a>
 
                     {% elif request.blueprint == 'billing' %}
@@ -411,7 +430,7 @@
                             <span>Financial Command</span>
                         </a>
 
-                        <!-- 3. Pending Invoices Queue -->
+                        <!-- 3. Invoices Queue -->
                         <a 
                             href="{{ url_for('billing.invoices') }}" 
                             class="flex items-center justify-between px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'billing.invoices' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
@@ -429,7 +448,51 @@
                             {% endif %}
                         </a>
 
-                        <!-- 4. Shift Reconciliation (X/Z Reports) -->
+                        <!-- 4. Insurance & SHA Claims Desk -->
+                        <a 
+                            href="{{ url_for('billing.insurance_claims') }}" 
+                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'billing.insurance_claims' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                        >
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                            </svg>
+                            <span>SHA & Insurance Claims</span>
+                        </a>
+
+                        <!-- 5. Refunds & Fee Waivers -->
+                        <a 
+                            href="{{ url_for('billing.refunds_waivers') }}" 
+                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'billing.refunds_waivers' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                        >
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <span>Refunds & Waivers</span>
+                        </a>
+
+                        <!-- 6. Aged Debtors -->
+                        <a 
+                            href="{{ url_for('billing.debtors') }}" 
+                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'billing.debtors' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                        >
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                            </svg>
+                            <span>Aged Debtors</span>
+                        </a>
+
+                        <!-- 7. Tax & Financial Reports -->
+                        <a 
+                            href="{{ url_for('billing.financial_reports') }}" 
+                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'billing.financial_reports' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                        >
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <span>Tax & Revenue Reports</span>
+                        </a>
+
+                        <!-- 8. Shift Reconciliation (X/Z Reports) -->
                         <a 
                             href="{{ url_for('billing.shift_report') }}" 
                             class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'billing.shift_report' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
@@ -438,50 +501,6 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
                             <span>Shift X/Z Reports</span>
-                        </a>
-
-                        <!-- 5. Insurance Claims Registry -->
-                        <a 
-                            href="{{ url_for('billing.insurance_registry') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'billing.insurance_registry' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
-                        >
-                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                            </svg>
-                            <span>Insurance Claims</span>
-                        </a>
-
-                        <!-- 6. Transaction Audit Ledger -->
-                        <a 
-                            href="{{ url_for('billing.transactions') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'billing.transactions' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
-                        >
-                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
-                            </svg>
-                            <span>Audit Ledger</span>
-                        </a>
-
-                        <!-- 7. Hospital Fee Schedule & Tariffs -->
-                        <a 
-                            href="{{ url_for('billing.tariffs') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'billing.tariffs' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
-                        >
-                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
-                            </svg>
-                            <span>Tariffs Schedule</span>
-                        </a>
-
-                        <!-- 8. Patient Directory Lookup -->
-                        <a 
-                            href="{{ url_for('reception.search') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-                        >
-                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
-                            </svg>
-                            <span>Patient Lookup</span>
                         </a>
 
                     {% elif request.blueprint == 'admin' %}

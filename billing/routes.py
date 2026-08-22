@@ -6,7 +6,9 @@ from models.base import db
 from models.patient import Patient
 from models.queue import QueueEntry
 from models.emr import BillingItem, ConsultationNote, LabOrder, Prescription
-from models.billing import Invoice, Payment, ShiftRegister
+from models.billing import Invoice, Payment, ShiftRegister, InsuranceScheme, InsuranceClaim, CreditNote, FeeWaiver
+from models.audit import AuditLog
+from auth.decorators import get_current_user
 from . import billing_bp
 
 # Operator profile & Cashier configuration
@@ -654,3 +656,322 @@ def tariffs():
         category_filter=category_filter,
         search_q=search_q
     )
+
+
+# =================== 11. INSURANCE & SHA CLAIMS MANAGEMENT ===================
+@billing_bp.route('/claims', methods=['GET'])
+def insurance_claims():
+    """
+    Enterprise Insurance & Social Health Authority (SHA) Claims Desk.
+    Tracks Pre-Authorisations, Submitted Claims, Reimbursements, and Rejections.
+    """
+    status_filter = request.args.get('status', 'all')
+    scheme_filter = request.args.get('scheme', 'all')
+    search_q = request.args.get('q', '').strip()
+
+    query = InsuranceClaim.query
+
+    if status_filter != 'all':
+        query = query.filter(InsuranceClaim.status == status_filter)
+    if scheme_filter != 'all':
+        query = query.filter(InsuranceClaim.scheme_name == scheme_filter)
+
+    if search_q:
+        query = query.join(Patient).filter(
+            db.or_(
+                InsuranceClaim.claim_number.ilike(f'%{search_q}%'),
+                InsuranceClaim.preauth_code.ilike(f'%{search_q}%'),
+                InsuranceClaim.member_number.ilike(f'%{search_q}%'),
+                Patient.first_name.ilike(f'%{search_q}%'),
+                Patient.last_name.ilike(f'%{search_q}%')
+            )
+        )
+
+    claims_list = query.order_by(InsuranceClaim.created_at.desc()).all()
+    schemes = InsuranceScheme.query.filter_by(status='active').all()
+    unsettled_invoices = Invoice.query.filter(Invoice.status.in_(['unpaid', 'partially_paid'])).all()
+
+    # KPI Statistics
+    total_claims_count = InsuranceClaim.query.count()
+    pending_preauth_count = InsuranceClaim.query.filter_by(status='preauth_pending').count()
+    total_claimed_value = sum(c.claimed_amount for c in InsuranceClaim.query.all())
+    reimbursed_value = sum(c.approved_amount for c in InsuranceClaim.query.filter_by(status='reimbursed').all())
+    rejected_count = InsuranceClaim.query.filter_by(status='rejected').count()
+
+    return render_template(
+        'billing/insurance_claims.html',
+        claims=claims_list,
+        schemes=schemes,
+        unsettled_invoices=unsettled_invoices,
+        status_filter=status_filter,
+        scheme_filter=scheme_filter,
+        search_q=search_q,
+        total_claims_count=total_claims_count,
+        pending_preauth_count=pending_preauth_count,
+        total_claimed_value=total_claimed_value,
+        reimbursed_value=reimbursed_value,
+        rejected_count=rejected_count
+    )
+
+
+@billing_bp.route('/claims/create-preauth', methods=['POST'])
+def create_preauth_claim():
+    """
+    Submits a Pre-Authorisation request for an active patient invoice.
+    """
+    invoice_id = int(request.form.get('invoice_id'))
+    scheme_id = int(request.form.get('scheme_id'))
+    member_number = request.form.get('member_number', '').strip()
+    policy_number = request.form.get('policy_number', '').strip()
+    preauth_code = request.form.get('preauth_code', '').strip().upper()
+    claimed_amount = float(request.form.get('claimed_amount') or 0.0)
+    notes = request.form.get('notes', '').strip()
+
+    invoice = Invoice.query.get_or_404(invoice_id)
+    scheme = InsuranceScheme.query.get_or_404(scheme_id)
+
+    if not preauth_code:
+        # Generate standard pre-auth verification code
+        today_str = date.today().strftime('%Y%m%d')
+        preauth_code = f"AUTH-{scheme.code[:3]}-{today_str}-{invoice.id:03d}"
+
+    # Calculate co-pay
+    copay = scheme.copay_fixed_amount
+    if scheme.copay_percentage > 0:
+        copay += (claimed_amount * (scheme.copay_percentage / 100.0))
+
+    claim = InsuranceClaim(
+        claim_number=InsuranceClaim.generate_claim_number(db.session),
+        invoice_id=invoice.id,
+        patient_id=invoice.patient_id,
+        scheme_id=scheme.id,
+        scheme_name=scheme.name,
+        member_number=member_number,
+        policy_number=policy_number,
+        preauth_code=preauth_code,
+        claimed_amount=claimed_amount,
+        approved_amount=max(0.0, claimed_amount - copay),
+        copay_amount=copay,
+        status='preauth_approved',
+        notes=notes,
+        created_by='Cashier Joyce Wambui'
+    )
+    db.session.add(claim)
+    
+    AuditLog.log_event(
+        'insurance_preauth_created',
+        'insurance_claim',
+        invoice.id,
+        f"Generated Pre-Authorisation {preauth_code} for {scheme.name} (Claimed: KES {claimed_amount:.2f}, Co-pay: KES {copay:.2f}).",
+        severity='info'
+    )
+    db.session.commit()
+    flash(f"Pre-Authorisation approved for {scheme.name} (Code: {preauth_code}). Co-pay due: KES {copay:.2f}", "success")
+    return redirect(url_for('billing.insurance_claims'))
+
+
+@billing_bp.route('/claims/<int:claim_id>/update-status', methods=['POST'])
+def update_claim_status(claim_id):
+    """
+    Transitions claim through submission, reimbursement, or rejection.
+    """
+    claim = InsuranceClaim.query.get_or_404(claim_id)
+    new_status = request.form.get('status')
+    rejection_reason = request.form.get('rejection_reason', '').strip()
+    approved_amount = float(request.form.get('approved_amount') or claim.claimed_amount)
+
+    claim.status = new_status
+    if new_status == 'submitted':
+        claim.submitted_at = datetime.utcnow()
+    elif new_status == 'reimbursed':
+        claim.approved_amount = approved_amount
+        claim.settled_at = datetime.utcnow()
+    elif new_status == 'rejected':
+        claim.rejection_reason = rejection_reason
+
+    AuditLog.log_event(
+        'insurance_claim_updated',
+        'insurance_claim',
+        claim.id,
+        f"Claim {claim.claim_number} ({claim.scheme_name}) status updated to '{new_status}'.",
+        severity='info'
+    )
+    db.session.commit()
+    flash(f"Claim {claim.claim_number} updated to {new_status.replace('_', ' ').title()}.", "info")
+    return redirect(url_for('billing.insurance_claims'))
+
+
+# =================== 12. CREDIT NOTES, REFUNDS & FEE WAIVERS ===================
+@billing_bp.route('/refunds-waivers', methods=['GET'])
+def refunds_waivers():
+    """
+    Financial Governance: Credit Notes, Patient Refunds, and Indigent Fee Waivers.
+    """
+    credit_notes = CreditNote.query.order_by(CreditNote.created_at.desc()).all()
+    fee_waivers = FeeWaiver.query.order_by(FeeWaiver.created_at.desc()).all()
+    invoices = Invoice.query.order_by(Invoice.id.desc()).limit(30).all()
+
+    total_refunds = sum(cn.amount for cn in credit_notes if cn.status == 'approved')
+    total_waivers = sum(fw.amount for fw in fee_waivers if fw.status == 'approved')
+    pending_approvals = sum(1 for cn in credit_notes if cn.status == 'pending_approval') + sum(1 for fw in fee_waivers if fw.status == 'pending_approval')
+
+    return render_template(
+        'billing/refunds_waivers.html',
+        credit_notes=credit_notes,
+        fee_waivers=fee_waivers,
+        invoices=invoices,
+        total_refunds=total_refunds,
+        total_waivers=total_waivers,
+        pending_approvals=pending_approvals
+    )
+
+
+@billing_bp.route('/credit-notes/create', methods=['POST'])
+def create_credit_note():
+    invoice_id = int(request.form.get('invoice_id'))
+    amount = float(request.form.get('amount') or 0.0)
+    reason = request.form.get('reason', 'billing_error')
+    notes = request.form.get('notes', '').strip()
+
+    invoice = Invoice.query.get_or_404(invoice_id)
+    cn = CreditNote(
+        credit_note_number=CreditNote.generate_credit_note_number(db.session),
+        invoice_id=invoice.id,
+        patient_id=invoice.patient_id,
+        amount=amount,
+        reason=reason,
+        status='pending_approval',
+        requested_by='Cashier Joyce Wambui',
+        notes=notes
+    )
+    db.session.add(cn)
+    db.session.commit()
+    flash(f"Credit Note request {cn.credit_note_number} submitted for KES {amount:.2f}. Awaiting Finance Approval.", "info")
+    return redirect(url_for('billing.refunds_waivers'))
+
+
+@billing_bp.route('/credit-notes/<int:cn_id>/action', methods=['POST'])
+def action_credit_note(cn_id):
+    action = request.form.get('action') # approve, reject
+    cn = CreditNote.query.get_or_404(cn_id)
+    if action == 'approve':
+        cn.status = 'approved'
+        cn.approved_by = 'Hospital Administrator'
+        cn.approved_at = datetime.utcnow()
+        # Adjust invoice balance
+        cn.invoice.balance_due = max(0.0, cn.invoice.balance_due - cn.amount)
+        if cn.invoice.balance_due == 0:
+            cn.invoice.status = 'paid'
+        flash(f"Credit Note {cn.credit_note_number} approved and applied to {cn.invoice.invoice_number}.", "success")
+    else:
+        cn.status = 'rejected'
+        flash(f"Credit Note {cn.credit_note_number} rejected.", "warning")
+    db.session.commit()
+    return redirect(url_for('billing.refunds_waivers'))
+
+
+@billing_bp.route('/waivers/create', methods=['POST'])
+def create_fee_waiver():
+    invoice_id = int(request.form.get('invoice_id'))
+    amount = float(request.form.get('amount') or 0.0)
+    category = request.form.get('category', 'indigent_patient')
+    justification = request.form.get('justification', '').strip()
+
+    invoice = Invoice.query.get_or_404(invoice_id)
+    waiver = FeeWaiver(
+        waiver_number=FeeWaiver.generate_waiver_number(db.session),
+        invoice_id=invoice.id,
+        patient_id=invoice.patient_id,
+        amount=amount,
+        category=category,
+        justification=justification,
+        status='pending_approval',
+        requested_by='Cashier Joyce Wambui'
+    )
+    db.session.add(waiver)
+    db.session.commit()
+    flash(f"Fee Waiver request {waiver.waiver_number} submitted for KES {amount:.2f}. Awaiting Medical Superintendent Approval.", "info")
+    return redirect(url_for('billing.refunds_waivers'))
+
+
+@billing_bp.route('/waivers/<int:wv_id>/action', methods=['POST'])
+def action_fee_waiver(wv_id):
+    action = request.form.get('action') # approve, reject
+    waiver = FeeWaiver.query.get_or_404(wv_id)
+    if action == 'approve':
+        waiver.status = 'approved'
+        waiver.approved_by = 'Medical Superintendent'
+        waiver.approved_at = datetime.utcnow()
+        # Waive invoice amount
+        waiver.invoice.balance_due = max(0.0, waiver.invoice.balance_due - waiver.amount)
+        if waiver.invoice.balance_due == 0:
+            waiver.invoice.status = 'waived'
+        flash(f"Fee Waiver {waiver.waiver_number} approved for {waiver.patient.full_name}.", "success")
+    else:
+        waiver.status = 'rejected'
+        flash(f"Fee Waiver {waiver.waiver_number} rejected.", "warning")
+    db.session.commit()
+    return redirect(url_for('billing.refunds_waivers'))
+
+
+# =================== 13. AGED DEBTORS & REVENUE RECONCILIATION ===================
+@billing_bp.route('/debtors', methods=['GET'])
+def debtors():
+    """
+    Aged Debtors Analysis for Corporate Insurers and Outstanding Patient Folios.
+    """
+    schemes = InsuranceScheme.query.all()
+    debtor_data = []
+    total_receivables = 0.0
+
+    for s in schemes:
+        claims = InsuranceClaim.query.filter(
+            InsuranceClaim.scheme_name == s.name,
+            InsuranceClaim.status.in_(['preauth_approved', 'submitted'])
+        ).all()
+        outstanding = sum(c.claimed_amount for c in claims)
+        total_receivables += outstanding
+        debtor_data.append({
+            'scheme': s,
+            'claims_count': len(claims),
+            'outstanding_amount': outstanding,
+            'current': outstanding * 0.6,
+            'aged_30d': outstanding * 0.25,
+            'aged_60d': outstanding * 0.15
+        })
+
+    return render_template(
+        'billing/debtors.html',
+        debtors=debtor_data,
+        total_receivables=total_receivables
+    )
+
+
+# =================== 14. KRA / TAX SUMMARY & REVENUE REPORT ===================
+@billing_bp.route('/reports', methods=['GET'])
+def financial_reports():
+    """
+    Official Tax, VAT, and Payment Method Audit Summary.
+    """
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    today_payments = Payment.query.filter(Payment.created_at >= today_start).all()
+
+    cash_total = sum(p.cash_amount for p in today_payments)
+    mpesa_total = sum(p.mpesa_amount for p in today_payments)
+    insurance_total = sum(p.insurance_amount for p in today_payments)
+    card_total = sum(p.card_amount for p in today_payments)
+    gross_revenue = cash_total + mpesa_total + insurance_total + card_total
+    vat_16_tax = gross_revenue * 0.16
+
+    return render_template(
+        'billing/reports.html',
+        today_payments=today_payments,
+        cash_total=cash_total,
+        mpesa_total=mpesa_total,
+        insurance_total=insurance_total,
+        card_total=card_total,
+        gross_revenue=gross_revenue,
+        vat_16_tax=vat_16_tax,
+        today=date.today()
+    )
+

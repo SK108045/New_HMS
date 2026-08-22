@@ -142,3 +142,152 @@ class ShiftRegister(db.Model):
 
     def __repr__(self):
         return f"<ShiftRegister {self.shift_code} Cashier={self.cashier_name} Status={self.status}>"
+
+
+class InsuranceScheme(db.Model):
+    """
+    Insurance Underwriter & Social Health Authority (SHA) Catalog.
+    """
+    __tablename__ = 'insurance_schemes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), unique=True, nullable=False)
+    code = db.Column(db.String(40), unique=True, nullable=False) # e.g. SHA-PUB, JUB-01, AAR-01, BRT-01
+    scheme_type = db.Column(db.String(40), default='private_insurer') # public_sha, private_insurer, corporate
+    coverage_percentage = db.Column(db.Float, default=100.0)
+    requires_preauth = db.Column(db.Boolean, default=True)
+    copay_fixed_amount = db.Column(db.Float, default=0.0)
+    copay_percentage = db.Column(db.Float, default=0.0)
+    contact_phone = db.Column(db.String(40), nullable=True)
+    claims_portal_url = db.Column(db.String(255), nullable=True)
+    status = db.Column(db.String(20), default='active') # active, suspended
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    claims = db.relationship('InsuranceClaim', back_populates='scheme', lazy=True)
+
+    def __repr__(self):
+        return f"<InsuranceScheme {self.name} ({self.code}) Type={self.scheme_type}>"
+
+
+class InsuranceClaim(db.Model):
+    """
+    Patient Insurance & SHA Pre-Authorisation / Reimbursement Claim.
+    """
+    __tablename__ = 'insurance_claims'
+
+    id = db.Column(db.Integer, primary_key=True)
+    claim_number = db.Column(db.String(60), unique=True, nullable=False)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoices.id'), nullable=False)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patients.id'), nullable=False)
+    scheme_id = db.Column(db.Integer, db.ForeignKey('insurance_schemes.id'), nullable=True)
+
+    scheme_name = db.Column(db.String(120), nullable=False)
+    member_number = db.Column(db.String(80), nullable=False)
+    policy_number = db.Column(db.String(80), nullable=True)
+    preauth_code = db.Column(db.String(80), nullable=True)
+
+    claimed_amount = db.Column(db.Float, nullable=False, default=0.0)
+    approved_amount = db.Column(db.Float, nullable=False, default=0.0)
+    copay_amount = db.Column(db.Float, nullable=False, default=0.0)
+
+    status = db.Column(db.String(40), default='preauth_pending') # preauth_pending, preauth_approved, submitted, reimbursed, rejected, disputed
+    rejection_reason = db.Column(db.Text, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
+    created_by = db.Column(db.String(120), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    submitted_at = db.Column(db.DateTime, nullable=True)
+    settled_at = db.Column(db.DateTime, nullable=True)
+
+    # Relationships
+    invoice = db.relationship('Invoice', backref=db.backref('insurance_claims', lazy=True))
+    patient = db.relationship('Patient', backref=db.backref('insurance_claims', lazy=True))
+    scheme = db.relationship('InsuranceScheme', back_populates='claims')
+
+    @classmethod
+    def generate_claim_number(cls, session=None):
+        today_str = date.today().strftime('%Y%m%d')
+        sess = session or db.session
+        count = sess.query(cls).filter(
+            cls.claim_number.like(f'CLM-{today_str}-%')
+        ).count()
+        return f"CLM-{today_str}-{count + 1:04d}"
+
+    def __repr__(self):
+        return f"<InsuranceClaim {self.claim_number} Scheme={self.scheme_name} Status={self.status} Amount={self.claimed_amount}>"
+
+
+class CreditNote(db.Model):
+    """
+    Credit Note & Patient Refund Request with Dual-Authorization.
+    """
+    __tablename__ = 'credit_notes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    credit_note_number = db.Column(db.String(60), unique=True, nullable=False)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoices.id'), nullable=False)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patients.id'), nullable=False)
+
+    amount = db.Column(db.Float, nullable=False)
+    reason = db.Column(db.String(80), nullable=False) # billing_error, medication_returned, service_cancelled, overpayment
+    status = db.Column(db.String(30), default='pending_approval') # pending_approval, approved, rejected
+    requested_by = db.Column(db.String(120), nullable=False)
+    approved_by = db.Column(db.String(120), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    approved_at = db.Column(db.DateTime, nullable=True)
+
+    invoice = db.relationship('Invoice', backref=db.backref('credit_notes', lazy=True))
+    patient = db.relationship('Patient', backref=db.backref('credit_notes', lazy=True))
+
+    @classmethod
+    def generate_credit_note_number(cls, session=None):
+        today_str = date.today().strftime('%Y%m%d')
+        sess = session or db.session
+        count = sess.query(cls).filter(
+            cls.credit_note_number.like(f'CRN-{today_str}-%')
+        ).count()
+        return f"CRN-{today_str}-{count + 1:04d}"
+
+    def __repr__(self):
+        return f"<CreditNote {self.credit_note_number} Amount={self.amount} Status={self.status}>"
+
+
+class FeeWaiver(db.Model):
+    """
+    Indigent Patient & Emergency Fee Waivers with Administrative Oversight.
+    """
+    __tablename__ = 'fee_waivers'
+
+    id = db.Column(db.Integer, primary_key=True)
+    waiver_number = db.Column(db.String(60), unique=True, nullable=False)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoices.id'), nullable=False)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patients.id'), nullable=False)
+
+    amount = db.Column(db.Float, nullable=False)
+    category = db.Column(db.String(80), default='indigent_patient') # indigent_patient, staff_discount, clinical_emergency, board_approved
+    justification = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(30), default='pending_approval') # pending_approval, approved, rejected
+    requested_by = db.Column(db.String(120), nullable=False)
+    approved_by = db.Column(db.String(120), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    approved_at = db.Column(db.DateTime, nullable=True)
+
+    invoice = db.relationship('Invoice', backref=db.backref('fee_waivers', lazy=True))
+    patient = db.relationship('Patient', backref=db.backref('fee_waivers', lazy=True))
+
+    @classmethod
+    def generate_waiver_number(cls, session=None):
+        today_str = date.today().strftime('%Y%m%d')
+        sess = session or db.session
+        count = sess.query(cls).filter(
+            cls.waiver_number.like(f'WVR-{today_str}-%')
+        ).count()
+        return f"WVR-{today_str}-{count + 1:04d}"
+
+    def __repr__(self):
+        return f"<FeeWaiver {self.waiver_number} Amount={self.amount} Status={self.status}>"
+

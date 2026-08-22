@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Tax, VAT & Revenue Reports - Apex Medical HMS{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header Banner -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border-2 border-slate-300 shadow-xs">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono font-bold text-slate-600 uppercase">
+                <span>STATUTORY & TAX REVENUE COMPLIANCE</span>
+                <span>&bull;</span>
+                <span>KRA FISCAL REPORT</span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-950 mt-1">Tax, VAT & Daily Revenue Reconciliation</h1>
+            <p class="text-xs text-slate-600 font-medium">Daily transaction breakdown across M-Pesa, Cash, Insurance, and Card payments with 16% standard VAT calculations.</p>
+        </div>
+        <div class="flex items-center gap-2 font-mono text-xs text-slate-600">
+            <span>Report Date:</span>
+            <span class="px-2.5 py-1 rounded bg-slate-100 border font-bold text-slate-900">{{ today.strftime('%d %b %Y') }}</span>
+        </div>
+    </div>
+
+    <!-- Revenue Summary Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div class="p-4 bg-white rounded-2xl border-2 border-slate-300 shadow-xs">
+            <div class="text-[10px] font-mono font-bold text-slate-500 uppercase">Total Gross Revenue</div>
+            <div class="text-xl font-black text-slate-950 mt-1">KES {{ "{:,.2f}".format(gross_revenue) }}</div>
+        </div>
+        <div class="p-4 bg-emerald-50 rounded-2xl border-2 border-emerald-300 shadow-xs">
+            <div class="text-[10px] font-mono font-bold text-emerald-900 uppercase">Cash Collections</div>
+            <div class="text-lg font-black text-emerald-950 mt-1">KES {{ "{:,.2f}".format(cash_total) }}</div>
+        </div>
+        <div class="p-4 bg-emerald-50 rounded-2xl border-2 border-emerald-300 shadow-xs">
+            <div class="text-[10px] font-mono font-bold text-emerald-900 uppercase">M-Pesa Collections</div>
+            <div class="text-lg font-black text-emerald-950 mt-1">KES {{ "{:,.2f}".format(mpesa_total) }}</div>
+        </div>
+        <div class="p-4 bg-blue-50 rounded-2xl border-2 border-blue-300 shadow-xs">
+            <div class="text-[10px] font-mono font-bold text-blue-900 uppercase">Insurance / SHA</div>
+            <div class="text-lg font-black text-blue-950 mt-1">KES {{ "{:,.2f}".format(insurance_total) }}</div>
+        </div>
+        <div class="p-4 bg-purple-50 rounded-2xl border-2 border-purple-300 shadow-xs">
+            <div class="text-[10px] font-mono font-bold text-purple-900 uppercase">VAT Liability (16%)</div>
+            <div class="text-lg font-black text-purple-950 mt-1">KES {{ "{:,.2f}".format(vat_16_tax) }}</div>
+        </div>
+    </div>
+
+    <!-- Settlement Vouchers Table -->
+    <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-xs overflow-hidden">
+        <div class="p-4 border-b-2 border-slate-300 bg-slate-50 flex items-center justify-between">
+            <h3 class="text-sm font-black text-slate-950 uppercase font-mono">Today's Settled Tax Receipts</h3>
+            <span class="text-xs text-slate-500 font-mono">{{ today_payments|length }} Transactions</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-100 border-b-2 border-slate-300 text-slate-800 font-mono uppercase text-[11px]">
+                        <th class="p-3.5">Receipt #</th>
+                        <th class="p-3.5">Patient</th>
+                        <th class="p-3.5">Invoice #</th>
+                        <th class="p-3.5">Payment Method</th>
+                        <th class="p-3.5 text-right">Gross Paid</th>
+                        <th class="p-3.5 text-right">Cashier</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for p in today_payments %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3.5 font-mono font-black text-slate-950">{{ p.receipt_number }}</td>
+                            <td class="p-3.5 font-bold text-slate-900">{{ p.patient.full_name }}</td>
+                            <td class="p-3.5 font-mono text-slate-600">{{ p.invoice.invoice_number }}</td>
+                            <td class="p-3.5">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-800 border">
+                                    {{ p.payment_method_summary }}
+                                </span>
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-black text-slate-950">
+                                KES {{ "{:,.2f}".format(p.total_amount_paid) }}
+                            </td>
+                            <td class="p-3.5 text-right text-slate-600 text-[11px] font-mono">{{ p.cashier_name }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="p-8 text-center text-slate-500">No payment receipts logged today.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Aged Debtors & Insurer Receivables - Apex Medical HMS{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Header Banner -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border-2 border-slate-300 shadow-xs">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-mono font-bold text-slate-600 uppercase">
+                <span>ACCOUNTS RECEIVABLE (AR)</span>
+                <span>&bull;</span>
+                <span>INSURER AGING SCHEDULE</span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-black text-slate-950 mt-1">Aged Debtors & Corporate Receivables</h1>
+            <p class="text-xs text-slate-600 font-medium">Breakdown of outstanding claims by aging bracket (Current, 30 Days, 60 Days, 90+ Days) for financial follow-up and remittance.</p>
+        </div>
+        <div class="p-3 bg-blue-50 border-2 border-blue-200 rounded-2xl text-right">
+            <div class="text-[10px] font-mono font-bold text-blue-900 uppercase">Total Outstanding Receivables</div>
+            <div class="text-xl font-black text-blue-950">KES {{ "{:,.2f}".format(total_receivables) }}</div>
+        </div>
+    </div>
+
+    <!-- Debtors Schedule Table -->
+    <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="bg-slate-100 border-b-2 border-slate-300 text-slate-800 font-mono uppercase text-[11px]">
+                        <th class="p-3.5">Insurer / Corporate Payer</th>
+                        <th class="p-3.5 text-center">Active Claims</th>
+                        <th class="p-3.5 text-right">Current (0-30d)</th>
+                        <th class="p-3.5 text-right">Aged 31-60d</th>
+                        <th class="p-3.5 text-right">Aged 61-90d+</th>
+                        <th class="p-3.5 text-right">Total Balance</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for d in debtors %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3.5">
+                                <div class="font-black text-slate-950 text-sm">{{ d.scheme.name }}</div>
+                                <div class="text-[10px] text-slate-500 font-mono">Code: {{ d.scheme.code }} &bull; {{ d.scheme.scheme_type.replace('_', ' ').title() }}</div>
+                            </td>
+                            <td class="p-3.5 text-center font-bold font-mono text-slate-700">
+                                {{ d.claims_count }}
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-bold text-slate-900">
+                                KES {{ "{:,.2f}".format(d.current) }}
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-bold text-amber-900">
+                                KES {{ "{:,.2f}".format(d.aged_30d) }}
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-bold text-rose-900">
+                                KES {{ "{:,.2f}".format(d.aged_60d) }}
+                            </td>
+                            <td class="p-3.5 text-right font-mono font-black text-slate-950 text-sm">
+                                KES {{ "{:,.2f}".format(d.outstanding_amount) }}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="p-8 text-center text-slate-500">No active insurer debtor accounts found.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
