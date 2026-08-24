@@ -17,6 +17,7 @@ from .audit import AuditLog
 from .inpatient import Ward, Bed, Admission, BedTransfer, NursingNote, WardRoundNote
 from .security import SecuritySetting, Permission, RolePermission
 from .document import ClinicalDocument
+from .sms import SMSLog, PatientOTP
 
 __all__ = [
     'db',
@@ -56,5 +57,7 @@ __all__ = [
     'SecuritySetting',
     'Permission',
     'RolePermission',
-    'ClinicalDocument'
+    'ClinicalDocument',
+    'SMSLog',
+    'PatientOTP'
 ]

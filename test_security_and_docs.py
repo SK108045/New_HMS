@@ -9,7 +9,8 @@ from models import (
     Patient, Prescription, AuditLog, Invoice, Payment,
     InsuranceScheme, InsuranceClaim, CreditNote, FeeWaiver,
     Supplier, PurchaseOrder, PurchaseOrderItem, ControlledDrugLog, QuarantineRecord,
-    MedicationItem, DrugBatch, Appointment, DoctorSchedule, QueueEntry
+    MedicationItem, DrugBatch, Appointment, DoctorSchedule, QueueEntry,
+    SMSLog, PatientOTP
 )
 
 def run_test_suite():
@@ -618,8 +619,62 @@ def run_test_suite():
         assert sched.max_patients_per_day == 25
     print("   ✓ Doctor duty roster & slot capacity updated via Doctor Portal")
 
-    # 21. Immutable Audit Trail Verification
-    print("21. Verifying Immutable Audit Trail Telemetry...")
+    # 21. Africa's Talking Live Telephony, SMS Dispatch & Patient OTP Verification
+    print("21. Testing Africa's Talking Live Telephony, SMS Dispatch & Patient OTP...")
+    
+    with client.session_transaction() as sess:
+        sess['user_id'] = rec_id
+        sess['username'] = 'reception'
+        sess['role'] = 'receptionist'
+        sess['portal'] = 'reception'
+        sess['2fa_verified'] = True
+
+    # Test Telephony Hub GET
+    res_tel = client.get('/reception/telephony')
+    assert res_tel.status_code == 200
+    print("   ✓ Telephony & SMS Command Center rendered (200 OK)")
+
+    # Test Live Custom SMS sending
+    res_live_sms = client.post('/reception/telephony/send-sms', data={
+        'recipient': '+254756205063',
+        'message_text': 'Apex Medical Automated Test: Africa\'s Talking SMS pipeline verified.',
+        'message_type': 'custom'
+    }, follow_redirects=True)
+    assert res_live_sms.status_code == 200
+    with app.app_context():
+        last_sms = SMSLog.query.order_by(SMSLog.id.desc()).first()
+        assert last_sms is not None
+        assert last_sms.status == 'Success'
+        assert last_sms.recipient == '+254756205063'
+    print(f"   ✓ Live SMS dispatched: Ref {last_sms.message_id} (Cost: {last_sms.cost})")
+
+    # Test 6-Digit OTP Generation & SMS Transmission
+    res_otp_send = client.post('/reception/telephony/send-otp', data={
+        'phone': '+254756205063',
+        'purpose': 'patient_verification'
+    }, follow_redirects=True)
+    assert res_otp_send.status_code == 200
+    with app.app_context():
+        last_otp = PatientOTP.query.order_by(PatientOTP.id.desc()).first()
+        assert last_otp is not None
+        assert len(last_otp.otp_code) == 6
+        assert last_otp.is_verified is False
+        otp_val = last_otp.otp_code
+    print(f"   ✓ 6-Digit Verification OTP generated and sent via SMS (Code: {otp_val})")
+
+    # Test OTP Verification
+    res_otp_v = client.post('/reception/telephony/verify-otp', data={
+        'phone': '+254756205063',
+        'otp_code': otp_val
+    }, follow_redirects=True)
+    assert res_otp_v.status_code == 200
+    with app.app_context():
+        otp_rec = PatientOTP.query.filter_by(otp_code=otp_val).order_by(PatientOTP.id.desc()).first()
+        assert otp_rec.is_verified is True
+    print("   ✓ Patient phone OTP verification confirmed successfully")
+
+    # 22. Immutable Audit Trail Verification
+    print("22. Verifying Immutable Audit Trail Telemetry...")
     with app.app_context():
         audit_events = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(10).all()
         assert len(audit_events) > 0
@@ -627,7 +682,7 @@ def run_test_suite():
         print(f"   ✓ Recent Audit Actions: {', '.join(actions[:5])}")
 
     print("\n" + "="*70)
-    print("🎉 ALL 20 TEST MODULES PASSED 100%! APPOINTMENTS, SMS/WA REMINDERS, ROSTER & RBAC FULLY OPERATIONAL")
+    print("🎉 ALL 21 TEST MODULES PASSED 100%! AFRICA'S TALKING SMS, OTPs, ROSTER & RBAC FULLY OPERATIONAL")
     print("="*70 + "\n")
 
 if __name__ == '__main__':

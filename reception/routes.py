@@ -2,7 +2,8 @@ from datetime import datetime, date, timedelta
 from flask import render_template, request, redirect, url_for, flash, jsonify, current_app
 from sqlalchemy import or_, and_, desc, func
 
-from models import db, Patient, QueueEntry, Appointment, DoctorSchedule, AuditLog
+from models import db, Patient, QueueEntry, Appointment, DoctorSchedule, AuditLog, SMSLog, PatientOTP
+from services.sms_service import sms_service
 from . import reception_bp
 from .utils import save_webcam_or_uploaded_photo, parse_dob
 
@@ -666,28 +667,34 @@ def cancel_appointment(appointment_id):
 @reception_bp.route('/appointments/<int:appointment_id>/send-reminder', methods=['POST'])
 def send_appointment_reminder(appointment_id):
     """
-    Multi-Channel Reminder Engine: Dispatches simulated SMS & WhatsApp reminders.
+    Multi-Channel Reminder Engine: Dispatches live Africa's Talking SMS and generates WhatsApp links.
     """
     app_entry = Appointment.query.get_or_404(appointment_id)
     channel = request.form.get('channel', 'both')  # 'sms', 'whatsapp', 'both'
     patient = app_entry.patient
 
     app_entry.last_reminder_at = datetime.utcnow()
+    sms_result = None
+
     if channel in ['sms', 'both']:
+        sms_result = sms_service.send_appointment_reminder(app_entry.id)
         app_entry.reminder_sent_sms = True
+
     if channel in ['whatsapp', 'both']:
         app_entry.reminder_sent_whatsapp = True
 
-    AuditLog.log_event(
-        'appointment_reminder_dispatched',
-        'appointment',
-        app_entry.id,
-        f"Dispatched {channel.upper()} reminder to {patient.phone} for appointment on {app_entry.scheduled_date} at {app_entry.scheduled_time}."
-    )
     db.session.commit()
 
-    msg = f"✓ Reminder successfully sent to {patient.full_name} ({patient.phone}) via {channel.upper()}!"
-    flash(msg, "success")
+    if sms_result and sms_result.get('success'):
+        msg = f"✓ Live SMS reminder successfully delivered to {patient.full_name} ({patient.phone}) via Africa's Talking!"
+        flash(msg, "success")
+    elif sms_result and not sms_result.get('success'):
+        msg = f"⚠ SMS delivery failed: {sms_result.get('error', 'Unknown gateway error')}"
+        flash(msg, "error")
+    else:
+        msg = f"✓ WhatsApp reminder link generated for {patient.full_name} ({patient.phone})."
+        flash(msg, "success")
+
     return redirect(url_for('reception.appointments', date=app_entry.scheduled_date.strftime('%Y-%m-%d')))
 
 
@@ -704,7 +711,9 @@ def checkin_from_appointment(appointment_id):
     ).first()
 
     if existing_ticket:
-        flash(f"Patient {patient.full_name} is already in the queue ({existing_ticket.ticket_number}).", "warning")
+        app_entry.status = 'checked_in'
+        db.session.commit()
+        flash(f"Patient {patient.full_name} is already in the queue ({existing_ticket.ticket_number}). Appointment marked checked-in.", "warning")
         return redirect(url_for('reception.appointments', date=app_entry.scheduled_date.strftime('%Y-%m-%d')))
 
     ticket_number = QueueEntry.generate_daily_ticket(db.session)
@@ -731,4 +740,130 @@ def checkin_from_appointment(appointment_id):
 
     flash(f"Checked in {patient.full_name} from appointment as ticket {ticket_number}.", "success")
     return redirect(url_for('reception.dashboard'))
+
+
+# =================== RECEPTION TELEPHONY & SMS COMMAND CENTER ===================
+
+@reception_bp.route('/telephony', methods=['GET'])
+def telephony_hub():
+    """
+    Live Telephony, Africa's Talking SMS Dispatcher & Patient OTP Verification Center.
+    """
+    all_patients = Patient.query.order_by(Patient.full_name.asc()).all()
+    selected_patient_id = request.args.get('patient_id', type=int)
+    selected_patient = Patient.query.get(selected_patient_id) if selected_patient_id else None
+
+    # Fetch recent SMS delivery logs
+    sms_logs = SMSLog.query.order_by(SMSLog.created_at.desc()).limit(50).all()
+
+    # Active unverified OTPs
+    active_otps = PatientOTP.query.filter(
+        PatientOTP.expires_at > datetime.utcnow(),
+        PatientOTP.is_verified == False
+    ).order_by(PatientOTP.created_at.desc()).limit(20).all()
+
+    # Total SMS telemetry
+    total_sent = SMSLog.query.count()
+    total_success = SMSLog.query.filter_by(status='Success').count()
+    total_failed = SMSLog.query.filter_by(status='Failed').count()
+
+    return render_template(
+        'reception/telephony.html',
+        all_patients=all_patients,
+        selected_patient=selected_patient,
+        sms_logs=sms_logs,
+        active_otps=active_otps,
+        total_sent=total_sent,
+        total_success=total_success,
+        total_failed=total_failed,
+        gateway_active=sms_service._initialized,
+        api_username=sms_service.username
+    )
+
+
+@reception_bp.route('/telephony/send-sms', methods=['POST'])
+def send_custom_sms():
+    """
+    Dispatches a custom broadcast/direct SMS to a patient or telephone number.
+    """
+    recipient = request.form.get('recipient', '').strip()
+    patient_id = request.form.get('patient_id', type=int) or None
+    message_text = request.form.get('message_text', '').strip()
+    msg_type = request.form.get('message_type', 'custom')
+
+    if not recipient or not message_text:
+        flash("Please provide both recipient phone number and message content.", "error")
+        return redirect(url_for('reception.telephony_hub', patient_id=patient_id))
+
+    res = sms_service.send_sms(recipient, message_text, patient_id=patient_id, message_type=msg_type)
+
+    if res.get('success'):
+        flash(f"✓ SMS sent successfully to {recipient} via Africa's Talking! (Cost: {res.get('cost', 'KES 0.8000')})", "success")
+    else:
+        flash(f"⚠ SMS failed: {res.get('error', 'Transmission error')}", "error")
+
+    return redirect(url_for('reception.telephony_hub', patient_id=patient_id))
+
+
+@reception_bp.route('/telephony/send-otp', methods=['POST'])
+def send_patient_otp():
+    """
+    Generates and dispatches a live 6-digit verification OTP code to the patient's phone.
+    """
+    patient_id = request.form.get('patient_id', type=int) or None
+    phone = request.form.get('phone', '').strip() or None
+    purpose = request.form.get('purpose', 'patient_verification')
+
+    if not patient_id and not phone:
+        flash("Please specify a patient or telephone number for OTP delivery.", "error")
+        return redirect(url_for('reception.telephony_hub'))
+
+    res = sms_service.generate_and_send_otp(patient_id, phone=phone, purpose=purpose)
+
+    if res.get('success'):
+        flash(f"✓ Verification OTP dispatched via Africa's Talking SMS to {phone or 'patient'}! (Valid for 10 mins)", "success")
+    else:
+        flash(f"⚠ Failed to dispatch OTP: {res.get('error')}", "error")
+
+    return redirect(url_for('reception.telephony_hub', patient_id=patient_id))
+
+
+@reception_bp.route('/telephony/verify-otp', methods=['POST'])
+def verify_patient_otp():
+    """
+    Validates a 6-digit OTP code submitted by the patient.
+    """
+    phone = request.form.get('phone', '').strip()
+    otp_code = request.form.get('otp_code', '').strip()
+    patient_id = request.form.get('patient_id', type=int) or None
+
+    if not phone or not otp_code:
+        flash("Please provide phone number and 6-digit OTP code.", "error")
+        return redirect(url_for('reception.telephony_hub', patient_id=patient_id))
+
+    res = sms_service.verify_otp(phone, otp_code, patient_id=patient_id)
+
+    if res.get('verified'):
+        flash(f"✓ Phone Number {phone} Verified Successfully! Identity Confirmed.", "success")
+    else:
+        flash(f"⚠ OTP Verification Failed: {res.get('error')}", "error")
+
+    return redirect(url_for('reception.telephony_hub', patient_id=patient_id))
+
+
+@reception_bp.route('/telephony/queue-alert/<int:queue_id>', methods=['POST'])
+def send_queue_sms(queue_id):
+    """
+    Triggers live SMS notification to a queued patient when their ticket is called.
+    """
+    entry = QueueEntry.query.get_or_404(queue_id)
+    res = sms_service.send_queue_alert(entry.id)
+
+    if res.get('success'):
+        flash(f"✓ Queue notice SMS sent to {entry.patient.full_name} ({entry.patient.phone})!", "success")
+    else:
+        flash(f"⚠ Queue SMS failed: {res.get('error')}", "error")
+
+    return redirect(request.referrer or url_for('reception.dashboard'))
+
 
