@@ -1182,14 +1182,15 @@
         </div>
     </div>
 
-    <!-- =================== GLOBAL INTERACTIVE ACTION FEEDBACK MODAL =================== -->
-    {% with flashed_items = get_flashed_messages(with_categories=true) %}
+    <!-- =================== ACTION SUCCESS / ERROR FEEDBACK MODAL =================== -->
+    {% with modal_items = get_flashed_messages(with_categories=true) %}
+    {% set active_modal = (modal_items | selectattr(0, 'in', ['modal_success', 'modal_error', 'modal_warning', 'modal_info']) | list) %}
     <div 
         x-data="{
-            isOpen: {% if flashed_items %}true{% else %}false{% endif %},
-            type: '{% if flashed_items %}{{ flashed_items[0][0] }}{% else %}success{% endif %}',
-            title: '{% if flashed_items %}{% if flashed_items[0][0] == 'success' %}Action Completed Successfully!{% elif flashed_items[0][0] == 'error' %}Action Failed / Error{% elif flashed_items[0][0] == 'warning' %}Notice / Warning{% else %}Hospital Notification{% endif %}{% else %}Success{% endif %}',
-            message: '{% if flashed_items %}{{ flashed_items[0][1]|replace('\'', '\\\'')|replace('\n', ' ') }}{% else %}{% endif %}',
+            isOpen: {% if active_modal %}true{% else %}false{% endif %},
+            type: '{% if active_modal %}{{ active_modal[0][0].replace('modal_', '') }}{% else %}success{% endif %}',
+            title: '{% if active_modal %}{% if active_modal[0][0] == 'modal_success' %}Action Completed Successfully!{% elif active_modal[0][0] == 'modal_error' %}Action Failed / Error{% elif active_modal[0][0] == 'modal_warning' %}Notice / Warning{% else %}Hospital Notification{% endif %}{% else %}Success{% endif %}',
+            message: '{% if active_modal %}{{ active_modal[0][1]|replace('\'', '\\\'')|replace('\n', ' ') }}{% else %}{% endif %}',
             close() {
                 this.isOpen = false;
             }

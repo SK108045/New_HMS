@@ -554,7 +554,7 @@ def appointments():
             f"Appointment {new_app.appointment_number} booked for {patient.full_name} with {doctor_name or 'General OPD'} on {parsed_date} at {scheduled_time}."
         )
 
-        flash(f"Appointment {new_app.appointment_number} booked for {patient.full_name} on {parsed_date} at {scheduled_time}.", "success")
+        flash(f"Appointment {new_app.appointment_number} booked for {patient.full_name} on {parsed_date} at {scheduled_time}.", "modal_success")
         return redirect(url_for('reception.appointments', date=parsed_date.strftime('%Y-%m-%d')))
 
     # Fetch appointments for the filtered date
@@ -593,21 +593,22 @@ def appointments():
         ).count()
 
         remaining_slots = max(0, sched.max_patients_per_day - booked_for_date)
-        is_full = booked_for_date >= sched.max_patients_per_day
+        is_full = (booked_for_date >= sched.max_patients_per_day)
 
         doctor_capacity_cards.append({
             'schedule': sched,
             'booked_count': booked_for_date,
             'max_capacity': sched.max_patients_per_day,
             'remaining_slots': remaining_slots,
-            'is_full': is_full,
-            'live_caseload': live_caseload
+            'live_caseload': live_caseload,
+            'is_full': is_full
         })
 
     all_patients = Patient.query.order_by(Patient.full_name.asc()).all()
     selected_patient_id = request.args.get('patient_id', type=int)
+    available_doctors = [d['schedule'].doctor_name for d in doctor_capacity_cards]
 
-    # Key metrics
+    # Metric counts
     total_day_appointments = len(day_appointments)
     confirmed_count = sum(1 for a in day_appointments if a.status == 'confirmed')
     checked_in_count = sum(1 for a in day_appointments if a.status == 'checked_in')
@@ -616,13 +617,15 @@ def appointments():
     return render_template(
         'reception/appointments.html',
         filter_date=filter_date,
+        selected_date_str=selected_date_str,
+        status_filter=status_filter,
+        doctor_filter=doctor_filter,
         day_appointments=day_appointments,
         upcoming_appointments=upcoming_appointments,
         doctor_capacity_cards=doctor_capacity_cards,
         all_patients=all_patients,
         selected_patient_id=selected_patient_id,
-        status_filter=status_filter,
-        doctor_filter=doctor_filter,
+        available_doctors=available_doctors,
         total_day_appointments=total_day_appointments,
         confirmed_count=confirmed_count,
         checked_in_count=checked_in_count,
@@ -638,7 +641,7 @@ def confirm_appointment(appointment_id):
     app_entry = Appointment.query.get_or_404(appointment_id)
     app_entry.status = 'confirmed'
     db.session.commit()
-    flash(f"Appointment {app_entry.appointment_number or app_entry.id} confirmed for {app_entry.patient.full_name}.", "success")
+    flash(f"Appointment {app_entry.appointment_number or app_entry.id} confirmed for {app_entry.patient.full_name}.", "modal_success")
     return redirect(url_for('reception.appointments', date=app_entry.scheduled_date.strftime('%Y-%m-%d')))
 
 
@@ -660,7 +663,7 @@ def cancel_appointment(appointment_id):
         f"Appointment {app_entry.appointment_number or app_entry.id} cancelled. Reason: {reason}",
         severity='warning'
     )
-    flash(f"Appointment cancelled for {app_entry.patient.full_name}.", "info")
+    flash(f"Appointment cancelled for {app_entry.patient.full_name}.", "modal_warning")
     return redirect(url_for('reception.appointments', date=app_entry.scheduled_date.strftime('%Y-%m-%d')))
 
 
@@ -687,13 +690,13 @@ def send_appointment_reminder(appointment_id):
 
     if sms_result and sms_result.get('success'):
         msg = f"✓ Live SMS reminder successfully delivered to {patient.full_name} ({patient.phone}) via Africa's Talking!"
-        flash(msg, "success")
+        flash(msg, "modal_success")
     elif sms_result and not sms_result.get('success'):
         msg = f"⚠ SMS delivery failed: {sms_result.get('error', 'Unknown gateway error')}"
-        flash(msg, "error")
+        flash(msg, "modal_error")
     else:
         msg = f"✓ WhatsApp reminder link generated for {patient.full_name} ({patient.phone})."
-        flash(msg, "success")
+        flash(msg, "modal_success")
 
     return redirect(url_for('reception.appointments', date=app_entry.scheduled_date.strftime('%Y-%m-%d')))
 
@@ -713,7 +716,7 @@ def checkin_from_appointment(appointment_id):
     if existing_ticket:
         app_entry.status = 'checked_in'
         db.session.commit()
-        flash(f"Patient {patient.full_name} is already in the queue ({existing_ticket.ticket_number}). Appointment marked checked-in.", "warning")
+        flash(f"Patient {patient.full_name} is already in the queue ({existing_ticket.ticket_number}). Appointment marked checked-in.", "modal_warning")
         return redirect(url_for('reception.appointments', date=app_entry.scheduled_date.strftime('%Y-%m-%d')))
 
     ticket_number = QueueEntry.generate_daily_ticket(db.session)
@@ -738,7 +741,7 @@ def checkin_from_appointment(appointment_id):
         f"Checked in patient {patient.full_name} from appointment {app_entry.appointment_number or app_entry.id} as ticket {ticket_number} (Assigned: {app_entry.doctor_name or 'General OPD'})."
     )
 
-    flash(f"Checked in {patient.full_name} from appointment as ticket {ticket_number}.", "success")
+    flash(f"Checked in {patient.full_name} from appointment as ticket {ticket_number}.", "modal_success")
     return redirect(url_for('reception.dashboard'))
 
 
@@ -794,16 +797,16 @@ def send_custom_sms():
     is_live = (request.form.get('send_mode') == 'live')
 
     if not recipient or not message_text:
-        flash("Please provide both recipient phone number and message content.", "error")
+        flash("Please provide both recipient phone number and message content.", "modal_error")
         return redirect(url_for('reception.telephony_hub', patient_id=patient_id))
 
     res = sms_service.send_sms(recipient, message_text, patient_id=patient_id, message_type=msg_type, is_live=is_live)
 
     if res.get('success'):
         mode_label = "via Africa's Talking Live Gateway" if not res.get('simulated') else "(Safe Simulation Mode - Zero Cost)"
-        flash(f"✓ SMS processed successfully {mode_label}! Ref: {res.get('message_id')}", "success")
+        flash(f"✓ SMS processed successfully {mode_label}! Ref: {res.get('message_id')}", "modal_success")
     else:
-        flash(f"⚠ SMS failed: {res.get('error', 'Transmission error')}", "error")
+        flash(f"⚠ SMS failed: {res.get('error', 'Transmission error')}", "modal_error")
 
     return redirect(url_for('reception.telephony_hub', patient_id=patient_id))
 
@@ -819,16 +822,16 @@ def send_patient_otp():
     is_live = (request.form.get('send_mode') == 'live')
 
     if not patient_id and not phone:
-        flash("Please specify a patient or telephone number for OTP delivery.", "error")
+        flash("Please specify a patient or telephone number for OTP delivery.", "modal_error")
         return redirect(url_for('reception.telephony_hub'))
 
     res = sms_service.generate_and_send_otp(patient_id, phone=phone, purpose=purpose, is_live=is_live)
 
     if res.get('success'):
         mode_label = "via Africa's Talking Live SMS" if not res.get('simulated') else "(Safe Simulation Mode)"
-        flash(f"✓ 6-Digit OTP code ({res.get('otp_code_preview')}) generated {mode_label}! Valid for 10 minutes.", "success")
+        flash(f"✓ 6-Digit OTP code ({res.get('otp_code_preview')}) generated {mode_label}! Valid for 10 minutes.", "modal_success")
     else:
-        flash(f"⚠ Failed to dispatch OTP: {res.get('error')}", "error")
+        flash(f"⚠ Failed to dispatch OTP: {res.get('error')}", "modal_error")
 
     return redirect(url_for('reception.telephony_hub', patient_id=patient_id))
 
@@ -843,15 +846,15 @@ def verify_patient_otp():
     patient_id = request.form.get('patient_id', type=int) or None
 
     if not phone or not otp_code:
-        flash("Please provide phone number and 6-digit OTP code.", "error")
+        flash("Please provide phone number and 6-digit OTP code.", "modal_error")
         return redirect(url_for('reception.telephony_hub', patient_id=patient_id))
 
     res = sms_service.verify_otp(phone, otp_code, patient_id=patient_id)
 
     if res.get('verified'):
-        flash(f"✓ Phone Number {phone} Verified Successfully! Patient identity confirmed.", "success")
+        flash(f"✓ Phone Number {phone} Verified Successfully! Patient identity confirmed.", "modal_success")
     else:
-        flash(f"⚠ OTP Verification Failed: {res.get('error')}", "error")
+        flash(f"⚠ OTP Verification Failed: {res.get('error')}", "modal_error")
 
     return redirect(url_for('reception.telephony_hub', patient_id=patient_id))
 
