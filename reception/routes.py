@@ -561,8 +561,8 @@ def appointments():
     query = Appointment.query.filter(Appointment.scheduled_date == filter_date)
     if status_filter != 'all':
         query = query.filter(Appointment.status == status_filter)
-    if doctor_filter != 'all':
-        query = query.filter(Appointment.doctor_name == doctor_filter)
+    if doctor_filter != 'all' and doctor_filter.strip():
+        query = query.filter(Appointment.doctor_name.ilike(f"%{doctor_filter.strip()}%"))
 
     day_appointments = query.order_by(Appointment.scheduled_time.asc()).all()
 

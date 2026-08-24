@@ -68,21 +68,28 @@
     <div>
         <div class="flex items-center justify-between mb-2">
             <h3 class="text-xs font-mono font-bold uppercase text-slate-600">Doctor Availability & Slot Capacity Matrix ({{ filter_date.strftime('%a, %d %b %Y') }})</h3>
-            <span class="text-[11px] text-slate-500 font-mono">Live Roster & Room Caseloads</span>
+            <span class="text-[11px] text-slate-500 font-mono">Click card to filter appointments by doctor</span>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             {% for doc in doctor_capacity_cards %}
-                <div class="p-3.5 rounded-2xl border-2 shadow-xs transition-all
-                    {% if doc.is_full %}bg-rose-50 border-rose-300
+                {% set is_selected_doc = (doctor_filter == doc.schedule.doctor_name or (doctor_filter != 'all' and doctor_filter in doc.schedule.doctor_name)) %}
+                <a 
+                    href="{{ url_for('reception.appointments', date=filter_date.strftime('%Y-%m-%d'), status=status_filter, doctor=('all' if is_selected_doc else doc.schedule.doctor_name)) }}"
+                    class="p-3.5 rounded-2xl border-2 shadow-xs transition-all block cursor-pointer
+                    {% if is_selected_doc %}ring-3 ring-blue-600 border-blue-600 bg-blue-50/80
+                    {% elif doc.is_full %}bg-rose-50 border-rose-300
                     {% elif doc.schedule.duty_status != 'available' %}bg-slate-100 border-slate-300 opacity-75
-                    {% else %}bg-white border-slate-300 hover:border-blue-400{% endif %}">
+                    {% else %}bg-white border-slate-300 hover:border-blue-400 hover:shadow-md{% endif %}"
+                    title="{% if is_selected_doc %}Click to reset doctor filter{% else %}Filter appointments for {{ doc.schedule.doctor_name }}{% endif %}"
+                >
                     <div class="flex items-center justify-between">
                         <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase
-                            {% if doc.schedule.duty_status == 'available' %}bg-emerald-100 text-emerald-900
+                            {% if is_selected_doc %}bg-blue-900 text-white
+                            {% elif doc.schedule.duty_status == 'available' %}bg-emerald-100 text-emerald-900
                             {% elif doc.schedule.duty_status == 'in_surgery' %}bg-purple-100 text-purple-900
                             {% elif doc.schedule.duty_status == 'on_leave' %}bg-rose-100 text-rose-900
                             {% else %}bg-slate-200 text-slate-800{% endif %}">
-                            {{ doc.schedule.duty_status.replace('_', ' ').title() }}
+                            {% if is_selected_doc %}✓ Active Filter{% else %}{{ doc.schedule.duty_status.replace('_', ' ').title() }}{% endif %}
                         </span>
                         <span class="text-[10px] font-mono font-bold text-slate-500">{{ doc.schedule.start_time }}-{{ doc.schedule.end_time }}</span>
                     </div>
@@ -109,13 +116,14 @@
                             <span>Live Caseload: <strong>{{ doc.live_caseload }}</strong></span>
                         </div>
                     </div>
-                </div>
+                </a>
             {% endfor %}
         </div>
     </div>
 
     <!-- Filter Bar & Metrics -->
     <div class="bg-white p-3.5 rounded-2xl border-2 border-slate-300 shadow-xs flex flex-col md:flex-row justify-between items-center gap-3">
+        <!-- Status Filter Tabs -->
         <div class="flex items-center gap-2 flex-wrap w-full md:w-auto text-xs font-bold">
             <a href="{{ url_for('reception.appointments', date=filter_date.strftime('%Y-%m-%d'), status='all', doctor=doctor_filter) }}"
                class="px-3 py-1.5 rounded-lg {% if status_filter == 'all' %}bg-slate-900 text-white{% else %}bg-slate-100 text-slate-700 hover:bg-slate-200{% endif %}">
@@ -135,8 +143,43 @@
             </a>
         </div>
 
-        <div class="text-xs font-mono font-bold text-slate-600">
-            Selected: <span class="text-slate-950 font-black">{{ filter_date.strftime('%A, %d %B %Y') }}</span>
+        <!-- Doctor Filter Dropdown & Selected Date -->
+        <div class="flex items-center gap-3 flex-wrap w-full md:w-auto justify-end">
+            <!-- Doctor Filter Form -->
+            <form method="GET" action="{{ url_for('reception.appointments') }}" class="flex items-center gap-1.5">
+                <input type="hidden" name="date" value="{{ filter_date.strftime('%Y-%m-%d') }}">
+                <input type="hidden" name="status" value="{{ status_filter }}">
+                
+                <div class="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-xl border border-slate-300">
+                    <span class="text-[10px] font-mono font-bold uppercase text-slate-500">Doctor:</span>
+                    <select 
+                        name="doctor" 
+                        onchange="this.form.submit()" 
+                        class="text-xs font-bold bg-transparent border-0 focus:ring-0 text-slate-900 py-0.5 pl-1 pr-6 cursor-pointer"
+                    >
+                        <option value="all" {% if doctor_filter == 'all' %}selected{% endif %}>👨‍⚕️ All Doctors & Clinicians</option>
+                        {% for doc in doctor_capacity_cards %}
+                            <option value="{{ doc.schedule.doctor_name }}" {% if doctor_filter == doc.schedule.doctor_name or (doctor_filter != 'all' and doctor_filter in doc.schedule.doctor_name) %}selected{% endif %}>
+                                {{ doc.schedule.doctor_name }} ({{ doc.booked_count }} booked)
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {% if doctor_filter != 'all' %}
+                    <a 
+                        href="{{ url_for('reception.appointments', date=filter_date.strftime('%Y-%m-%d'), status=status_filter, doctor='all') }}"
+                        class="p-1 px-2 text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200 rounded-lg hover:bg-rose-100"
+                        title="Clear Doctor Filter"
+                    >
+                        ✕ Clear
+                    </a>
+                {% endif %}
+            </form>
+
+            <div class="text-xs font-mono font-bold text-slate-600 hidden sm:block">
+                <span class="text-slate-950 font-black">{{ filter_date.strftime('%A, %d %B %Y') }}</span>
+            </div>
         </div>
     </div>
 
@@ -255,7 +298,10 @@
                     {% else %}
                         <tr>
                             <td colspan="7" class="p-8 text-center text-slate-500">
-                                No appointments found on {{ filter_date.strftime('%d %b %Y') }}. Click "+ Book Appointment" above to schedule a patient consultation.
+                                No appointments found on {{ filter_date.strftime('%d %b %Y') }}{% if doctor_filter != 'all' %} for <strong>{{ doctor_filter }}</strong>{% endif %}{% if status_filter != 'all' %} with status <strong>{{ status_filter }}</strong>{% endif %}.
+                                <div class="mt-2">
+                                    <a href="{{ url_for('reception.appointments', date=filter_date.strftime('%Y-%m-%d'), status='all', doctor='all') }}" class="text-xs text-blue-800 font-bold hover:underline">Reset all filters &rarr;</a>
+                                </div>
                             </td>
                         </tr>
                     {% endfor %}
