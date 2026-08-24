@@ -25,8 +25,16 @@
 
         <!-- Action Toolbar -->
         <div class="flex items-center gap-2.5 flex-wrap">
+            <button 
+                type="button"
+                @click="$dispatch('open-paystack-modal', { patientId: {{ patient.id }}, patientName: '{{ patient.full_name|replace('\'', '\\\'') }}', phone: '{{ patient.phone }}', amount: 500.0 })"
+                class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            >
+                <span>⚡ Paystack MPesa (KES 500)</span>
+            </button>
+
             {% if active_ticket %}
-                <span class="px-3.5 py-2 bg-amber-50 border border-amber-300 text-amber-900 rounded-lg text-xs font-bold flex items-center gap-2 font-mono">
+                <span class="inline-flex items-center gap-2 px-3 py-2 bg-amber-50 text-amber-800 border border-amber-300 rounded-lg text-xs font-mono font-bold">
                     <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
                     In Queue: {{ active_ticket.ticket_number }} ({{ active_ticket.destination_department }})
                 </span>

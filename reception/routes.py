@@ -2,8 +2,9 @@ from datetime import datetime, date, timedelta
 from flask import render_template, request, redirect, url_for, flash, jsonify, current_app
 from sqlalchemy import or_, and_, desc, func
 
-from models import db, Patient, QueueEntry, Appointment, DoctorSchedule, AuditLog, SMSLog, PatientOTP
+from models import db, Patient, QueueEntry, Appointment, DoctorSchedule, AuditLog, SMSLog, PatientOTP, Invoice, Payment
 from services.sms_service import sms_service
+from services.paystack_service import paystack_service
 from . import reception_bp
 from .utils import save_webcam_or_uploaded_photo, parse_dob
 
@@ -875,11 +876,163 @@ def send_queue_sms(queue_id):
 
     return redirect(request.referrer or url_for('reception.dashboard'))
 
-    if res.get('success'):
-        flash(f"✓ Queue notice SMS sent to {entry.patient.full_name} ({entry.patient.phone})!", "success")
-    else:
-        flash(f"⚠ Queue SMS failed: {res.get('error')}", "error")
 
-    return redirect(request.referrer or url_for('reception.dashboard'))
+# =================== PAYSTACK IN-PORTAL CONSULTATION SETTLEMENT ===================
+
+@reception_bp.route('/paystack/prompt', methods=['POST'])
+def paystack_prompt():
+    """
+    Triggers an in-portal Paystack MPesa STK Push prompt for consultation fee (KES 500).
+    Called asynchronously from the in-portal modal.
+    """
+    if request.is_json:
+        req_data = request.get_json()
+    else:
+        req_data = request.form
+
+    patient_id = req_data.get('patient_id')
+    phone = req_data.get('phone', '').strip()
+    amount = float(req_data.get('amount', 500.0))
+    department = req_data.get('department', 'General OPD')
+    doctor_name = req_data.get('doctor_name')
+
+    patient = None
+    if patient_id:
+        patient = Patient.query.get(int(patient_id))
+        if patient and not phone:
+            phone = patient.phone
+
+    if not phone:
+        return jsonify({"success": False, "error": "Patient phone number is required for MPesa STK Push prompt."}), 400
+
+    patient_name = patient.full_name if patient else "Walk-in Patient"
+    
+    # Trigger Paystack MPesa Charge
+    res = paystack_service.prompt_mpesa_charge(
+        phone=phone,
+        amount_kes=amount,
+        patient_name=patient_name
+    )
+
+    if res.get('success'):
+        return jsonify({
+            "success": True,
+            "reference": res.get('reference'),
+            "status": res.get('status'),
+            "display_text": res.get('display_text'),
+            "phone": res.get('phone'),
+            "amount": amount,
+            "patient_id": patient.id if patient else None,
+            "patient_name": patient_name,
+            "department": department,
+            "doctor_name": doctor_name
+        })
+    else:
+        return jsonify({
+            "success": False,
+            "error": res.get('error', 'Unable to initiate Paystack MPesa prompt.')
+        }), 400
+
+
+@reception_bp.route('/paystack/verify/<reference>', methods=['GET'])
+def paystack_verify(reference):
+    """
+    Checks payment verification status with Paystack.
+    If paid, settles invoice, issues receipt, creates triage queue ticket, and returns success payload.
+    """
+    patient_id = request.args.get('patient_id', type=int)
+    amount = request.args.get('amount', default=500.0, type=float)
+    department = request.args.get('department', default='General OPD')
+    doctor_name = request.args.get('doctor_name')
+
+    verify_res = paystack_service.verify_transaction(reference)
+
+    if verify_res.get('paid'):
+        if patient_id:
+            settlement = paystack_service.settle_consultation_payment(
+                patient_id=patient_id,
+                reference=reference,
+                amount=amount,
+                destination_dept=department,
+                assigned_doctor=doctor_name
+            )
+            return jsonify({
+                "paid": True,
+                "status": "success",
+                "message": f"Payment of KES {amount:.2f} verified via Paystack! Patient fast-tracked to Queue (#{settlement['ticket_number']}).",
+                "payment_id": settlement.get('payment_id'),
+                "ticket_number": settlement['ticket_number'],
+                "invoice_number": settlement['invoice_number'],
+                "receipt_number": settlement['receipt_number'],
+                "receipt_url": url_for('reception.receipt_view', payment_id=settlement.get('payment_id'), format='thermal'),
+                "receipt_a4_url": url_for('reception.receipt_view', payment_id=settlement.get('payment_id'), format='a4'),
+                "redirect_url": url_for('reception.dashboard')
+            })
+        else:
+            return jsonify({
+                "paid": True,
+                "status": "success",
+                "message": f"Payment of KES {amount:.2f} verified on Paystack! (Reference: {reference})",
+                "redirect_url": url_for('reception.dashboard')
+            })
+
+    elif verify_res.get('status') == 'pending':
+        return jsonify({
+            "paid": False,
+            "status": "pending",
+            "message": verify_res.get('message', "Awaiting patient authorization on mobile handset...")
+        })
+    else:
+        return jsonify({
+            "paid": False,
+            "status": verify_res.get('status', 'failed'),
+            "message": verify_res.get('message', "Payment prompt not completed.")
+        })
+
+
+@reception_bp.route('/paystack/manual-settle', methods=['POST'])
+def paystack_manual_settle():
+    """
+    Manual confirmation / cash override for receptionist to immediately fast-track patient to triage.
+    """
+    patient_id = request.form.get('patient_id', type=int)
+    amount = float(request.form.get('amount', 500.0))
+    department = request.form.get('department', 'General OPD')
+    doctor_name = request.form.get('doctor_name')
+    reference = request.form.get('reference') or f"PAYSTACK-MANUAL-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+
+    patient = Patient.query.get_or_404(patient_id)
+    settlement = paystack_service.settle_consultation_payment(
+        patient_id=patient.id,
+        reference=reference,
+        amount=amount,
+        destination_dept=department,
+        assigned_doctor=doctor_name
+    )
+
+    flash(f"✓ Consultation fee (KES {amount:.2f}) settled for {patient.full_name}! Fast-tracked to queue as Ticket #{settlement['ticket_number']}.", "success")
+    return redirect(url_for('reception.dashboard'))
+
+
+@reception_bp.route('/receipt/<int:payment_id>', methods=['GET'])
+def receipt_view(payment_id):
+    """
+    Printable Dual-Format Receipt view accessible from Reception Desk:
+    - Format 1: 80mm Thermal POS Slip (Default)
+    - Format 2: Standard A4 Itemized Official Tax Invoice
+    """
+    payment = Payment.query.get_or_404(payment_id)
+    format_type = request.args.get('format', 'thermal') # 'thermal' or 'a4'
+
+    return render_template(
+        'billing/receipt.html',
+        payment=payment,
+        invoice=payment.invoice,
+        patient=payment.patient,
+        facility_name='APEX ADVANCED MEDICAL CENTER & HOSPITAL',
+        facility_code='HSP-NBI-001',
+        format_type=format_type
+    )
+
 
 

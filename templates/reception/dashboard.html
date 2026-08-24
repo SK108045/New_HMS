@@ -39,9 +39,18 @@
                 </div>
                 <div class="mt-2.5 flex items-center justify-between text-xs text-slate-500">
                     <span class="font-mono">Type to search records &bull; Press <kbd class="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded font-bold text-slate-800">Enter</kbd> to jump</span>
-                    <a href="{{ url_for('reception.register') }}" class="text-slate-900 hover:text-slate-700 font-bold flex items-center gap-1.5 text-xs">
-                        + Register New Patient
-                    </a>
+                    <div class="flex items-center gap-3">
+                        <button 
+                            type="button" 
+                            @click="$dispatch('open-paystack-modal', { amount: 500.0, phone: '+254756205063' })"
+                            class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg font-bold text-xs flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                        >
+                            <span>⚡ Paystack MPesa (KES 500)</span>
+                        </button>
+                        <a href="{{ url_for('reception.register') }}" class="text-slate-900 hover:text-slate-700 font-bold flex items-center gap-1.5 text-xs">
+                            + Register Patient
+                        </a>
+                    </div>
                 </div>
 
                 <!-- HTMX Live Search Dropdown Container -->
@@ -211,9 +220,19 @@
                                 </div>
                             </div>
                             
-                            <a href="{{ url_for('reception.patient_detail', patient_id=p.id) }}" class="text-slate-400 hover:text-slate-900 p-1 font-bold text-sm">
-                                &rarr;
-                            </a>
+                            <div class="flex items-center gap-2">
+                                <button 
+                                    type="button" 
+                                    @click="$dispatch('open-paystack-modal', { patientId: {{ p.id }}, patientName: '{{ p.full_name|replace('\'', '\\\'') }}', phone: '{{ p.phone }}', amount: 500.0 })"
+                                    class="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg text-[10px] flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                                    title="Pay KES 500 Consultation via Paystack MPesa"
+                                >
+                                    <span>⚡ Pay 500</span>
+                                </button>
+                                <a href="{{ url_for('reception.patient_detail', patient_id=p.id) }}" class="text-slate-400 hover:text-slate-900 p-1 font-bold text-sm">
+                                    &rarr;
+                                </a>
+                            </div>
                         </div>
                     {% endfor %}
                 </div>

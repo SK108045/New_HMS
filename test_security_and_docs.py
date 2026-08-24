@@ -673,8 +673,48 @@ def run_test_suite():
         assert otp_rec.is_verified is True
     print("   ✓ Patient phone OTP verification confirmed successfully")
 
-    # 22. Immutable Audit Trail Verification
-    print("22. Verifying Immutable Audit Trail Telemetry...")
+    # 22. Paystack Consultation Fee STK Prompt & Instant Receipt Generation
+    print("22. Testing Paystack Consultation Fee (KES 500) & Instant Receipt Generation...")
+    res_ps_prompt = client.post('/reception/paystack/prompt', json={
+        'patient_id': 1,
+        'phone': '+254756205063',
+        'amount': 500.0,
+        'department': 'General OPD'
+    })
+    assert res_ps_prompt.status_code == 200
+    ps_data = res_ps_prompt.get_json()
+    assert ps_data['success'] is True
+    ps_ref = ps_data['reference']
+    print(f"   ✓ Paystack MPesa STK prompt dispatched: Ref {ps_ref} (KES {ps_data['amount']})")
+
+    # Simulate Paystack Settlement & Fast-Track Queue
+    from services.paystack_service import paystack_service
+    with app.app_context():
+        settlement = paystack_service.settle_consultation_payment(
+            patient_id=1,
+            reference=ps_ref,
+            amount=500.0,
+            destination_dept="General OPD"
+        )
+        assert settlement['success'] is True
+        assert settlement['invoice_number'].startswith("INV-")
+        assert settlement['receipt_number'].startswith("RCP-")
+        payment_id = settlement['payment_id']
+    print(f"   ✓ Consultation settled: Invoice {settlement['invoice_number']}, Receipt {settlement['receipt_number']}, Queue #{settlement['ticket_number']}")
+
+    # Verify Dual-Format Printable Receipt Endpoint
+    res_receipt_thermal = client.get(f'/reception/receipt/{payment_id}?format=thermal')
+    assert res_receipt_thermal.status_code == 200
+    assert b"Paystack MPesa" in res_receipt_thermal.data
+    assert b"500.00" in res_receipt_thermal.data
+
+    res_receipt_a4 = client.get(f'/reception/receipt/{payment_id}?format=a4')
+    assert res_receipt_a4.status_code == 200
+    assert b"Standard A4 Tax Invoice" in res_receipt_a4.data or b"TAX INVOICE" in res_receipt_a4.data
+    print(f"   ✓ Official Thermal POS Slip & A4 Tax Invoice receipts verified (200 OK)")
+
+    # 23. Immutable Audit Trail Verification
+    print("23. Verifying Immutable Audit Trail Telemetry...")
     with app.app_context():
         audit_events = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(10).all()
         assert len(audit_events) > 0
@@ -682,7 +722,7 @@ def run_test_suite():
         print(f"   ✓ Recent Audit Actions: {', '.join(actions[:5])}")
 
     print("\n" + "="*70)
-    print("🎉 ALL 21 TEST MODULES PASSED 100%! AFRICA'S TALKING SMS, OTPs, ROSTER & RBAC FULLY OPERATIONAL")
+    print("🎉 ALL 22 TEST MODULES PASSED 100%! PAYSTACK MPESA PROMPT & RECEIPTS OPERATIONAL")
     print("="*70 + "\n")
 
 if __name__ == '__main__':

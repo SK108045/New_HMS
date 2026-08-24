@@ -456,6 +456,8 @@ def receipt(payment_id):
         payment=payment,
         invoice=payment.invoice,
         patient=payment.patient,
+        facility_name='APEX ADVANCED MEDICAL CENTER & HOSPITAL',
+        facility_code='HSP-NBI-001',
         format_type=format_type
     )
 

@@ -1,0 +1,431 @@
+<!-- =================== PAYSTACK IN-PORTAL CONSULTATION SETTLEMENT MODAL =================== -->
+<div 
+    x-data="paystackConsultationModal()"
+    @open-paystack-modal.window="openModal($event.detail)"
+    x-show="isOpen" 
+    x-cloak
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs transition-opacity duration-200"
+    @keydown.escape.window="if(step !== 'sending') closeModal()"
+>
+    <!-- Modal Backdrop -->
+    <div class="fixed inset-0" @click="if(step !== 'sending') closeModal()"></div>
+
+    <!-- Modal Container -->
+    <div 
+        class="relative bg-white rounded-3xl border-2 border-slate-300 shadow-2xl max-w-md w-full p-6 space-y-4 transform transition-all animate-in fade-in zoom-in duration-200"
+        @click.stop
+    >
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between border-b pb-3.5">
+            <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-2xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800 text-lg font-black shadow-xs">
+                    ⚡
+                </div>
+                <div>
+                    <h3 class="text-sm font-black text-slate-950 uppercase font-mono tracking-tight">Paystack MPesa Consultation</h3>
+                    <p class="text-[11px] text-slate-500 font-medium">In-Portal STK Prompt • Standard OPD Fee</p>
+                </div>
+            </div>
+            <button 
+                type="button" 
+                @click="closeModal()" 
+                class="w-7 h-7 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 font-bold flex items-center justify-center text-xs transition-colors cursor-pointer"
+            >
+                ✕
+            </button>
+        </div>
+
+        <!-- STEP 1: INITIAL INPUT & REVIEW -->
+        <template x-if="step === 'input'">
+            <div class="space-y-4">
+                <!-- Tariff Summary Banner -->
+                <div class="bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-slate-50 border border-emerald-200/80 p-3.5 rounded-2xl flex items-center justify-between">
+                    <div>
+                        <div class="text-[10px] font-bold text-emerald-900 uppercase tracking-wide">Consultation Tariff</div>
+                        <div class="text-xs font-bold text-slate-800 mt-0.5" x-text="patientName || 'Outpatient Consultation'"></div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-lg font-black text-emerald-700 font-mono">KES <span x-text="amount.toFixed(2)"></span></div>
+                        <span class="text-[9px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded-md">Paystack MPesa</span>
+                    </div>
+                </div>
+
+                <div class="space-y-3 text-xs">
+                    <!-- Amount Quick Selector & Test Pill -->
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1.5">Consultation Amount (KES)</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button 
+                                type="button" 
+                                @click="amount = 1.0" 
+                                class="py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer"
+                                :class="amount === 1.0 ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'"
+                            >
+                                🧪 1 Bob (KES 1)
+                            </button>
+                            <button 
+                                type="button" 
+                                @click="amount = 500.0" 
+                                class="py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer"
+                                :class="amount === 500.0 ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'"
+                            >
+                                🩺 KES 500 (OPD)
+                            </button>
+                            <button 
+                                type="button" 
+                                @click="amount = 1000.0" 
+                                class="py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer"
+                                :class="amount === 1000.0 ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'"
+                            >
+                                👨‍⚕️ KES 1,000
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Target Patient Phone (MPesa) *</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-sm">📱</span>
+                            <input 
+                                type="text" 
+                                x-model="phone" 
+                                required 
+                                placeholder="+254756205063 or 0756205063" 
+                                class="form-input text-xs w-full pl-9 rounded-xl border-slate-300 font-mono font-bold focus:ring-emerald-500 focus:border-emerald-500"
+                            >
+                        </div>
+                        <p class="text-[10px] text-slate-500 mt-1">An instant MPesa PIN prompt will appear on the patient's phone.</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-700 uppercase mb-1">Department</label>
+                            <select x-model="department" class="form-select text-xs w-full rounded-xl border-slate-300 font-medium">
+                                <option value="General OPD">General OPD</option>
+                                <option value="Internal Medicine">Internal Medicine</option>
+                                <option value="Pediatrics">Pediatrics</option>
+                                <option value="Dental Clinic">Dental Clinic</option>
+                                <option value="Eye Clinic">Eye Clinic</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-700 uppercase mb-1">Assigned Doctor</label>
+                            <input type="text" x-model="doctorName" placeholder="e.g. Dr. Kamau (Optional)" class="form-input text-xs w-full rounded-xl border-slate-300">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error Alert if any -->
+                <div x-show="errorMessage" class="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-1.5" x-text="errorMessage"></div>
+
+                <!-- Action Button -->
+                <div class="pt-2">
+                    <button 
+                        type="button" 
+                        @click="triggerSTKPrompt()" 
+                        class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:shadow-lg"
+                    >
+                        <span>📲 Send MPesa STK Prompt (KES <span x-text="amount"></span>) &rarr;</span>
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <!-- STEP 2: SENDING / INITIATING SPINNER -->
+        <template x-if="step === 'sending'">
+            <div class="py-8 text-center space-y-3">
+                <div class="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin mx-auto"></div>
+                <h4 class="text-sm font-black text-slate-900 font-mono">Initiating Paystack Mobile Charge...</h4>
+                <p class="text-xs text-slate-500">Dispatching encrypted STK Push request to <span class="font-mono font-bold text-slate-800" x-text="phone"></span></p>
+            </div>
+        </template>
+
+        <!-- STEP 3: PROMPTED / AWAITING HANDSET PIN -->
+        <template x-if="step === 'prompted'">
+            <div class="space-y-4 text-center py-2">
+                <div class="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-2xl animate-pulse">
+                    📲
+                </div>
+                <div>
+                    <h4 class="text-sm font-black text-slate-950 font-mono">MPesa Prompt Sent to Phone!</h4>
+                    <p class="text-xs text-slate-600 mt-1 max-w-xs mx-auto leading-relaxed">
+                        Please check handset <strong class="text-slate-900 font-mono" x-text="phone"></strong> and enter MPesa PIN to authorize <strong>KES 500.00</strong>.
+                    </p>
+                </div>
+
+                <!-- Live Status Polling Indicator -->
+                <div class="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+                    <div class="flex items-center justify-center gap-2 text-xs font-bold text-emerald-800">
+                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                        <span>Auto-verifying transaction...</span>
+                    </div>
+                    <div class="text-[10px] font-mono text-slate-500">
+                        Paystack Reference: <span class="font-bold text-slate-700" x-text="reference"></span>
+                    </div>
+                </div>
+
+                <!-- Override or Manual Settle Options -->
+                <div class="pt-2 flex flex-col gap-2">
+                    <button 
+                        type="button" 
+                        @click="checkStatusManually()" 
+                        class="w-full py-2 bg-slate-900 hover:bg-slate-950 text-white font-bold rounded-xl text-xs shadow-xs cursor-pointer"
+                    >
+                        🔄 Refresh Verification Status
+                    </button>
+                    <button 
+                        type="button" 
+                        @click="manualFastTrack()" 
+                        class="w-full py-1.5 text-[11px] font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                    >
+                        ✓ Manual Receipt / Cash Settle Fast-Track
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <!-- STEP 4: SUCCESS / QUEUE CONFIRMED -->
+        <template x-if="step === 'success'">
+            <div class="space-y-4 text-center py-3">
+                <div class="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-3xl shadow-inner">
+                    ✓
+                </div>
+                <div>
+                    <h4 class="text-base font-black text-slate-950 font-mono">Payment Verified & Settled!</h4>
+                    <p class="text-xs text-emerald-800 font-bold mt-1">
+                        Consultation fee KES 500.00 confirmed via Paystack.
+                    </p>
+                </div>
+
+                <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-left space-y-1 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-slate-600 font-medium">Queue Ticket:</span>
+                        <strong class="font-mono text-emerald-950 text-sm" x-text="'#' + (ticketNumber || 'TRG-001')"></strong>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-600 font-medium">Invoice Number:</span>
+                        <span class="font-mono font-bold text-slate-800" x-text="invoiceNumber"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-600 font-medium">Payment Channel:</span>
+                        <span class="font-bold text-emerald-700">Paystack MPesa Live</span>
+                    </div>
+                </div>
+
+                <!-- Printable Receipt Actions -->
+                <div class="pt-1 flex flex-col gap-2">
+                    <div class="grid grid-cols-2 gap-2">
+                        <a 
+                            :href="receiptUrl || ('/billing/receipt/' + (paymentId || '1') + '?format=thermal')" 
+                            target="_blank"
+                            class="py-2 px-3 bg-slate-900 hover:bg-slate-950 text-white font-bold rounded-xl text-[11px] shadow-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                        >
+                            <span>🧾 Thermal Slip &rarr;</span>
+                        </a>
+                        <a 
+                            :href="receiptA4Url || ('/billing/receipt/' + (paymentId || '1') + '?format=a4')" 
+                            target="_blank"
+                            class="py-2 px-3 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold rounded-xl text-[11px] shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                        >
+                            <span>📄 A4 Tax Invoice &rarr;</span>
+                        </a>
+                    </div>
+
+                    <button 
+                        type="button" 
+                        @click="window.location.reload()" 
+                        class="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-md cursor-pointer"
+                    >
+                        ✓ Continue to Triage Queue &rarr;
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <!-- STEP 5: FAILED / TIMED OUT -->
+        <template x-if="step === 'failed'">
+            <div class="space-y-4 text-center py-2">
+                <div class="w-14 h-14 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto text-2xl">
+                    ⚠
+                </div>
+                <div>
+                    <h4 class="text-sm font-black text-slate-950 font-mono">Transaction Not Completed</h4>
+                    <p class="text-xs text-slate-600 mt-1" x-text="errorMessage || 'The MPesa push prompt was cancelled or timed out.'"></p>
+                </div>
+
+                <div class="pt-2 flex gap-2">
+                    <button 
+                        type="button" 
+                        @click="step = 'input'" 
+                        class="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs cursor-pointer"
+                    >
+                        🔄 Try Again
+                    </button>
+                    <button 
+                        type="button" 
+                        @click="manualFastTrack()" 
+                        class="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs cursor-pointer"
+                    >
+                        💵 Settle Cash
+                    </button>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+
+<script>
+function paystackConsultationModal() {
+    return {
+        isOpen: false,
+        step: 'input', // 'input', 'sending', 'prompted', 'success', 'failed'
+        patientId: null,
+        patientName: '',
+        phone: '+254756205063',
+        amount: 1.0,
+        department: 'General OPD',
+        doctorName: '',
+        reference: '',
+        ticketNumber: '',
+        invoiceNumber: '',
+        paymentId: null,
+        receiptUrl: '',
+        receiptA4Url: '',
+        errorMessage: '',
+        pollInterval: null,
+
+        openModal(data) {
+            this.step = 'input';
+            this.errorMessage = '';
+            this.receiptUrl = '';
+            this.receiptA4Url = '';
+            this.paymentId = null;
+            if (data) {
+                this.patientId = data.patientId || null;
+                this.patientName = data.patientName || '';
+                this.phone = data.phone || '+254756205063';
+                this.amount = data.amount || 1.0;
+                this.department = data.department || 'General OPD';
+                this.doctorName = data.doctorName || '';
+            }
+            this.isOpen = true;
+        },
+
+        closeModal() {
+            if (this.pollInterval) {
+                clearInterval(this.pollInterval);
+                this.pollInterval = null;
+            }
+            this.isOpen = false;
+        },
+
+        async triggerSTKPrompt() {
+            if (!this.phone) {
+                this.errorMessage = 'Please enter patient telephone number.';
+                return;
+            }
+            this.errorMessage = '';
+            this.step = 'sending';
+
+            try {
+                const res = await fetch('{{ url_for("reception.paystack_prompt") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        patient_id: this.patientId,
+                        phone: this.phone,
+                        amount: this.amount,
+                        department: this.department,
+                        doctor_name: this.doctorName
+                    })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    this.reference = data.reference;
+                    this.step = 'prompted';
+                    this.startPolling();
+                } else {
+                    this.step = 'input';
+                    this.errorMessage = data.error || 'Failed to dispatch Paystack prompt.';
+                }
+            } catch (err) {
+                this.step = 'input';
+                this.errorMessage = 'Network error contacting payment gateway.';
+            }
+        },
+
+        startPolling() {
+            if (this.pollInterval) clearInterval(this.pollInterval);
+            let attempts = 0;
+
+            this.pollInterval = setInterval(async () => {
+                attempts++;
+                if (attempts > 30) { // Stop after 75 seconds
+                    clearInterval(this.pollInterval);
+                    this.pollInterval = null;
+                    return;
+                }
+                await this.checkStatusSilently();
+            }, 2500);
+        },
+
+        async checkStatusSilently() {
+            if (!this.reference) return;
+            try {
+                const url = `{{ url_for("reception.paystack_verify", reference="REF_PLACEHOLDER") }}`.replace('REF_PLACEHOLDER', this.reference)
+                    + `?patient_id=${this.patientId || ''}&amount=${this.amount}&department=${encodeURIComponent(this.department)}&doctor_name=${encodeURIComponent(this.doctorName)}`;
+                
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.paid) {
+                    if (this.pollInterval) clearInterval(this.pollInterval);
+                    this.ticketNumber = data.ticket_number;
+                    this.invoiceNumber = data.invoice_number;
+                    this.paymentId = data.payment_id;
+                    this.receiptUrl = data.receipt_url;
+                    this.receiptA4Url = data.receipt_a4_url;
+                    this.step = 'success';
+                } else if (data.status === 'failed') {
+                    if (this.pollInterval) clearInterval(this.pollInterval);
+                    this.errorMessage = data.message;
+                    this.step = 'failed';
+                }
+            } catch (err) {
+                console.error('Polling error:', err);
+            }
+        },
+
+        async checkStatusManually() {
+            await this.checkStatusSilently();
+        },
+
+        async manualFastTrack() {
+            if (this.pollInterval) clearInterval(this.pollInterval);
+            
+            // Create standard form POST to manual-settle
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ url_for("reception.paystack_manual_settle") }}';
+
+            const addField = (name, val) => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = name;
+                input.value = val;
+                form.appendChild(input);
+            };
+
+            addField('patient_id', this.patientId || '1');
+            addField('amount', this.amount);
+            addField('department', this.department);
+            addField('doctor_name', this.doctorName);
+            addField('reference', this.reference || '');
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+    };
+}
+</script>
