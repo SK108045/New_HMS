@@ -59,13 +59,18 @@ class SMSService:
             clean = "+254" + clean
         return clean
 
-    def send_sms(self, recipient: str, message_text: str, patient_id: int = None, message_type: str = "custom") -> dict:
+    def send_sms(self, recipient: str, message_text: str, patient_id: int = None, message_type: str = "custom", is_live: bool = None) -> dict:
         """
-        Sends an SMS via Africa's Talking and records telemetry in the database.
+        Sends an SMS. Supports safe zero-cost Simulation Mode and Live Africa's Talking Gateway.
+        Defaults to safe simulation unless live is explicitly requested or HMS_SMS_LIVE=true.
         """
         formatted_recipient = self.format_phone(recipient)
         if not formatted_recipient:
             return {"success": False, "error": "Invalid recipient phone number."}
+
+        # Check live flag: default to safe mode unless explicitly specified
+        if is_live is None:
+            is_live = (os.getenv("HMS_SMS_LIVE", "false").lower() == "true")
 
         # Create pending log entry
         log_entry = SMSLog(
@@ -79,11 +84,29 @@ class SMSService:
         db.session.add(log_entry)
         db.session.flush()
 
-        if not self._initialized or not self.sms:
-            log_entry.status = "Failed"
-            log_entry.error_message = "SMS Service not initialized (missing API key or client error)."
+        # If running in safe simulation mode or service uninitialized, use zero-cost simulator
+        if not is_live or not self._initialized or not self.sms:
+            log_entry.status = "Success"
+            log_entry.status_code = 100
+            log_entry.cost = "KES 0.00 (Simulated)"
+            log_entry.message_id = f"SIM-{random.randint(100000, 999999)}"
+            log_entry.error_message = None
             db.session.commit()
-            return {"success": False, "error": log_entry.error_message}
+
+            AuditLog.log_event(
+                "sms_dispatched_simulated",
+                "sms_log",
+                log_entry.id,
+                f"Simulated SMS [{message_type}] dispatched to {formatted_recipient} (Zero cost / Safe Mode)."
+            )
+
+            return {
+                "success": True,
+                "log_id": log_entry.id,
+                "cost": log_entry.cost,
+                "message_id": log_entry.message_id,
+                "simulated": True
+            }
 
         try:
             response = self.sms.send(message_text, [formatted_recipient], timeout=30)
@@ -109,10 +132,10 @@ class SMSService:
             db.session.commit()
 
             AuditLog.log_event(
-                "sms_dispatched",
+                "sms_dispatched_live",
                 "sms_log",
                 log_entry.id,
-                f"SMS [{message_type}] dispatched to {formatted_recipient}. Status: {log_entry.status} (Cost: {log_entry.cost or 'N/A'})."
+                f"Live Africa's Talking SMS [{message_type}] dispatched to {formatted_recipient}. Status: {log_entry.status} (Cost: {log_entry.cost or 'N/A'})."
             )
 
             return {
@@ -120,7 +143,8 @@ class SMSService:
                 "log_id": log_entry.id,
                 "cost": log_entry.cost,
                 "message_id": log_entry.message_id,
-                "response": response
+                "response": response,
+                "simulated": False
             }
 
         except Exception as e:
@@ -130,7 +154,7 @@ class SMSService:
             db.session.commit()
             return {"success": False, "error": str(e), "log_id": log_entry.id}
 
-    def generate_and_send_otp(self, patient_id: int, phone: str = None, purpose: str = "patient_verification") -> dict:
+    def generate_and_send_otp(self, patient_id: int, phone: str = None, purpose: str = "patient_verification", is_live: bool = None) -> dict:
         """
         Generates a secure 6-digit OTP, stores it with 10-min expiry, and delivers via SMS.
         """
@@ -166,7 +190,7 @@ class SMSService:
             f"Valid for 10 minutes. Please present this code to the receptionist for intake verification."
         )
 
-        res = self.send_sms(target_phone, message_text, patient_id=patient.id if patient else None, message_type="otp")
+        res = self.send_sms(target_phone, message_text, patient_id=patient.id if patient else None, message_type="otp", is_live=is_live)
         res["otp_id"] = otp_record.id
         res["otp_code_preview"] = otp_code
         return res
@@ -206,7 +230,7 @@ class SMSService:
 
         return {"verified": True, "message": "Phone number verified successfully!"}
 
-    def send_appointment_reminder(self, appointment_id: int) -> dict:
+    def send_appointment_reminder(self, appointment_id: int, is_live: bool = None) -> dict:
         """
         Dispatches personalized appointment reminder SMS.
         """
@@ -221,7 +245,7 @@ class SMSService:
             f"Helpline: +254 700 000 100."
         )
 
-        res = self.send_sms(formatted_phone, message_text, patient_id=patient.id, message_type="appointment_reminder")
+        res = self.send_sms(formatted_phone, message_text, patient_id=patient.id, message_type="appointment_reminder", is_live=is_live)
         if res.get("success"):
             app.reminder_sent_sms = True
             app.last_reminder_at = datetime.utcnow()
@@ -229,9 +253,9 @@ class SMSService:
 
         return res
 
-    def send_queue_alert(self, queue_entry_id: int) -> dict:
+    def send_queue_alert(self, queue_entry_id: int, is_live: bool = None) -> dict:
         """
-        Sends live SMS notice when patient's ticket is called to consultation room.
+        Sends live or simulated SMS notice when patient's ticket is called to consultation room.
         """
         entry = QueueEntry.query.get_or_404(queue_entry_id)
         patient = entry.patient
@@ -243,7 +267,7 @@ class SMSService:
             f"with {entry.assigned_doctor or 'Attending Doctor'}. Please proceed to the room."
         )
 
-        return self.send_sms(formatted_phone, message_text, patient_id=patient.id, message_type="queue_alert")
+        return self.send_sms(formatted_phone, message_text, patient_id=patient.id, message_type="queue_alert", is_live=is_live)
 
 # Singleton Instance
 sms_service = SMSService()

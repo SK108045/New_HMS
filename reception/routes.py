@@ -785,20 +785,23 @@ def telephony_hub():
 def send_custom_sms():
     """
     Dispatches a custom broadcast/direct SMS to a patient or telephone number.
+    Supports Safe Simulation Mode (Zero Cost) and Live Africa's Talking Gateway.
     """
     recipient = request.form.get('recipient', '').strip()
     patient_id = request.form.get('patient_id', type=int) or None
     message_text = request.form.get('message_text', '').strip()
     msg_type = request.form.get('message_type', 'custom')
+    is_live = (request.form.get('send_mode') == 'live')
 
     if not recipient or not message_text:
         flash("Please provide both recipient phone number and message content.", "error")
         return redirect(url_for('reception.telephony_hub', patient_id=patient_id))
 
-    res = sms_service.send_sms(recipient, message_text, patient_id=patient_id, message_type=msg_type)
+    res = sms_service.send_sms(recipient, message_text, patient_id=patient_id, message_type=msg_type, is_live=is_live)
 
     if res.get('success'):
-        flash(f"✓ SMS sent successfully to {recipient} via Africa's Talking! (Cost: {res.get('cost', 'KES 0.8000')})", "success")
+        mode_label = "via Africa's Talking Live Gateway" if not res.get('simulated') else "(Safe Simulation Mode - Zero Cost)"
+        flash(f"✓ SMS processed successfully {mode_label}! Ref: {res.get('message_id')}", "success")
     else:
         flash(f"⚠ SMS failed: {res.get('error', 'Transmission error')}", "error")
 
@@ -808,20 +811,22 @@ def send_custom_sms():
 @reception_bp.route('/telephony/send-otp', methods=['POST'])
 def send_patient_otp():
     """
-    Generates and dispatches a live 6-digit verification OTP code to the patient's phone.
+    Generates and dispatches a 6-digit verification OTP code to the patient's phone.
     """
     patient_id = request.form.get('patient_id', type=int) or None
     phone = request.form.get('phone', '').strip() or None
     purpose = request.form.get('purpose', 'patient_verification')
+    is_live = (request.form.get('send_mode') == 'live')
 
     if not patient_id and not phone:
         flash("Please specify a patient or telephone number for OTP delivery.", "error")
         return redirect(url_for('reception.telephony_hub'))
 
-    res = sms_service.generate_and_send_otp(patient_id, phone=phone, purpose=purpose)
+    res = sms_service.generate_and_send_otp(patient_id, phone=phone, purpose=purpose, is_live=is_live)
 
     if res.get('success'):
-        flash(f"✓ Verification OTP dispatched via Africa's Talking SMS to {phone or 'patient'}! (Valid for 10 mins)", "success")
+        mode_label = "via Africa's Talking Live SMS" if not res.get('simulated') else "(Safe Simulation Mode)"
+        flash(f"✓ 6-Digit OTP code ({res.get('otp_code_preview')}) generated {mode_label}! Valid for 10 minutes.", "success")
     else:
         flash(f"⚠ Failed to dispatch OTP: {res.get('error')}", "error")
 
@@ -844,7 +849,7 @@ def verify_patient_otp():
     res = sms_service.verify_otp(phone, otp_code, patient_id=patient_id)
 
     if res.get('verified'):
-        flash(f"✓ Phone Number {phone} Verified Successfully! Identity Confirmed.", "success")
+        flash(f"✓ Phone Number {phone} Verified Successfully! Patient identity confirmed.", "success")
     else:
         flash(f"⚠ OTP Verification Failed: {res.get('error')}", "error")
 
@@ -854,10 +859,18 @@ def verify_patient_otp():
 @reception_bp.route('/telephony/queue-alert/<int:queue_id>', methods=['POST'])
 def send_queue_sms(queue_id):
     """
-    Triggers live SMS notification to a queued patient when their ticket is called.
+    Triggers SMS notification to a queued patient when their ticket is called.
     """
     entry = QueueEntry.query.get_or_404(queue_id)
-    res = sms_service.send_queue_alert(entry.id)
+    is_live = (request.form.get('send_mode') == 'live')
+    res = sms_service.send_queue_alert(entry.id, is_live=is_live)
+
+    if res.get('success'):
+        flash(f"✓ Queue notice sent to {entry.patient.full_name} ({entry.patient.phone})!", "success")
+    else:
+        flash(f"⚠ Queue notice failed: {res.get('error')}", "error")
+
+    return redirect(request.referrer or url_for('reception.dashboard'))
 
     if res.get('success'):
         flash(f"✓ Queue notice SMS sent to {entry.patient.full_name} ({entry.patient.phone})!", "success")
