@@ -5,17 +5,74 @@
 {% block content %}
 <div class="space-y-6">
 
-    <!-- Top Command Strip: Search & Operational Metrics -->
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+    <!-- =================== 1. OPERATIONAL KPI METRICS (FULL WIDTH 4-COL GRID) =================== -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <!-- Metric 1: Total Checked In Today -->
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 flex items-center justify-between transition-all hover:border-slate-300">
+            <div>
+                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Checked In Today</span>
+                <div class="text-2xl lg:text-3xl font-extrabold font-mono text-slate-900 mt-1">{{ total_checked_in_today }}</div>
+                <span class="text-[10px] text-slate-400 font-medium">Arrivals registered</span>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200 text-blue-800 flex items-center justify-center text-xl font-bold">
+                👥
+            </div>
+        </div>
+
+        <!-- Metric 2: Currently Waiting in Triage -->
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 flex items-center justify-between transition-all hover:border-slate-300">
+            <div>
+                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">In Triage Queue</span>
+                <div class="text-2xl lg:text-3xl font-extrabold font-mono text-slate-900 mt-1">{{ waiting_count }}</div>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                    <span class="w-2 h-2 rounded-full {% if waiting_count > 0 %}bg-emerald-500 animate-ping{% else %}bg-slate-300{% endif %}"></span>
+                    <span class="text-[10px] {% if waiting_count > 0 %}text-emerald-700 font-bold{% else %}text-slate-400{% endif %}">
+                        {% if waiting_count > 0 %}Active Caseload{% else %}Queue Clear{% endif %}
+                    </span>
+                </div>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center justify-center text-xl font-bold">
+                ⏳
+            </div>
+        </div>
+
+        <!-- Metric 3: Urgent / Emergency Cases -->
+        <div class="{% if emergency_count > 0 %}bg-rose-50/80 border-rose-300 shadow-rose-100{% else %}bg-white border-slate-200/90{% endif %} rounded-2xl border shadow-xs p-4 flex items-center justify-between transition-all">
+            <div>
+                <span class="text-[11px] font-bold {% if emergency_count > 0 %}text-rose-900{% else %}text-slate-500{% endif %} uppercase tracking-wider block">Urgent / ER Priority</span>
+                <div class="text-2xl lg:text-3xl font-extrabold font-mono {% if emergency_count > 0 %}text-rose-700{% else %}text-slate-900{% endif %} mt-1">{{ emergency_count }}</div>
+                <span class="text-[10px] {% if emergency_count > 0 %}text-rose-700 font-bold{% else %}text-slate-400{% endif %}">Critical triage alerts</span>
+            </div>
+            <div class="w-12 h-12 rounded-2xl {% if emergency_count > 0 %}bg-rose-200 border-rose-300 text-rose-900{% else %}bg-slate-100 border-slate-200 text-slate-600{% endif %} flex items-center justify-center text-xl font-bold">
+                🚨
+            </div>
+        </div>
+
+        <!-- Metric 4: Scheduled Appointments Today -->
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 flex items-center justify-between transition-all hover:border-slate-300">
+            <div>
+                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Today's Appointments</span>
+                <div class="text-2xl lg:text-3xl font-extrabold font-mono text-slate-900 mt-1">{{ today_appointments|length }}</div>
+                <a href="{{ url_for('reception.appointments') }}" class="text-[10px] text-blue-900 hover:text-blue-950 font-bold inline-flex items-center gap-0.5">
+                    <span>Manage Schedule &rarr;</span>
+                </a>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 flex items-center justify-center text-xl font-bold">
+                📅
+            </div>
+        </div>
+
+    </div>
+
+    <!-- =================== 2. DEDICATED SEARCH & QUICK ACTIONS COMMAND STRIP =================== -->
+    <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 sm:p-5">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             
-            <!-- Dominant Fast Search-as-you-type Bar -->
-            <div class="lg:col-span-8">
-                <label for="patient-search" class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">
-                    Fast Patient Lookup & Instant Check-In
-                </label>
+            <!-- Fast Search-as-you-type Input -->
+            <div class="flex-1 max-w-3xl">
                 <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
@@ -24,8 +81,8 @@
                         type="text" 
                         id="patient-search"
                         name="q"
-                        placeholder="Search Patient Name, Hospital Number (e.g. HSP-2026-0001), Phone, or National ID..."
-                        class="form-input pl-12 py-3.5 text-base font-medium rounded-lg border-slate-300 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 w-full"
+                        placeholder="Fast Search Patient Name, Hospital Number (e.g. HSP-2026-0001), Phone (+254...), or ID..."
+                        class="form-input pl-11 pr-10 py-3 text-sm font-medium rounded-xl border-slate-300 focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 w-full"
                         hx-get="{{ url_for('reception.quick_search') }}"
                         hx-trigger="keyup changed delay:200ms, search"
                         hx-target="#search-results"
@@ -33,23 +90,8 @@
                         autocomplete="off"
                         autofocus
                     >
-                    <div id="search-spinner" class="htmx-indicator absolute inset-y-0 right-0 pr-4 flex items-center">
-                        <div class="w-5 h-5 border-2 border-slate-800 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                </div>
-                <div class="mt-2.5 flex items-center justify-between text-xs text-slate-500">
-                    <span class="font-mono">Type to search records &bull; Press <kbd class="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded font-bold text-slate-800">Enter</kbd> to jump</span>
-                    <div class="flex items-center gap-3">
-                        <button 
-                            type="button" 
-                            @click="$dispatch('open-paystack-modal', { amount: 500.0, phone: '+254756205063' })"
-                            class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg font-bold text-xs flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
-                        >
-                            <span>⚡ Paystack MPesa (KES 500)</span>
-                        </button>
-                        <a href="{{ url_for('reception.register') }}" class="text-slate-900 hover:text-slate-700 font-bold flex items-center gap-1.5 text-xs">
-                            + Register Patient
-                        </a>
+                    <div id="search-spinner" class="htmx-indicator absolute inset-y-0 right-0 pr-3.5 flex items-center">
+                        <div class="w-4 h-4 border-2 border-slate-800 border-t-transparent rounded-full animate-spin"></div>
                     </div>
                 </div>
 
@@ -57,67 +99,66 @@
                 <div id="search-results" class="mt-2"></div>
             </div>
 
-            <!-- Front-Desk Operational Pulse (Neutral & Clear) -->
-            <div class="lg:col-span-4 border-t lg:border-t-0 lg:border-l border-slate-200 pt-5 lg:pt-0 lg:pl-6">
-                <div class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2.5">
-                    Today's Front-Desk Pulse
-                </div>
-                <div class="grid grid-cols-3 gap-3">
-                    
-                    <!-- Total Checked In -->
-                    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-center">
-                        <div class="text-xs text-slate-500 font-semibold uppercase">Checked In</div>
-                        <div class="text-3xl font-extrabold font-mono text-slate-900 mt-1">{{ total_checked_in_today }}</div>
-                    </div>
+            <!-- Action Toolbar Buttons -->
+            <div class="flex items-center gap-2.5 shrink-0 flex-wrap">
+                <!-- ⚡ Paystack Consultation Fee Prompt Modal Trigger -->
+                <button 
+                    type="button" 
+                    @click="$dispatch('open-paystack-modal', { amount: 1.0, phone: '+254756205063' })"
+                    class="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer hover:shadow-md"
+                    title="Initiate In-Portal MPesa STK Push Consultation Settlement"
+                >
+                    <span>⚡ Paystack MPesa</span>
+                    <span class="bg-emerald-800 text-emerald-100 text-[10px] px-1.5 py-0.5 rounded font-mono">1 Bob / 500</span>
+                </button>
 
-                    <!-- Active Waiting -->
-                    <div class="bg-slate-100 border border-slate-300 rounded-xl p-3.5 text-center">
-                        <div class="text-xs text-slate-700 font-semibold uppercase">In Queue</div>
-                        <div class="text-3xl font-extrabold font-mono text-slate-900 mt-1">{{ waiting_count }}</div>
-                    </div>
-
-                    <!-- Emergency / Urgent -->
-                    <div class="{% if emergency_count > 0 %}bg-rose-50 border-rose-300 text-rose-900{% else %}bg-slate-50 border-slate-200 text-slate-700{% endif %} border rounded-xl p-3.5 text-center">
-                        <div class="text-xs font-semibold uppercase {% if emergency_count > 0 %}text-rose-800 font-bold{% else %}text-slate-500{% endif %}">Urgent / ER</div>
-                        <div class="text-3xl font-extrabold font-mono mt-1 {% if emergency_count > 0 %}text-rose-700{% endif %}">{{ emergency_count }}</div>
-                    </div>
-
-                </div>
+                <!-- + Register New Patient -->
+                <a 
+                    href="{{ url_for('reception.register') }}" 
+                    class="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-950 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+                    </svg>
+                    <span>+ Register Patient</span>
+                </a>
             </div>
 
         </div>
     </div>
 
-    <!-- Main Workspace Layout: Two-Column -->
+    <!-- =================== 3. MAIN WORKSPACE: BALANCED TWO-COLUMN GRID =================== -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        <!-- Left 8-Cols: Live Triage & Intake Queue -->
-        <div class="lg:col-span-8 space-y-4">
+        <!-- Left 7-Cols: Live Triage & Intake Queue Station -->
+        <div class="lg:col-span-7 space-y-6">
             
-            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
                 
-                <!-- Queue Table Header & Controls -->
-                <div class="p-4 sm:px-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/80">
-                    <div class="flex items-center gap-3">
-                        <div class="w-3 h-3 rounded-full bg-slate-700 animate-pulse"></div>
-                        <h2 class="text-base font-bold text-slate-900">Live Intake & Triage Queue</h2>
-                        <span class="text-xs font-mono font-bold text-slate-700 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+                <!-- Queue Station Header & Filters -->
+                <div class="p-4 sm:px-5 border-b border-slate-200/90 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/70">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <h2 class="text-sm font-black text-slate-950 uppercase font-mono tracking-tight">Live Intake & Triage Queue</h2>
+                        <span class="text-[11px] font-mono font-bold text-slate-700 bg-white border border-slate-300 px-2 py-0.5 rounded-full shadow-2xs">
                             {{ active_queue|length }} Waiting
                         </span>
                     </div>
 
-                    <!-- Filter Controls (HTMX) -->
-                    <div class="flex items-center gap-2">
+                    <!-- Filter Tabs -->
+                    <div class="flex items-center gap-1.5 bg-slate-200/80 p-1 rounded-xl">
                         <button 
                             hx-get="{{ url_for('reception.live_queue', status='active') }}"
                             hx-target="#queue-table-container"
-                            class="px-3 py-1.5 text-xs font-semibold bg-white text-slate-800 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors">
+                            class="px-2.5 py-1 text-xs font-bold bg-white text-slate-900 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                        >
                             Active Queue
                         </button>
                         <button 
                             hx-get="{{ url_for('reception.live_queue', status='all') }}"
                             hx-target="#queue-table-container"
-                            class="px-3 py-1.5 text-xs font-semibold bg-white text-slate-800 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors">
+                            class="px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
+                        >
                             All Today
                         </button>
                     </div>
@@ -134,108 +175,132 @@
 
             </div>
 
-        </div>
-
-        <!-- Right 4-Cols: Today's Appointments & Recent Registrations -->
-        <div class="lg:col-span-4 space-y-6">
-            
-            <!-- Scheduled Appointments for Today -->
-            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                <div class="flex items-center justify-between pb-3.5 mb-3.5 border-b border-slate-200">
-                    <div>
-                        <h3 class="text-sm font-bold text-slate-900">Today's Appointments</h3>
-                        <p class="text-xs text-slate-500 font-mono">{{ today_appointments|length }} bookings scheduled</p>
+            <!-- Recent Patient Registrations (Master Records) -->
+            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3.5">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">📋</span>
+                        <h3 class="text-xs font-black text-slate-950 uppercase font-mono">Recent Patient Master Records</h3>
                     </div>
-                    <a href="{{ url_for('reception.appointments') }}" class="text-xs font-bold text-slate-900 hover:text-slate-700">
-                        View All &rarr;
-                    </a>
+                    <span class="text-[11px] text-slate-500 font-mono font-bold bg-slate-100 px-2 py-0.5 rounded">Latest 6 Registered</span>
                 </div>
 
-                {% if today_appointments %}
-                    <div class="space-y-3">
-                        {% for app in today_appointments %}
-                            <div class="p-3 rounded-lg border border-slate-200 hover:border-slate-300 bg-slate-50/70 flex items-center justify-between text-xs transition-all">
-                                <div class="space-y-1">
-                                    <div class="flex items-center gap-2">
-                                        <span class="font-mono font-bold text-xs text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-300">
-                                            {{ app.scheduled_time }}
-                                        </span>
-                                        <span class="font-bold text-sm text-slate-900">{{ app.patient.full_name }}</span>
-                                    </div>
-                                    <div class="text-slate-500 font-mono text-xs">
-                                        {{ app.patient.hospital_id }} &bull; {{ app.department }}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    {% if app.status == 'scheduled' %}
-                                        <form method="POST" action="{{ url_for('reception.checkin_from_appointment', appointment_id=app.id) }}">
-                                            <button type="submit" class="btn-primary text-xs py-1.5 px-3 shadow-xs">
-                                                Check In
-                                            </button>
-                                        </form>
-                                    {% elif app.status == 'checked_in' %}
-                                        <span class="px-2.5 py-1 bg-slate-200 text-slate-800 border border-slate-300 rounded font-bold text-xs font-mono">
-                                            In Queue
-                                        </span>
-                                    {% else %}
-                                        <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded font-medium text-xs font-mono">
-                                            {{ app.status|capitalize }}
-                                        </span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <div class="text-center py-8 text-slate-400 text-xs">
-                        No appointments scheduled for today.
-                    </div>
-                {% endif %}
-            </div>
-
-            <!-- Recent Patient Registrations -->
-            <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                <div class="flex items-center justify-between pb-3.5 mb-3.5 border-b border-slate-200">
-                    <h3 class="text-sm font-bold text-slate-900">Recent Master Records</h3>
-                    <span class="text-xs text-slate-500 font-mono font-semibold">Latest 6</span>
-                </div>
-
-                <div class="divide-y divide-slate-100">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {% for p in recent_patients %}
-                        <div class="py-2.5 flex items-center justify-between text-xs">
-                            <div class="flex items-center gap-3">
+                        <div class="p-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2.5 min-w-0">
                                 {% if p.photo_filename %}
-                                    <img src="{{ url_for('static', filename='uploads/photos/' ~ p.photo_filename) }}" class="w-9 h-9 rounded-md object-cover border border-slate-300">
+                                    <img src="{{ url_for('static', filename='uploads/photos/' ~ p.photo_filename) }}" class="w-8 h-8 rounded-lg object-cover border border-slate-300 shrink-0">
                                 {% else %}
-                                    <div class="w-9 h-9 rounded-md bg-slate-200 text-slate-800 font-bold flex items-center justify-center font-mono text-xs border border-slate-300">
+                                    <div class="w-8 h-8 rounded-lg bg-slate-200 text-slate-800 font-bold flex items-center justify-center font-mono text-xs border border-slate-300 shrink-0">
                                         {{ p.initials }}
                                     </div>
                                 {% endif %}
-                                <div>
-                                    <a href="{{ url_for('reception.patient_detail', patient_id=p.id) }}" class="font-bold text-sm text-slate-900 hover:text-slate-700 block">
+                                <div class="min-w-0">
+                                    <a href="{{ url_for('reception.patient_detail', patient_id=p.id) }}" class="font-bold text-xs text-slate-900 hover:text-blue-900 truncate block">
                                         {{ p.full_name }}
                                     </a>
-                                    <span class="font-mono text-slate-500 text-xs">{{ p.hospital_id }} &bull; {{ p.phone }}</span>
+                                    <span class="font-mono text-slate-500 text-[10px] block truncate">{{ p.hospital_id }} &bull; {{ p.phone }}</span>
                                 </div>
                             </div>
                             
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1.5 shrink-0">
                                 <button 
                                     type="button" 
-                                    @click="$dispatch('open-paystack-modal', { patientId: {{ p.id }}, patientName: '{{ p.full_name|replace('\'', '\\\'') }}', phone: '{{ p.phone }}', amount: 500.0 })"
-                                    class="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg text-[10px] flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
-                                    title="Pay KES 500 Consultation via Paystack MPesa"
+                                    @click="$dispatch('open-paystack-modal', { patientId: {{ p.id }}, patientName: '{{ p.full_name|replace('\'', '\\\'') }}', phone: '{{ p.phone }}', amount: 1.0 })"
+                                    class="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg text-[10px] flex items-center gap-0.5 shadow-2xs transition-colors cursor-pointer"
+                                    title="Initiate Paystack MPesa Settlement"
                                 >
-                                    <span>⚡ Pay 500</span>
+                                    <span>⚡ Pay</span>
                                 </button>
-                                <a href="{{ url_for('reception.patient_detail', patient_id=p.id) }}" class="text-slate-400 hover:text-slate-900 p-1 font-bold text-sm">
+                                <a href="{{ url_for('reception.patient_detail', patient_id=p.id) }}" class="p-1 text-slate-400 hover:text-slate-900 font-bold text-xs" title="View Profile">
                                     &rarr;
                                 </a>
                             </div>
                         </div>
                     {% endfor %}
                 </div>
+            </div>
+
+        </div>
+
+        <!-- Right 5-Cols: Today's Scheduled Appointments Hub -->
+        <div class="lg:col-span-5 space-y-6">
+            
+            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-4">
+                
+                <!-- Appointments Header -->
+                <div class="flex items-center justify-between pb-3.5 border-b border-slate-200">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">📅</span>
+                            <h3 class="text-sm font-black text-slate-950 uppercase font-mono tracking-tight">Today's Appointments</h3>
+                        </div>
+                        <p class="text-[11px] text-slate-500 font-mono mt-0.5">{{ today_appointments|length }} bookings scheduled for today</p>
+                    </div>
+                    <a href="{{ url_for('reception.appointments') }}" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors flex items-center gap-1">
+                        <span>Full Schedule &rarr;</span>
+                    </a>
+                </div>
+
+                <!-- Scrollable Appointments List with Max-Height -->
+                {% if today_appointments %}
+                    <div class="max-h-[520px] overflow-y-auto space-y-2.5 pr-1 custom-scrollbar">
+                        {% for app in today_appointments %}
+                            <div class="p-3 rounded-xl border border-slate-200 hover:border-slate-300 bg-slate-50/60 hover:bg-slate-50 transition-all flex items-center justify-between gap-3 text-xs">
+                                
+                                <!-- Left: Time, Name, Info -->
+                                <div class="space-y-1 min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="font-mono font-bold text-[11px] text-blue-950 bg-blue-100/80 px-2 py-0.5 rounded-md border border-blue-200 shrink-0">
+                                            {{ app.scheduled_time }}
+                                        </span>
+                                        <a href="{{ url_for('reception.patient_detail', patient_id=app.patient.id) }}" class="font-bold text-xs text-slate-900 hover:text-blue-900 truncate">
+                                            {{ app.patient.full_name }}
+                                        </a>
+                                    </div>
+                                    <div class="text-slate-500 font-mono text-[10px] flex items-center gap-2 truncate">
+                                        <span>{{ app.patient.hospital_id }}</span>
+                                        <span>&bull;</span>
+                                        <span class="text-slate-700 font-medium truncate">{{ app.doctor_name or app.department }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Right: Status Badge & 1-Click Action -->
+                                <div class="shrink-0">
+                                    {% if app.status == 'scheduled' %}
+                                        <form method="POST" action="{{ url_for('reception.checkin_from_appointment', appointment_id=app.id) }}">
+                                            <button type="submit" class="px-3 py-1.5 bg-blue-900 hover:bg-blue-950 text-white font-bold rounded-xl text-xs shadow-xs transition-all cursor-pointer">
+                                                Check In &rarr;
+                                            </button>
+                                        </form>
+                                    {% elif app.status == 'confirmed' %}
+                                        <form method="POST" action="{{ url_for('reception.checkin_from_appointment', appointment_id=app.id) }}">
+                                            <button type="submit" class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-xs transition-all cursor-pointer" title="Confirmed appointment - Check In">
+                                                ✓ Check In
+                                            </button>
+                                        </form>
+                                    {% elif app.status == 'checked_in' %}
+                                        <span class="px-2.5 py-1 bg-slate-200 text-slate-800 border border-slate-300 rounded-lg font-bold text-[11px] font-mono">
+                                            In Queue
+                                        </span>
+                                    {% else %}
+                                        <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded font-medium text-[10px] font-mono">
+                                            {{ app.status|capitalize }}
+                                        </span>
+                                    {% endif %}
+                                </div>
+
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-10 text-slate-400 text-xs bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                        <div class="text-2xl mb-1">📅</div>
+                        No appointments booked for today.
+                    </div>
+                {% endif %}
+
             </div>
 
         </div>
