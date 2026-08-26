@@ -1,7 +1,7 @@
 {% if patients %}
 <div class="w-full overflow-hidden">
     <table class="w-full text-left text-sm table-auto">
-        <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+        <thead class="bg-slate-50 text-slate-800 font-bold border-b border-slate-200 uppercase tracking-wider text-xs font-sans">
             <tr>
                 <th class="py-3.5 px-4 w-[16%]">Hospital ID</th>
                 <th class="py-3.5 px-4 w-[24%]">Patient Name</th>
@@ -17,7 +17,7 @@
                     
                     <!-- Hospital ID -->
                     <td class="py-3.5 px-4 whitespace-nowrap">
-                        <a href="{{ url_for('reception.patient_detail', patient_id=patient.id) }}" class="font-mono font-bold text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-900 border border-slate-300 rounded transition-colors inline-block">
+                        <a href="{{ url_for('reception.patient_detail', patient_id=patient.id) }}" class="font-mono font-bold text-xs px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-950 border border-slate-300 rounded-lg transition-colors inline-block shadow-2xs">
                             {{ patient.hospital_id }}
                         </a>
                     </td>
@@ -25,35 +25,35 @@
                     <!-- Patient Name -->
                     <td class="py-3.5 px-4 whitespace-nowrap">
                         <div class="flex items-center gap-1.5">
-                            <a href="{{ url_for('reception.patient_detail', patient_id=patient.id) }}" class="font-bold text-slate-900 hover:text-slate-700 text-sm hover:underline">
+                            <a href="{{ url_for('reception.patient_detail', patient_id=patient.id) }}" class="font-black text-slate-950 hover:text-blue-900 text-sm hover:underline">
                                 {{ patient.full_name }}
                             </a>
                             {% if patient.allergies %}
-                                <span class="text-[10px] font-bold px-1.5 py-0.2 bg-rose-50 text-rose-700 border border-rose-200 rounded" title="Allergies: {{ patient.allergies }}">
+                                <span class="text-xs font-bold px-2 py-0.5 bg-rose-100 text-rose-900 border border-rose-300 rounded-md" title="Allergies: {{ patient.allergies }}">
                                     Allergy
                                 </span>
                             {% endif %}
                         </div>
-                        <div class="text-xs text-slate-500 font-mono">
+                        <div class="text-xs text-slate-600 font-sans font-medium mt-0.5">
                             {{ patient.gender }}, {{ patient.age }}y
                         </div>
                     </td>
 
                     <!-- Phone -->
-                    <td class="py-3.5 px-4 whitespace-nowrap font-mono text-slate-800 font-semibold text-sm">
+                    <td class="py-3.5 px-4 whitespace-nowrap font-mono text-slate-950 font-bold text-sm">
                         {{ patient.phone }}
                     </td>
 
                     <!-- Payer -->
                     <td class="py-3.5 px-4 whitespace-nowrap">
-                        <span class="px-2 py-0.5 rounded text-xs font-semibold
-                            {% if patient.primary_payer == 'Insurance' %}bg-slate-100 text-slate-900 border border-slate-300 font-bold
-                            {% elif patient.primary_payer == 'Corporate' %}bg-slate-800 text-white font-bold
-                            {% else %}bg-slate-50 text-slate-700 border border-slate-200{% endif %}">
+                        <span class="px-2.5 py-0.5 rounded-lg text-xs font-bold font-sans
+                            {% if patient.primary_payer == 'Insurance' %}bg-slate-100 text-slate-950 border border-slate-300
+                            {% elif patient.primary_payer == 'Corporate' %}bg-slate-900 text-white
+                            {% else %}bg-slate-100 text-slate-800 border border-slate-200{% endif %}">
                             {{ patient.primary_payer }}
                         </span>
                         {% if patient.insurance_company %}
-                            <div class="text-xs text-slate-500 mt-0.5 font-medium truncate max-w-[130px]" title="{{ patient.insurance_company }}">
+                            <div class="text-xs text-slate-600 font-sans font-medium mt-0.5 truncate max-w-[130px]" title="{{ patient.insurance_company }}">
                                 {{ patient.insurance_company }}
                             </div>
                         {% endif %}
@@ -61,8 +61,8 @@
 
                     <!-- Next of Kin -->
                     <td class="py-3.5 px-4 whitespace-nowrap text-slate-800 text-xs">
-                        <div class="font-semibold text-slate-900 text-xs">{{ patient.next_of_kin_name }}</div>
-                        <div class="text-slate-500 font-mono text-[11px]">{{ patient.next_of_kin_relation }} &bull; {{ patient.next_of_kin_phone }}</div>
+                        <div class="font-bold text-slate-950 text-xs">{{ patient.next_of_kin_name }}</div>
+                        <div class="text-slate-600 font-sans font-medium text-xs mt-0.5">{{ patient.next_of_kin_relation }} &bull; <span class="font-mono">{{ patient.next_of_kin_phone }}</span></div>
                     </td>
 
                     <!-- Actions -->
@@ -72,13 +72,13 @@
                                 type="button"
                                 hx-get="{{ url_for('reception.checkin', patient_id=patient.id) }}"
                                 hx-target="#modal-container"
-                                class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded shadow-xs inline-flex items-center gap-1 transition-colors"
+                                class="px-3 py-1.5 bg-slate-900 hover:bg-slate-950 text-white font-bold text-xs rounded-xl shadow-xs inline-flex items-center gap-1 transition-colors cursor-pointer"
                                 title="Check In Patient to Triage"
                             >
                                 Check In
                             </button>
 
-                            <a href="{{ url_for('reception.patient_detail', patient_id=patient.id) }}" class="p-1 bg-white hover:bg-slate-100 text-slate-700 rounded border border-slate-300 transition-colors" title="View Patient Chart">
+                            <a href="{{ url_for('reception.patient_detail', patient_id=patient.id) }}" class="p-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-300 transition-colors" title="View Patient Chart">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                                 </svg>
@@ -92,7 +92,7 @@
     </table>
 </div>
 
-<div class="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 font-mono">
+<div class="px-5 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-sans font-medium">
     <span>Showing {{ patients|length }} Master Record{% if patients|length != 1 %}s{% endif %}</span>
     <span>Apex Medical Core Registry</span>
 </div>

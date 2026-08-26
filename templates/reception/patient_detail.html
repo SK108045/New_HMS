@@ -8,16 +8,16 @@
     <!-- Header & Breadcrumb -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
         <div>
-            <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
-                <a href="{{ url_for('reception.dashboard') }}" class="hover:text-slate-900">Reception Desk</a>
+            <div class="flex items-center gap-2 text-xs font-sans text-slate-500 mb-1">
+                <a href="{{ url_for('reception.dashboard') }}" class="hover:text-slate-900 font-semibold text-slate-600">Reception Desk</a>
                 <span>/</span>
-                <a href="{{ url_for('reception.search') }}" class="hover:text-slate-900">Patient Directory</a>
+                <a href="{{ url_for('reception.search') }}" class="hover:text-slate-900 font-semibold text-slate-600">Patient Directory</a>
                 <span>/</span>
-                <span class="text-slate-800 font-semibold">{{ patient.hospital_id }}</span>
+                <span class="text-slate-900 font-bold font-mono">{{ patient.hospital_id }}</span>
             </div>
             <div class="flex items-center gap-3">
-                <h1 class="text-xl font-bold text-slate-900 tracking-tight">{{ patient.full_name }}</h1>
-                <span class="font-mono text-xs font-bold px-2.5 py-1 bg-slate-100 text-slate-900 border border-slate-300 rounded-md">
+                <h1 class="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">{{ patient.full_name }}</h1>
+                <span class="font-mono text-xs font-black px-2.5 py-1 bg-slate-100 text-slate-950 border border-slate-300 rounded-lg shadow-2xs">
                     {{ patient.hospital_id }}
                 </span>
             </div>
@@ -28,13 +28,13 @@
             <button 
                 type="button"
                 @click="$dispatch('open-paystack-modal', { patientId: {{ patient.id }}, patientName: '{{ patient.full_name|replace('\'', '\\\'') }}', phone: '{{ patient.phone }}', amount: 500.0 })"
-                class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
             >
                 <span>⚡ Paystack MPesa (KES 500)</span>
             </button>
 
             {% if active_ticket %}
-                <span class="inline-flex items-center gap-2 px-3 py-2 bg-amber-50 text-amber-800 border border-amber-300 rounded-lg text-xs font-mono font-bold">
+                <span class="inline-flex items-center gap-2 px-3 py-2 bg-amber-50 text-amber-950 border border-amber-300 rounded-xl text-xs font-mono font-bold shadow-2xs">
                     <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
                     In Queue: {{ active_ticket.ticket_number }} ({{ active_ticket.destination_department }})
                 </span>
@@ -43,41 +43,41 @@
                     type="button"
                     hx-get="{{ url_for('reception.checkin', patient_id=patient.id) }}"
                     hx-target="#modal-container"
-                    class="btn-primary text-xs py-2 px-3.5 shadow-sm"
+                    class="btn-primary text-xs py-2 px-3.5 shadow-sm font-bold"
                 >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
                     </svg>
-                    Check In to Queue
+                    <span>Check In to Queue</span>
                 </button>
             {% endif %}
 
-            <a href="{{ url_for('triage.direct_vitals', patient_id=patient.id) }}" class="btn-primary text-xs py-2 px-3">
+            <a href="{{ url_for('triage.direct_vitals', patient_id=patient.id) }}" class="btn-primary text-xs py-2 px-3.5 font-bold">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                 </svg>
-                Record Vitals
+                <span>Record Vitals</span>
             </a>
 
-            <a href="{{ url_for('reception.appointments') }}?patient_id={{ patient.id }}" class="btn-secondary text-xs py-2 px-3">
+            <a href="{{ url_for('reception.appointments') }}?patient_id={{ patient.id }}" class="btn-secondary text-xs py-2 px-3 font-bold">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                 </svg>
-                Book Visit
+                <span>Book Visit</span>
             </a>
 
-            <a href="{{ url_for('reception.print_card', patient_id=patient.id) }}" target="_blank" class="btn-secondary text-xs py-2 px-3">
+            <a href="{{ url_for('reception.print_card', patient_id=patient.id) }}" target="_blank" class="btn-secondary text-xs py-2 px-3 font-bold">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
                 </svg>
-                Print ID Card
+                <span>Print ID Card</span>
             </a>
 
-            <a href="{{ url_for('reception.edit_patient', patient_id=patient.id) }}" class="btn-secondary text-xs py-2 px-3">
+            <a href="{{ url_for('reception.edit_patient', patient_id=patient.id) }}" class="btn-secondary text-xs py-2 px-3 font-bold">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                 </svg>
-                Edit Record
+                <span>Edit Record</span>
             </a>
         </div>
     </div>
@@ -86,64 +86,64 @@
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         <!-- Left: Photo & Identification Card -->
-        <div class="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
+        <div class="lg:col-span-4 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-5">
             
             <div class="flex items-center gap-4 pb-4 border-b border-slate-200">
                 {% if patient.photo_filename %}
-                    <img src="{{ url_for('static', filename='uploads/photos/' ~ patient.photo_filename) }}" alt="{{ patient.full_name }}" class="w-20 h-20 rounded-xl object-cover border border-slate-300 shadow-xs">
+                    <img src="{{ url_for('static', filename='uploads/photos/' ~ patient.photo_filename) }}" alt="{{ patient.full_name }}" class="w-20 h-20 rounded-2xl object-cover border border-slate-300 shadow-xs">
                 {% else %}
-                    <div class="w-20 h-20 rounded-xl bg-slate-200 text-slate-800 font-bold flex items-center justify-center font-mono text-2xl border border-slate-300">
+                    <div class="w-20 h-20 rounded-2xl bg-slate-200 text-slate-900 font-black flex items-center justify-center font-mono text-2xl border border-slate-300">
                         {{ patient.initials }}
                     </div>
                 {% endif %}
                 
                 <div class="space-y-1">
-                    <div class="text-xs font-mono font-bold text-slate-500 uppercase">Hospital ID</div>
-                    <div class="text-lg font-bold font-mono text-slate-900">{{ patient.hospital_id }}</div>
-                    <div class="text-xs text-slate-500 font-mono">Registered: {{ patient.created_at.strftime('%d %b %Y') }}</div>
+                    <div class="text-xs font-sans font-bold text-slate-600 uppercase tracking-wider">Hospital ID</div>
+                    <div class="text-xl font-black font-mono text-slate-950">{{ patient.hospital_id }}</div>
+                    <div class="text-xs text-slate-600 font-sans font-medium">Registered: {{ patient.created_at.strftime('%d %b %Y') }}</div>
                 </div>
             </div>
 
             <!-- Allergy Alert Banner -->
             {% if patient.allergies %}
-                <div class="p-3.5 bg-rose-50 border border-rose-200 rounded-lg text-xs space-y-1">
-                    <div class="flex items-center gap-1.5 font-bold text-rose-800 uppercase tracking-wider text-xs">
-                        <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                <div class="p-3.5 bg-rose-50 border border-rose-300 rounded-xl text-xs space-y-1 shadow-2xs">
+                    <div class="flex items-center gap-1.5 font-black text-rose-900 uppercase tracking-wider text-xs">
+                        <svg class="w-4 h-4 text-rose-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
                         </svg>
                         Clinical Allergy Alert
                     </div>
-                    <div class="font-semibold text-rose-900 text-xs">{{ patient.allergies }}</div>
+                    <div class="font-bold text-rose-950 text-xs">{{ patient.allergies }}</div>
                 </div>
             {% endif %}
 
             <!-- Core Demographics Table -->
             <div class="space-y-3 text-sm">
-                <div class="flex justify-between py-1 border-b border-slate-100">
-                    <span class="text-slate-500 font-medium">Gender</span>
-                    <span class="font-bold text-slate-900">{{ patient.gender }}</span>
+                <div class="flex justify-between py-1.5 border-b border-slate-100">
+                    <span class="text-slate-700 font-semibold font-sans">Gender</span>
+                    <span class="font-black text-slate-950">{{ patient.gender }}</span>
                 </div>
-                <div class="flex justify-between py-1 border-b border-slate-100">
-                    <span class="text-slate-500 font-medium">Date of Birth</span>
-                    <span class="font-mono text-slate-900 font-semibold">{{ patient.date_of_birth.strftime('%d %b %Y') }} ({{ patient.age }} yrs)</span>
+                <div class="flex justify-between py-1.5 border-b border-slate-100">
+                    <span class="text-slate-700 font-semibold font-sans">Date of Birth</span>
+                    <span class="font-mono text-slate-950 font-bold">{{ patient.date_of_birth.strftime('%d %b %Y') }} ({{ patient.age }} yrs)</span>
                 </div>
-                <div class="flex justify-between py-1 border-b border-slate-100">
-                    <span class="text-slate-500 font-medium">Blood Group</span>
-                    <span class="font-bold font-mono px-2 py-0.5 bg-slate-100 rounded text-slate-900 border border-slate-200">
+                <div class="flex justify-between py-1.5 border-b border-slate-100">
+                    <span class="text-slate-700 font-semibold font-sans">Blood Group</span>
+                    <span class="font-black font-mono px-2.5 py-0.5 bg-slate-100 rounded-lg text-slate-950 border border-slate-300 shadow-2xs">
                         {{ patient.blood_group or 'Not Tested' }}
                     </span>
                 </div>
-                <div class="flex justify-between py-1 border-b border-slate-100">
-                    <span class="text-slate-500 font-medium">National ID</span>
-                    <span class="font-mono text-slate-900 font-semibold">{{ patient.national_id or '-' }}</span>
+                <div class="flex justify-between py-1.5 border-b border-slate-100">
+                    <span class="text-slate-700 font-semibold font-sans">National ID</span>
+                    <span class="font-mono text-slate-950 font-bold">{{ patient.national_id or '-' }}</span>
                 </div>
-                <div class="flex justify-between py-1 border-b border-slate-100">
-                    <span class="text-slate-500 font-medium">Phone Number</span>
-                    <span class="font-mono font-bold text-slate-900">{{ patient.phone }}</span>
+                <div class="flex justify-between py-1.5 border-b border-slate-100">
+                    <span class="text-slate-700 font-semibold font-sans">Phone Number</span>
+                    <span class="font-mono font-black text-slate-950">{{ patient.phone }}</span>
                 </div>
-                <div class="flex justify-between py-1">
-                    <span class="text-slate-500 font-medium">Address</span>
-                    <span class="text-slate-800 text-right max-w-[200px] font-medium">{{ patient.residential_address or '-' }}</span>
+                <div class="flex justify-between py-1.5">
+                    <span class="text-slate-700 font-semibold font-sans">Address</span>
+                    <span class="text-slate-900 text-right max-w-[200px] font-bold">{{ patient.residential_address or '-' }}</span>
                 </div>
             </div>
 
@@ -156,43 +156,43 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 
                 <!-- Payer / Insurance -->
-                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+                <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3">
                     <div class="flex items-center justify-between pb-2 border-b border-slate-200">
-                        <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Primary Payer Scheme</h3>
-                        <span class="px-2.5 py-0.5 rounded text-xs font-bold font-mono bg-slate-100 text-slate-900 border border-slate-300">
+                        <h3 class="text-xs font-bold text-slate-950 uppercase tracking-wider font-sans">Primary Payer Scheme</h3>
+                        <span class="px-2.5 py-0.5 rounded-lg text-xs font-bold font-mono bg-slate-100 text-slate-950 border border-slate-300">
                             {{ patient.primary_payer }}
                         </span>
                     </div>
-                    <div class="space-y-2 text-xs">
+                    <div class="space-y-2.5 text-xs">
                         <div>
-                            <span class="text-slate-500 block text-xs">Provider / Scheme</span>
-                            <span class="font-bold text-slate-900 text-sm">{{ patient.insurance_company or 'Direct Self-Pay' }}</span>
+                            <span class="text-slate-600 block text-xs font-semibold font-sans">Provider / Scheme</span>
+                            <span class="font-black text-slate-950 text-sm">{{ patient.insurance_company or 'Direct Self-Pay' }}</span>
                         </div>
                         {% if patient.insurance_policy_number %}
                             <div>
-                                <span class="text-slate-500 block text-xs">Policy / Member Number</span>
-                                <span class="font-mono font-bold text-slate-900 text-sm">{{ patient.insurance_policy_number }}</span>
+                                <span class="text-slate-600 block text-xs font-semibold font-sans">Policy / Member Number</span>
+                                <span class="font-mono font-black text-slate-950 text-sm">{{ patient.insurance_policy_number }}</span>
                             </div>
                         {% endif %}
                     </div>
                 </div>
 
                 <!-- Next of Kin -->
-                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+                <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3">
                     <div class="flex items-center justify-between pb-2 border-b border-slate-200">
-                        <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Emergency Contact (Next of Kin)</h3>
-                        <span class="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        <h3 class="text-xs font-bold text-slate-950 uppercase tracking-wider font-sans">Emergency Contact (Next of Kin)</h3>
+                        <span class="text-xs font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-300">
                             {{ patient.next_of_kin_relation }}
                         </span>
                     </div>
-                    <div class="space-y-2 text-xs">
+                    <div class="space-y-2.5 text-xs">
                         <div>
-                            <span class="text-slate-500 block text-xs">Contact Name</span>
-                            <span class="font-bold text-slate-900 text-sm">{{ patient.next_of_kin_name }}</span>
+                            <span class="text-slate-600 block text-xs font-semibold font-sans">Contact Name</span>
+                            <span class="font-black text-slate-950 text-sm">{{ patient.next_of_kin_name }}</span>
                         </div>
                         <div>
-                            <span class="text-slate-500 block text-xs">Emergency Phone</span>
-                            <span class="font-mono font-bold text-slate-900 text-sm">{{ patient.next_of_kin_phone }}</span>
+                            <span class="text-slate-600 block text-xs font-semibold font-sans">Emergency Phone</span>
+                            <span class="font-mono font-black text-slate-950 text-sm">{{ patient.next_of_kin_phone }}</span>
                         </div>
                     </div>
                 </div>
@@ -200,11 +200,11 @@
             </div>
 
             <!-- Clinical Visit & Intake History -->
-            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
                 <div class="p-4 sm:px-6 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
                     <div class="flex items-center gap-2.5">
-                        <h3 class="text-sm font-bold text-slate-900">Intake & Queue Visit History</h3>
-                        <span class="text-xs font-mono font-bold text-slate-600 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+                        <h3 class="text-sm font-bold text-slate-950">Intake & Queue Visit History</h3>
+                        <span class="text-xs font-mono font-black text-slate-900 bg-white border border-slate-300 px-2.5 py-0.5 rounded-lg shadow-2xs">
                             {{ patient.queue_entries|length }} Records
                         </span>
                     </div>
@@ -212,47 +212,47 @@
 
                 {% if patient.queue_entries %}
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left text-xs">
-                            <thead class="bg-slate-100/90 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
+                        <table class="w-full text-left text-sm table-auto">
+                            <thead class="bg-slate-50 text-slate-800 font-bold border-b border-slate-200 uppercase tracking-wider text-xs font-sans">
                                 <tr>
-                                    <th class="py-3 px-4">Ticket</th>
-                                    <th class="py-3 px-4">Intake Date/Time</th>
-                                    <th class="py-3 px-4">Department</th>
-                                    <th class="py-3 px-4">Priority</th>
-                                    <th class="py-3 px-4">Chief Complaint</th>
-                                    <th class="py-3 px-4">Status</th>
+                                    <th class="py-3.5 px-4">Ticket</th>
+                                    <th class="py-3.5 px-4">Intake Date/Time</th>
+                                    <th class="py-3.5 px-4">Department</th>
+                                    <th class="py-3.5 px-4">Priority</th>
+                                    <th class="py-3.5 px-4">Chief Complaint</th>
+                                    <th class="py-3.5 px-4">Status</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                                 {% for q in patient.queue_entries %}
-                                    <tr class="hover:bg-slate-50/80">
-                                        <td class="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
+                                    <tr class="hover:bg-slate-50/80 transition-colors">
+                                        <td class="py-3.5 px-4 font-mono font-black text-slate-950 whitespace-nowrap">
                                             {{ q.ticket_number }}
                                         </td>
-                                        <td class="py-3 px-4 whitespace-nowrap font-mono text-slate-600">
+                                        <td class="py-3.5 px-4 whitespace-nowrap font-mono text-slate-700 font-semibold text-xs">
                                             {{ q.checked_in_at.strftime('%d %b %Y, %H:%M') }}
                                         </td>
-                                        <td class="py-3 px-4 whitespace-nowrap font-bold text-slate-900">
+                                        <td class="py-3.5 px-4 whitespace-nowrap font-bold text-slate-950">
                                             {{ q.destination_department }}
                                         </td>
-                                        <td class="py-3 px-4 whitespace-nowrap">
+                                        <td class="py-3.5 px-4 whitespace-nowrap">
                                             {% if q.priority == 'emergency' %}
-                                                <span class="badge-emergency text-[11px] uppercase font-bold">ER</span>
+                                                <span class="badge-emergency text-xs uppercase font-bold">ER</span>
                                             {% elif q.priority == 'urgent' %}
-                                                <span class="badge-urgent text-[11px] uppercase font-bold">Urgent</span>
+                                                <span class="badge-urgent text-xs uppercase font-bold">Urgent</span>
                                             {% else %}
-                                                <span class="badge-normal text-[11px]">Normal</span>
+                                                <span class="badge-normal text-xs font-semibold">Normal</span>
                                             {% endif %}
                                         </td>
-                                        <td class="py-3 px-4 text-slate-800 max-w-xs truncate" title="{{ q.chief_complaint or '-' }}">
+                                        <td class="py-3.5 px-4 text-slate-900 max-w-xs truncate font-medium text-xs" title="{{ q.chief_complaint or '-' }}">
                                             {{ q.chief_complaint or '-' }}
                                         </td>
-                                        <td class="py-3 px-4 whitespace-nowrap">
-                                            <span class="px-2.5 py-0.5 rounded text-xs font-semibold 
-                                                {% if q.status == 'waiting' %}bg-slate-100 text-slate-800 border border-slate-300
-                                                {% elif q.status == 'in_progress' %}bg-slate-800 text-white
-                                                {% elif q.status == 'completed' %}bg-slate-100 text-slate-600 border border-slate-200
-                                                {% else %}bg-rose-50 text-rose-700 border border-rose-200{% endif %}">
+                                        <td class="py-3.5 px-4 whitespace-nowrap">
+                                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold font-sans shadow-2xs 
+                                                {% if q.status == 'waiting' %}bg-amber-50 text-amber-950 border border-amber-300
+                                                {% elif q.status == 'in_progress' %}bg-slate-900 text-white
+                                                {% elif q.status == 'completed' %}bg-slate-100 text-slate-800 border border-slate-300
+                                                {% else %}bg-rose-50 text-rose-900 border border-rose-300{% endif %}">
                                                 {{ q.status|capitalize }}
                                             </span>
                                         </td>
@@ -269,56 +269,56 @@
             </div>
 
             <!-- Clinical Vitals History -->
-            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
                 <div class="p-4 sm:px-6 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
                     <div class="flex items-center gap-2.5">
-                        <h3 class="text-sm font-bold text-slate-900">Clinical Vitals & Acuity History</h3>
-                        <span class="text-xs font-mono font-bold text-slate-600 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+                        <h3 class="text-sm font-bold text-slate-950">Clinical Vitals & Acuity History</h3>
+                        <span class="text-xs font-mono font-black text-slate-900 bg-white border border-slate-300 px-2.5 py-0.5 rounded-lg shadow-2xs">
                             {{ patient.vitals_records|length }} Assessments
                         </span>
                     </div>
-                    <a href="{{ url_for('triage.direct_vitals', patient_id=patient.id) }}" class="text-xs font-bold text-slate-900 hover:text-slate-700">
+                    <a href="{{ url_for('triage.direct_vitals', patient_id=patient.id) }}" class="text-xs font-bold text-blue-800 hover:text-blue-900">
                         + Capture New Vitals
                     </a>
                 </div>
 
                 {% if patient.vitals_records %}
                     <div class="overflow-hidden">
-                        <table class="w-full text-left text-xs table-auto">
-                            <thead class="bg-slate-100/90 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
+                        <table class="w-full text-left text-sm table-auto">
+                            <thead class="bg-slate-50 text-slate-800 font-bold border-b border-slate-200 uppercase tracking-wider text-xs font-sans">
                                 <tr>
-                                    <th class="py-3 px-4 w-[16%]">Date/Time</th>
-                                    <th class="py-3 px-4 w-[22%]">Blood Pressure & HR</th>
-                                    <th class="py-3 px-4 w-[20%]">Temp & SpO2</th>
-                                    <th class="py-3 px-4 w-[16%]">BMI & Status</th>
-                                    <th class="py-3 px-4 w-[14%]">Acuity</th>
-                                    <th class="py-3 px-4 text-right w-[12%]">Nurse</th>
+                                    <th class="py-3.5 px-4 w-[16%]">Date/Time</th>
+                                    <th class="py-3.5 px-4 w-[22%]">Blood Pressure & HR</th>
+                                    <th class="py-3.5 px-4 w-[20%]">Temp & SpO2</th>
+                                    <th class="py-3.5 px-4 w-[16%]">BMI & Status</th>
+                                    <th class="py-3.5 px-4 w-[14%]">Acuity</th>
+                                    <th class="py-3.5 px-4 text-right w-[12%]">Nurse</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                                 {% for v in patient.vitals_records %}
-                                    <tr class="hover:bg-slate-50/80">
-                                        <td class="py-3 px-4 whitespace-nowrap font-mono text-slate-600">
+                                    <tr class="hover:bg-slate-50/80 transition-colors">
+                                        <td class="py-3.5 px-4 whitespace-nowrap font-mono text-slate-700 font-semibold text-xs">
                                             {{ v.created_at.strftime('%d %b %Y, %H:%M') }}
                                         </td>
-                                        <td class="py-3 px-4 whitespace-nowrap font-mono font-bold text-slate-900">
-                                            {{ v.bp_display }} &bull; {{ v.pulse_rate or '-' }} bpm
+                                        <td class="py-3.5 px-4 whitespace-nowrap font-sans font-bold text-xs text-slate-950">
+                                            <span class="font-mono">{{ v.bp_display }}</span> &bull; <span class="font-mono">{{ v.pulse_rate or '-' }}</span> bpm
                                         </td>
-                                        <td class="py-3 px-4 whitespace-nowrap font-mono text-slate-700">
-                                            {{ v.temperature or '-' }}&deg;C &bull; {{ v.spo2 or '-' }}%
+                                        <td class="py-3.5 px-4 whitespace-nowrap font-sans text-xs font-medium text-slate-800">
+                                            <span class="font-mono">{{ v.temperature or '-' }}</span>&deg;C &bull; <span class="font-mono">{{ v.spo2 or '-' }}</span>%
                                         </td>
-                                        <td class="py-3 px-4 whitespace-nowrap font-mono text-slate-800">
-                                            {{ v.bmi or '-' }} ({{ v.bmi_category or '-' }})
+                                        <td class="py-3.5 px-4 whitespace-nowrap font-sans text-xs font-medium text-slate-900">
+                                            <span class="font-mono font-bold">{{ v.bmi or '-' }}</span> ({{ v.bmi_category or '-' }})
                                         </td>
-                                        <td class="py-3 px-4 whitespace-nowrap">
-                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono 
-                                                {% if v.triage_category == 'red' %}bg-rose-100 text-rose-800 border border-rose-300
-                                                {% elif v.triage_category == 'yellow' %}bg-amber-100 text-amber-800 border border-amber-300
-                                                {% else %}bg-slate-100 text-slate-800 border border-slate-300{% endif %}">
+                                        <td class="py-3.5 px-4 whitespace-nowrap">
+                                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold font-mono shadow-2xs
+                                                {% if v.triage_category == 'red' %}bg-rose-100 text-rose-950 border border-rose-300
+                                                {% elif v.triage_category == 'yellow' %}bg-amber-100 text-amber-950 border border-amber-300
+                                                {% else %}bg-slate-100 text-slate-900 border border-slate-300{% endif %}">
                                                 {{ v.triage_category|upper }}
                                             </span>
                                         </td>
-                                        <td class="py-3 px-4 text-right text-slate-500 whitespace-nowrap">
+                                        <td class="py-3.5 px-4 text-right text-slate-700 font-medium text-xs whitespace-nowrap">
                                             {{ v.recorded_by }}
                                         </td>
                                     </tr>
@@ -327,63 +327,63 @@
                         </table>
                     </div>
                 {% else %}
-                    <div class="text-center py-6 text-slate-400 text-xs">
+                    <div class="text-center py-8 text-slate-500 font-medium text-xs">
                         No vitals assessments recorded yet for this patient.
                     </div>
                 {% endif %}
             </div>
 
             <!-- Scheduled Appointments -->
-            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
                 <div class="p-4 sm:px-6 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
                     <div class="flex items-center gap-2.5">
-                        <h3 class="text-sm font-bold text-slate-900">Scheduled Appointments</h3>
-                        <span class="text-xs font-mono font-bold text-slate-600 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+                        <h3 class="text-sm font-bold text-slate-950">Scheduled Appointments</h3>
+                        <span class="text-xs font-mono font-black text-slate-900 bg-white border border-slate-300 px-2.5 py-0.5 rounded-lg shadow-2xs">
                             {{ patient.appointments|length }} Bookings
                         </span>
                     </div>
-                    <a href="{{ url_for('reception.appointments') }}?patient_id={{ patient.id }}" class="text-xs font-bold text-slate-900 hover:text-slate-700">
+                    <a href="{{ url_for('reception.appointments') }}?patient_id={{ patient.id }}" class="text-xs font-bold text-blue-800 hover:text-blue-900">
                         + Schedule New Visit
                     </a>
                 </div>
 
                 {% if patient.appointments %}
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left text-xs">
-                            <thead class="bg-slate-100/90 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
+                        <table class="w-full text-left text-sm table-auto">
+                            <thead class="bg-slate-50 text-slate-800 font-bold border-b border-slate-200 uppercase tracking-wider text-xs font-sans">
                                 <tr>
-                                    <th class="py-3 px-4">Date & Time</th>
-                                    <th class="py-3 px-4">Department</th>
-                                    <th class="py-3 px-4">Doctor / Clinician</th>
-                                    <th class="py-3 px-4">Reason / Notes</th>
-                                    <th class="py-3 px-4">Status</th>
-                                    <th class="py-3 px-4 text-right">Actions</th>
+                                    <th class="py-3.5 px-4">Date & Time</th>
+                                    <th class="py-3.5 px-4">Department</th>
+                                    <th class="py-3.5 px-4">Doctor / Clinician</th>
+                                    <th class="py-3.5 px-4">Reason / Notes</th>
+                                    <th class="py-3.5 px-4">Status</th>
+                                    <th class="py-3.5 px-4 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100">
                                 {% for app in patient.appointments %}
-                                    <tr class="hover:bg-slate-50/80">
-                                        <td class="py-3 px-4 font-mono text-slate-900 font-bold whitespace-nowrap">
+                                    <tr class="hover:bg-slate-50/80 transition-colors">
+                                        <td class="py-3.5 px-4 font-mono text-slate-950 font-bold text-xs whitespace-nowrap">
                                             {{ app.scheduled_date.strftime('%d %b %Y') }} at {{ app.scheduled_time }}
                                         </td>
-                                        <td class="py-3 px-4 whitespace-nowrap font-bold text-slate-900">
+                                        <td class="py-3.5 px-4 whitespace-nowrap font-bold text-slate-950">
                                             {{ app.department }}
                                         </td>
-                                        <td class="py-3 px-4 whitespace-nowrap text-slate-600">
+                                        <td class="py-3.5 px-4 whitespace-nowrap text-slate-700 font-medium">
                                             {{ app.doctor_name or '-' }}
                                         </td>
-                                        <td class="py-3 px-4 text-slate-800 max-w-xs truncate" title="{{ app.reason or '-' }}">
+                                        <td class="py-3.5 px-4 text-slate-900 max-w-xs truncate font-medium text-xs" title="{{ app.reason or '-' }}">
                                             {{ app.reason or '-' }}
                                         </td>
-                                        <td class="py-3 px-4 whitespace-nowrap">
-                                            <span class="px-2.5 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-300">
+                                        <td class="py-3.5 px-4 whitespace-nowrap">
+                                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-900 border border-slate-300 shadow-2xs">
                                                 {{ app.status }}
                                             </span>
                                         </td>
-                                        <td class="py-3 px-4 text-right whitespace-nowrap">
+                                        <td class="py-3.5 px-4 text-right whitespace-nowrap">
                                             {% if app.is_today and app.status == 'scheduled' %}
                                                 <form method="POST" action="{{ url_for('reception.checkin_from_appointment', appointment_id=app.id) }}" class="inline">
-                                                    <button type="submit" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded shadow-xs">
+                                                    <button type="submit" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-950 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer">
                                                         Check In
                                                     </button>
                                                 </form>
@@ -395,7 +395,7 @@
                         </table>
                     </div>
                 {% else %}
-                    <div class="text-center py-8 text-slate-400 text-xs">
+                    <div class="text-center py-8 text-slate-500 font-medium text-xs">
                         No appointments currently scheduled for this patient.
                     </div>
                 {% endif %}

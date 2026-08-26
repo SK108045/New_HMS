@@ -195,8 +195,8 @@
         </div>
 
         <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs min-w-[900px]">
-                <thead class="bg-slate-100 text-slate-800 font-black uppercase border-b-2 border-slate-200 text-[11px]">
+            <table class="w-full text-left text-sm min-w-[900px]">
+                <thead class="bg-slate-100 text-slate-800 font-bold uppercase border-b-2 border-slate-200 text-xs font-sans tracking-wider">
                     <tr>
                         <th class="p-3.5">Staff Identity</th>
                         <th class="p-3.5">Role & Station</th>
@@ -215,13 +215,13 @@
                             <!-- Identity -->
                             <td class="p-3.5">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-mono font-extrabold text-xs shrink-0 shadow-xs">
+                                    <div class="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-mono font-extrabold text-sm shrink-0 shadow-xs">
                                         {{ user.username[:2]|upper }}
                                     </div>
                                     <div>
-                                        <div class="font-extrabold text-slate-950 text-sm leading-tight">{{ user.full_name }}</div>
-                                        <div class="text-slate-600 font-mono text-xs flex items-center gap-1.5 mt-0.5">
-                                            <span class="font-bold text-slate-800 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-300 text-[10px]">{{ user.staff_id }}</span>
+                                        <div class="font-black text-slate-950 text-sm leading-tight">{{ user.full_name }}</div>
+                                        <div class="text-slate-600 font-sans text-xs flex items-center gap-1.5 mt-0.5 font-medium">
+                                            <span class="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-300 font-mono text-xs">{{ user.staff_id }}</span>
                                             <span>&bull; @{{ user.username }}</span>
                                         </div>
                                     </div>
@@ -230,20 +230,20 @@
 
                             <!-- Role & Station -->
                             <td class="p-3.5">
-                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-black border
-                                    {% if user.role == 'admin' %}bg-purple-100 text-purple-900 border-purple-300
-                                    {% elif user.role == 'doctor' %}bg-indigo-100 text-indigo-900 border-indigo-300
-                                    {% elif user.role == 'nurse' %}bg-teal-100 text-teal-900 border-teal-300
-                                    {% elif user.role == 'pharmacist' %}bg-emerald-100 text-emerald-900 border-emerald-300
-                                    {% elif user.role == 'cashier' %}bg-amber-100 text-amber-900 border-amber-300
-                                    {% else %}bg-stone-100 text-stone-900 border-stone-300{% endif %}">
+                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border font-sans shadow-2xs
+                                    {% if user.role == 'admin' %}bg-purple-100 text-purple-950 border-purple-300
+                                    {% elif user.role == 'doctor' %}bg-indigo-100 text-indigo-950 border-indigo-300
+                                    {% elif user.role == 'nurse' %}bg-teal-100 text-teal-950 border-teal-300
+                                    {% elif user.role == 'pharmacist' %}bg-emerald-100 text-emerald-950 border-emerald-300
+                                    {% elif user.role == 'cashier' %}bg-amber-100 text-amber-950 border-amber-300
+                                    {% else %}bg-slate-100 text-slate-950 border-slate-300{% endif %}">
                                     {{ user.role.title() }}
                                 </span>
-                                <div class="text-[11px] text-slate-600 font-mono mt-1">Portal: <strong>{{ user.portal.title() }}</strong></div>
+                                <div class="text-xs text-slate-600 font-sans mt-1 font-medium">Portal: <strong>{{ user.portal.title() }}</strong></div>
                             </td>
 
                             <!-- Department -->
-                            <td class="p-3.5 font-semibold text-slate-800">
+                            <td class="p-3.5 font-semibold text-slate-900 text-sm">
                                 {{ user.department }}
                             </td>
 

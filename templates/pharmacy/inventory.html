@@ -9,23 +9,23 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-4">
         <div>
             <div class="flex items-center gap-2 text-xs font-mono text-slate-500 mb-1">
-                <a href="{{ url_for('pharmacy.dashboard') }}" class="hover:text-slate-900">Pharmacy Station</a>
+                <a href="{{ url_for('pharmacy.dashboard') }}" class="hover:text-slate-900 font-semibold text-slate-600">Pharmacy Station</a>
                 <span>/</span>
-                <span class="text-slate-800 font-semibold">Inventory Management</span>
+                <span class="text-slate-900 font-bold">Inventory Management</span>
             </div>
-            <h1 class="text-xl font-bold text-slate-900 tracking-tight">Pharmacy Drug Inventory & Stock Levels</h1>
-            <p class="text-xs text-slate-500 mt-0.5">Formulary catalog, live stock balance, shelf locations, and batch replenishment</p>
+            <h1 class="text-xl font-black text-slate-950 tracking-tight">Pharmacy Drug Inventory & Stock Levels</h1>
+            <p class="text-xs text-slate-600 font-sans font-medium mt-0.5">Formulary catalog, live stock balance, shelf locations, and batch replenishment</p>
         </div>
 
         <div class="flex items-center gap-2">
-            <button @click="showAddModal = true" class="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-xs">
+            <button @click="showAddModal = true" class="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-xs font-bold">
                 <span>+ Register New Drug</span>
             </button>
         </div>
     </div>
 
     <!-- Filter & Search Toolbar -->
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+    <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4">
         <form method="GET" action="{{ url_for('pharmacy.inventory') }}" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
             
             <div class="sm:col-span-6 relative">
@@ -39,12 +39,12 @@
                     name="q" 
                     value="{{ search_q }}" 
                     placeholder="Search medication name, generic, barcode, or shelf..."
-                    class="form-input pl-9 text-xs py-2 rounded-lg"
+                    class="form-input pl-9 text-xs py-2 rounded-xl border-slate-300 font-medium"
                 >
             </div>
 
             <div class="sm:col-span-3">
-                <select name="category" onchange="this.form.submit()" class="form-select text-xs py-2 rounded-lg font-bold">
+                <select name="category" onchange="this.form.submit()" class="form-select text-xs py-2 rounded-xl border-slate-300 font-bold text-slate-900">
                     <option value="all" {% if category_filter == 'all' %}selected{% endif %}>All Categories</option>
                     {% for cat in categories_list %}
                         <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
@@ -53,7 +53,7 @@
             </div>
 
             <div class="sm:col-span-3">
-                <select name="stock_status" onchange="this.form.submit()" class="form-select text-xs py-2 rounded-lg font-bold">
+                <select name="stock_status" onchange="this.form.submit()" class="form-select text-xs py-2 rounded-xl border-slate-300 font-bold text-slate-900">
                     <option value="all" {% if stock_status_filter == 'all' %}selected{% endif %}>All Stock Levels</option>
                     <option value="adequate" {% if stock_status_filter == 'adequate' %}selected{% endif %}>Adequate Stock</option>
                     <option value="low" {% if stock_status_filter == 'low' %}selected{% endif %}>Low Stock Alerts</option>
@@ -65,12 +65,12 @@
     </div>
 
     <!-- Inventory Table (No Horizontal Scroll) -->
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-            <h2 class="text-sm font-bold text-slate-900">
+    <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+        <div class="p-4 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-950">
                 Formulary Inventory Products
             </h2>
-            <span class="text-xs font-mono font-bold text-slate-700 bg-white border border-slate-300 px-2.5 py-0.5 rounded-full">
+            <span class="text-xs font-mono font-black text-slate-900 bg-white border border-slate-300 px-2.5 py-0.5 rounded-lg shadow-2xs">
                 {{ medications|length }} Products
             </span>
         </div>
@@ -78,7 +78,7 @@
         {% if medications %}
             <div class="w-full overflow-hidden">
                 <table class="w-full text-left text-sm table-auto">
-                    <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
+                    <thead class="bg-slate-50 text-slate-800 font-bold border-b border-slate-200 uppercase tracking-wider text-xs font-sans">
                         <tr>
                             <th class="py-3.5 px-4 w-[28%]">Medication Name & Strength</th>
                             <th class="py-3.5 px-4 w-[16%]">Category & Form</th>
@@ -94,42 +94,42 @@
                                 
                                 <!-- Medication Name -->
                                 <td class="py-3.5 px-4">
-                                    <div class="font-bold text-slate-900 text-sm">{{ med.name }}</div>
-                                    <div class="text-xs font-mono text-slate-500">{{ med.generic_name or med.name }}</div>
+                                    <div class="font-black text-slate-950 text-sm">{{ med.name }}</div>
+                                    <div class="text-xs font-sans font-medium text-slate-600">{{ med.generic_name or med.name }}</div>
                                 </td>
 
                                 <!-- Category & Form -->
                                 <td class="py-3.5 px-4 whitespace-nowrap">
-                                    <span class="px-2 py-0.5 rounded text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                                    <span class="px-2.5 py-0.5 rounded-lg text-xs font-sans font-bold bg-slate-100 text-slate-900 border border-slate-300">
                                         {{ med.category }}
                                     </span>
-                                    <div class="text-[11px] text-slate-500 font-mono mt-0.5">{{ med.form }}</div>
+                                    <div class="text-xs text-slate-600 font-sans font-medium mt-0.5">{{ med.form }}</div>
                                 </td>
 
                                 <!-- Current Stock Level -->
-                                <td class="py-3.5 px-4 whitespace-nowrap font-mono text-xs">
+                                <td class="py-3.5 px-4 whitespace-nowrap text-xs">
                                     <div class="flex items-center gap-1.5">
-                                        <span class="font-bold text-sm {% if med.stock_status == 'out_of_stock' %}text-rose-700{% elif med.stock_status in ['critical', 'low'] %}text-amber-700{% else %}text-slate-900{% endif %}">
+                                        <span class="font-black font-mono text-sm {% if med.stock_status == 'out_of_stock' %}text-rose-700{% elif med.stock_status in ['critical', 'low'] %}text-amber-800{% else %}text-slate-950{% endif %}">
                                             {{ med.current_stock }}
                                         </span>
-                                        <span class="text-slate-500">units</span>
+                                        <span class="text-slate-600 font-sans font-medium">units</span>
                                     </div>
                                     {% if med.stock_status == 'out_of_stock' %}
-                                        <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">Out of Stock</span>
+                                        <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-rose-100 text-rose-950 border border-rose-300">Out of Stock</span>
                                     {% elif med.stock_status in ['critical', 'low'] %}
-                                        <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Low Stock (≤{{ med.reorder_level }})</span>
+                                        <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-amber-100 text-amber-950 border border-amber-300">Low Stock (≤{{ med.reorder_level }})</span>
                                     {% else %}
-                                        <span class="text-[10px] text-slate-400">Reorder at {{ med.reorder_level }}</span>
+                                        <span class="text-xs text-slate-600 font-sans font-medium">Reorder at {{ med.reorder_level }}</span>
                                     {% endif %}
                                 </td>
 
                                 <!-- Location Shelf -->
-                                <td class="py-3.5 px-4 whitespace-nowrap font-mono text-xs font-bold text-slate-800">
+                                <td class="py-3.5 px-4 whitespace-nowrap font-mono text-xs font-black text-slate-900">
                                     {{ med.location_shelf }}
                                 </td>
 
                                 <!-- Unit Price -->
-                                <td class="py-3.5 px-4 whitespace-nowrap font-mono text-xs text-slate-900 font-bold">
+                                <td class="py-3.5 px-4 whitespace-nowrap font-mono text-xs text-slate-950 font-black">
                                     KES {{ "%.2f"|format(med.unit_price) }}
                                 </td>
 
@@ -138,7 +138,7 @@
                                     <button 
                                         type="button" 
                                         @click="selectedMed = { id: {{ med.id }}, name: '{{ med.name }}' }; showRestockModal = true" 
-                                        class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300 text-xs font-mono font-bold text-slate-800"
+                                        class="px-3 py-1.5 bg-white hover:bg-slate-100 rounded-xl border border-slate-300 text-xs font-sans font-bold text-slate-900 shadow-2xs cursor-pointer transition-colors"
                                     >
                                         + Receive Stock
                                     </button>
