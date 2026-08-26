@@ -30,34 +30,37 @@
 
     <!-- Patient 360° Banner with Live Triage Vitals Strip -->
     {% set latest_v = patient.latest_vitals %}
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+    <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-4">
         
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             
             <!-- Patient Demographics -->
             <div class="flex items-center gap-4">
                 {% if patient.photo_filename %}
-                    <img src="{{ url_for('static', filename='uploads/photos/' ~ patient.photo_filename) }}" alt="{{ patient.full_name }}" class="w-14 h-14 rounded-xl object-cover border border-slate-200 shrink-0 shadow-xs">
+                    <img src="{{ url_for('static', filename='uploads/photos/' ~ patient.photo_filename) }}" alt="{{ patient.full_name }}" class="w-14 h-14 rounded-2xl object-cover border border-slate-300 shrink-0 shadow-xs">
                 {% else %}
-                    <div class="w-14 h-14 rounded-xl bg-slate-200 text-slate-800 font-bold flex items-center justify-center font-mono text-lg border border-slate-300 shrink-0">
+                    <div class="w-14 h-14 rounded-2xl bg-slate-200 text-slate-900 font-black flex items-center justify-center font-mono text-lg border border-slate-300 shrink-0">
                         {{ patient.initials }}
                     </div>
                 {% endif %}
                 <div>
                     <div class="flex items-center gap-2.5 flex-wrap">
-                        <h2 class="font-bold text-slate-900 text-lg">{{ patient.full_name }}</h2>
-                        <span class="font-mono text-xs font-bold px-2 py-0.5 bg-slate-100 text-slate-800 border border-slate-300 rounded">
+                        <h2 class="font-black text-slate-950 text-xl">{{ patient.full_name }}</h2>
+                        <span class="font-mono text-xs font-bold px-2.5 py-0.5 bg-slate-100 text-slate-900 border border-slate-300 rounded-lg">
                             {{ patient.hospital_id }}
                         </span>
-                        <span class="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        <span class="text-xs font-bold text-slate-800 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
                             {{ patient.gender }}, {{ patient.age }} yrs (DOB: {{ patient.date_of_birth.strftime('%d %b %Y') }})
                         </span>
                     </div>
-                    <div class="text-xs font-mono text-slate-500 mt-1">
-                        Payer: <strong class="text-slate-800">{{ patient.primary_payer }}</strong>
-                        {% if patient.insurance_company %} ({{ patient.insurance_company }}){% endif %}
-                        &bull; Phone: {{ patient.phone }}
-                        {% if patient.blood_group %} &bull; Blood: <strong class="text-slate-800">{{ patient.blood_group }}</strong>{% endif %}
+                    <div class="text-xs font-semibold text-slate-700 mt-1 flex items-center gap-2 flex-wrap">
+                        <span>Payer: <strong class="text-slate-950 font-black">{{ patient.primary_payer }}</strong>{% if patient.insurance_company %} ({{ patient.insurance_company }}){% endif %}</span>
+                        <span>&bull;</span>
+                        <span>Phone: <strong class="text-slate-950 font-mono">{{ patient.phone }}</strong></span>
+                        {% if patient.blood_group %}
+                            <span>&bull;</span>
+                            <span>Blood: <strong class="text-slate-950 font-black">{{ patient.blood_group }}</strong></span>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -65,69 +68,69 @@
             <!-- Allergy Alert Pill -->
             <div>
                 {% if patient.allergies %}
-                    <div class="p-2.5 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2 text-xs text-rose-900">
-                        <span class="font-mono font-bold text-rose-700">⚠️ ALLERGIES:</span>
-                        <span class="font-semibold">{{ patient.allergies }}</span>
+                    <div class="p-2.5 bg-rose-50 border border-rose-300 rounded-xl flex items-center gap-2 text-xs text-rose-900 shadow-2xs">
+                        <span class="font-mono font-black text-rose-700">⚠️ ALLERGIES:</span>
+                        <span class="font-bold">{{ patient.allergies }}</span>
                     </div>
                 {% else %}
-                    <span class="text-xs font-mono text-slate-400 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
-                        No Known Drug Allergies (NKDA)
+                    <span class="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-300 px-3 py-1.5 rounded-xl inline-block">
+                        ✓ No Known Drug Allergies (NKDA)
                     </span>
                 {% endif %}
             </div>
 
         </div>
 
-        <!-- Latest Vitals Strip -->
-        <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 overflow-x-auto text-xs font-mono">
+        <!-- Latest Vitals Strip (High Contrast) -->
+        <div class="pt-3 border-t border-slate-200 flex items-center justify-between gap-2 overflow-x-auto text-xs">
             <div class="flex items-center gap-4 flex-wrap">
-                <span class="text-slate-400 uppercase font-bold text-[11px]">Triage Vitals:</span>
+                <span class="text-slate-950 uppercase font-black text-xs font-mono">Triage Vitals:</span>
                 {% if latest_v %}
-                    <div class="flex items-center gap-1">
-                        <span class="text-slate-500">BP:</span>
-                        <span class="font-bold {% if latest_v.is_bp_abnormal %}text-rose-600{% else %}text-slate-900{% endif %}">
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                        <span class="text-slate-600 font-bold">BP:</span>
+                        <span class="font-black font-mono {% if latest_v.is_bp_abnormal %}text-rose-700{% else %}text-slate-950{% endif %}">
                             {{ latest_v.bp_display }}
                         </span>
                     </div>
-                    <div class="flex items-center gap-1">
-                        <span class="text-slate-500">Pulse:</span>
-                        <span class="font-bold {% if latest_v.is_pulse_abnormal %}text-rose-600{% else %}text-slate-900{% endif %}">
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                        <span class="text-slate-600 font-bold">Pulse:</span>
+                        <span class="font-black font-mono {% if latest_v.is_pulse_abnormal %}text-rose-700{% else %}text-slate-950{% endif %}">
                             {{ latest_v.pulse_rate or '-' }} bpm
                         </span>
                     </div>
-                    <div class="flex items-center gap-1">
-                        <span class="text-slate-500">Temp:</span>
-                        <span class="font-bold {% if latest_v.is_temp_abnormal %}text-rose-600{% else %}text-slate-900{% endif %}">
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                        <span class="text-slate-600 font-bold">Temp:</span>
+                        <span class="font-black font-mono {% if latest_v.is_temp_abnormal %}text-rose-700{% else %}text-slate-950{% endif %}">
                             {{ latest_v.temperature or '-' }}&deg;C
                         </span>
                     </div>
-                    <div class="flex items-center gap-1">
-                        <span class="text-slate-500">SpO2:</span>
-                        <span class="font-bold {% if latest_v.is_spo2_abnormal %}text-rose-600{% else %}text-slate-900{% endif %}">
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                        <span class="text-slate-600 font-bold">SpO2:</span>
+                        <span class="font-black font-mono {% if latest_v.is_spo2_abnormal %}text-rose-700{% else %}text-slate-950{% endif %}">
                             {{ latest_v.spo2 or '-' }}%
                         </span>
                     </div>
-                    <div class="flex items-center gap-1">
-                        <span class="text-slate-500">BMI:</span>
-                        <span class="font-bold text-slate-900">
+                    <div class="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                        <span class="text-slate-600 font-bold">BMI:</span>
+                        <span class="font-black text-slate-950 font-mono">
                             {{ latest_v.bmi or '-' }} ({{ latest_v.bmi_category or '-' }})
                         </span>
                     </div>
-                    <div class="flex items-center gap-1">
-                        <span class="text-slate-500">Acuity:</span>
-                        <span class="px-1.5 py-0.2 rounded font-bold uppercase text-[10px] 
-                            {% if latest_v.triage_category == 'red' %}bg-rose-100 text-rose-800
-                            {% elif latest_v.triage_category == 'yellow' %}bg-amber-100 text-amber-800
-                            {% else %}bg-slate-100 text-slate-800{% endif %}">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-slate-600 font-bold">Acuity:</span>
+                        <span class="px-2 py-0.5 rounded-md font-black uppercase text-[10px] font-mono border
+                            {% if latest_v.triage_category == 'red' %}bg-rose-100 text-rose-900 border-rose-300
+                            {% elif latest_v.triage_category == 'yellow' %}bg-amber-100 text-amber-900 border-amber-300
+                            {% else %}bg-slate-100 text-slate-900 border-slate-300{% endif %}">
                             {{ latest_v.triage_category }}
                         </span>
                     </div>
                 {% else %}
-                    <span class="text-slate-400">No vitals captured for this ticket.</span>
+                    <span class="text-slate-600 font-semibold">No vitals captured for this ticket.</span>
                 {% endif %}
             </div>
 
-            <button type="button" @click="activeTab = 'timeline'" class="text-xs font-bold text-slate-900 hover:text-slate-700 underline shrink-0">
+            <button type="button" @click="activeTab = 'timeline'" class="text-xs font-black text-blue-900 hover:text-blue-950 underline shrink-0 cursor-pointer">
                 View 360° History & PACS &rarr;
             </button>
         </div>
@@ -138,13 +141,13 @@
     <form method="POST" action="{{ url_for('doctor.consultation', queue_id=queue_entry.id) }}" class="space-y-6">
         
         <!-- Clinical Navigation Tabs Strip -->
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-1.5 flex items-center gap-2 overflow-x-auto text-xs font-bold">
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-1.5 flex items-center gap-2 overflow-x-auto text-xs font-bold">
             
             <button 
                 type="button" 
                 @click="activeTab = 'soap'" 
-                :class="activeTab === 'soap' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'"
-                class="px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+                :class="activeTab === 'soap' ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-800 bg-slate-100/80 hover:bg-slate-200 border border-slate-200'"
+                class="px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-black cursor-pointer"
             >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -155,8 +158,8 @@
             <button 
                 type="button" 
                 @click="activeTab = 'labs'" 
-                :class="activeTab === 'labs' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'"
-                class="px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+                :class="activeTab === 'labs' ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-800 bg-slate-100/80 hover:bg-slate-200 border border-slate-200'"
+                class="px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-black cursor-pointer"
             >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
@@ -167,8 +170,8 @@
             <button 
                 type="button" 
                 @click="activeTab = 'rx'" 
-                :class="activeTab === 'rx' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'"
-                class="px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+                :class="activeTab === 'rx' ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-800 bg-slate-100/80 hover:bg-slate-200 border border-slate-200'"
+                class="px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-black cursor-pointer"
             >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
@@ -179,8 +182,8 @@
             <button 
                 type="button" 
                 @click="activeTab = 'timeline'" 
-                :class="activeTab === 'timeline' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'"
-                class="px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+                :class="activeTab === 'timeline' ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-800 bg-slate-100/80 hover:bg-slate-200 border border-slate-200'"
+                class="px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-black cursor-pointer"
             >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
@@ -191,8 +194,8 @@
             <button 
                 type="button" 
                 @click="activeTab = 'documents'" 
-                :class="activeTab === 'documents' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'"
-                class="px-4 py-2 rounded-lg transition-all flex items-center gap-2"
+                :class="activeTab === 'documents' ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-800 bg-slate-100/80 hover:bg-slate-200 border border-slate-200'"
+                class="px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-black cursor-pointer"
             >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
@@ -208,58 +211,58 @@
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 
                 <!-- Left 7-Cols: Structured SOAP Textboxes & ICD-10 Search -->
-                <div class="lg:col-span-7 bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
+                <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-5">
                     
-                    <div class="border-b border-slate-200 pb-3 flex items-center justify-between">
+                    <div class="border-b border-slate-200 pb-3.5 flex items-center justify-between">
                         <div>
-                            <h3 class="text-sm font-bold text-slate-900">SOAP Consultation Notes</h3>
-                            <p class="text-xs text-slate-500 font-mono">Standardized Clinical EMR Documentation</p>
+                            <h3 class="text-base font-black text-slate-950">SOAP Consultation Notes</h3>
+                            <p class="text-xs font-bold text-slate-700 mt-0.5">Standardized Clinical EMR Documentation</p>
                         </div>
-                        <span class="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded border border-slate-200">
+                        <span class="text-xs font-bold bg-blue-100 text-blue-950 px-3 py-1 rounded-lg border border-blue-300 font-mono shadow-2xs">
                             ICD-10 Enabled
                         </span>
                     </div>
 
                     <!-- S: Subjective -->
                     <div>
-                        <label for="subjective_notes" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                            <span class="w-4 h-4 rounded accent-surface inline-flex items-center justify-center text-[10px] mr-1">S</span>
-                            Subjective (Chief Complaint & History of Presenting Illness)
+                        <label for="subjective_notes" class="block text-xs font-black text-slate-950 uppercase tracking-wider mb-1.5 flex items-center">
+                            <span class="w-5 h-5 rounded-md bg-blue-700 text-white font-black inline-flex items-center justify-center text-xs mr-1.5 shadow-2xs">S</span>
+                            <span>Subjective (Chief Complaint & History of Presenting Illness)</span>
                         </label>
                         <textarea 
                             name="subjective_notes" 
                             id="subjective_notes" 
                             rows="3" 
-                            class="form-input text-xs"
+                            class="form-input text-xs font-medium text-slate-950 placeholder:text-slate-500 border-slate-300 focus:border-slate-900 rounded-xl"
                             placeholder="Patient reports acute onset of symptoms, pain severity, duration, aggravating/relieving factors..."
                         >{{ (queue_entry and queue_entry.chief_complaint) or '' }}</textarea>
                     </div>
 
                     <!-- O: Objective -->
                     <div>
-                        <div class="flex items-center justify-between mb-1">
-                            <label for="objective_notes" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                <span class="w-4 h-4 rounded accent-surface inline-flex items-center justify-center text-[10px] mr-1">O</span>
-                                Objective (Physical Examination & Clinical Observations)
+                        <div class="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+                            <label for="objective_notes" class="block text-xs font-black text-slate-950 uppercase tracking-wider flex items-center">
+                                <span class="w-5 h-5 rounded-md bg-teal-700 text-white font-black inline-flex items-center justify-center text-xs mr-1.5 shadow-2xs">O</span>
+                                <span>Objective (Physical Examination & Clinical Observations)</span>
                             </label>
-                            <span class="text-[11px] text-slate-400 font-mono">Tip: Click 3D body zones to tag</span>
+                            <span class="text-xs font-bold text-blue-900 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">💡 Tip: Click 3D body zones to tag</span>
                         </div>
                         <textarea 
                             name="objective_notes" 
                             id="objective_notes" 
                             x-model="objectiveText"
                             rows="3" 
-                            class="form-input text-xs font-mono"
+                            class="form-input text-xs font-mono font-medium text-slate-950 placeholder:text-slate-500 border-slate-300 focus:border-slate-900 rounded-xl"
                             placeholder="General examination: Alert, not in respiratory distress. Systemic examination findings..."
                         ></textarea>
 
                         <!-- Tagged Anatomical Zones Pill Strip -->
-                        <div class="mt-2 flex items-center gap-1.5 flex-wrap" x-show="taggedRegions.length > 0">
-                            <span class="text-[10px] font-bold uppercase text-slate-500">Examined Regions:</span>
+                        <div class="mt-2.5 flex items-center gap-1.5 flex-wrap" x-show="taggedRegions.length > 0">
+                            <span class="text-xs font-black uppercase text-slate-900">Examined Regions:</span>
                             <template x-for="r in taggedRegions" :key="r">
-                                <span class="px-2 py-0.5 rounded-md accent-surface text-[11px] font-mono flex items-center gap-1">
+                                <span class="px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-950 border border-indigo-300 text-xs font-bold font-mono flex items-center gap-1.5 shadow-2xs">
                                     <span x-text="r"></span>
-                                    <button type="button" @click="removeRegion(r)" class="text-slate-400 hover:text-white font-bold ml-1">&times;</button>
+                                    <button type="button" @click="removeRegion(r)" class="text-indigo-700 hover:text-rose-700 font-black text-sm ml-1 cursor-pointer">&times;</button>
                                 </span>
                             </template>
                         </div>
@@ -267,17 +270,17 @@
                     </div>
 
                     <!-- A: Assessment & Searchable ICD-10 Diagnosis -->
-                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                            <span class="w-4 h-4 rounded accent-surface inline-flex items-center justify-center text-[10px] mr-1">A</span>
-                            Assessment & ICD-10 Primary Diagnosis <span class="text-rose-600">*</span>
+                    <div class="p-4 bg-slate-50/90 border border-slate-300 rounded-2xl space-y-3">
+                        <label class="block text-xs font-black text-slate-950 uppercase tracking-wider flex items-center">
+                            <span class="w-5 h-5 rounded-md bg-indigo-700 text-white font-black inline-flex items-center justify-center text-xs mr-1.5 shadow-2xs">A</span>
+                            <span>Assessment & ICD-10 Primary Diagnosis <span class="text-rose-600">*</span></span>
                         </label>
 
                         <!-- Selected ICD-10 Badge Display -->
-                        <div class="flex items-center gap-2" x-show="selectedIcd10.code">
-                            <span class="px-2.5 py-1 accent-surface font-mono font-bold text-xs rounded-md" x-text="selectedIcd10.code"></span>
-                            <span class="font-bold text-xs text-slate-900" x-text="selectedIcd10.description"></span>
-                            <button type="button" @click="clearIcd10()" class="text-xs text-slate-400 hover:text-slate-700 ml-2">Change</button>
+                        <div class="flex items-center gap-2.5 flex-wrap" x-show="selectedIcd10.code">
+                            <span class="px-3 py-1.5 bg-indigo-900 text-white font-mono font-black text-xs rounded-lg shadow-2xs" x-text="selectedIcd10.code"></span>
+                            <span class="font-extrabold text-xs text-slate-950" x-text="selectedIcd10.description"></span>
+                            <button type="button" @click="clearIcd10()" class="text-xs font-bold text-blue-900 hover:text-blue-950 underline ml-1 cursor-pointer">Change</button>
                         </div>
 
                         <input type="hidden" name="icd10_code" :value="selectedIcd10.code">
@@ -290,24 +293,24 @@
                                 x-model="icd10Query"
                                 @input="searchIcd10()"
                                 placeholder="Search ICD-10 code (e.g. J06.9, Hypertension, Malaria, Diabetes, Gastritis)..."
-                                class="form-input text-xs"
+                                class="form-input text-xs font-medium text-slate-950 border-slate-300 rounded-xl"
                             >
                             
                             <!-- Search Dropdown List -->
                             <div 
                                 x-show="icd10Results.length > 0" 
-                                class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-30 max-h-48 overflow-y-auto divide-y divide-slate-100"
+                                class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-300 rounded-2xl shadow-2xl z-30 max-h-52 overflow-y-auto divide-y divide-slate-100"
                             >
                                 <template x-for="item in icd10Results" :key="item.code">
                                     <div 
                                         @click="selectIcd10(item)" 
-                                        class="p-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between text-xs transition-colors"
+                                        class="p-3 hover:bg-slate-100 cursor-pointer flex items-center justify-between text-xs transition-colors"
                                     >
                                         <div>
-                                            <span class="font-mono font-bold text-slate-900" x-text="item.code"></span>
-                                            <span class="ml-2 text-slate-700" x-text="item.description"></span>
+                                            <span class="font-mono font-bold text-slate-950" x-text="item.code"></span>
+                                            <span class="ml-2 font-bold text-slate-900" x-text="item.description"></span>
                                         </div>
-                                        <span class="text-[10px] text-slate-400 font-mono" x-text="item.category"></span>
+                                        <span class="text-xs font-mono font-bold text-slate-600" x-text="item.category"></span>
                                     </div>
                                 </template>
                             </div>
@@ -315,12 +318,12 @@
 
                         <!-- Common Presets Quick Pills -->
                         <div class="pt-1 flex items-center gap-1.5 flex-wrap">
-                            <span class="text-[10px] text-slate-400 font-bold uppercase">Quick Pick:</span>
+                            <span class="text-xs font-black uppercase text-slate-800">Quick Pick:</span>
                             {% for preset in icd10_database[:6] %}
                                 <button 
                                     type="button" 
                                     @click="selectIcd10({code: '{{ preset.code }}', description: '{{ preset.description }}'})" 
-                                    class="px-2 py-0.5 bg-white border border-slate-300 rounded text-[11px] font-mono text-slate-700 hover:bg-slate-100 hover:border-slate-400 transition-colors"
+                                    class="px-2.5 py-1 bg-white border border-slate-300 hover:border-slate-500 hover:bg-slate-100 rounded-lg text-xs font-mono font-bold text-slate-900 shadow-2xs transition-colors cursor-pointer"
                                 >
                                     {{ preset.code }} ({{ preset.category }})
                                 </button>
@@ -331,7 +334,7 @@
                             <textarea 
                                 name="assessment_notes" 
                                 rows="2" 
-                                class="form-input text-xs" 
+                                class="form-input text-xs font-medium text-slate-950 border-slate-300 rounded-xl" 
                                 placeholder="Additional clinical diagnostic notes, differential diagnoses, or staging..."
                             ></textarea>
                         </div>
@@ -339,15 +342,15 @@
 
                     <!-- P: Plan -->
                     <div>
-                        <label for="plan_notes" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                            <span class="w-4 h-4 rounded accent-surface inline-flex items-center justify-center text-[10px] mr-1">P</span>
-                            Plan & Patient Advice
+                        <label for="plan_notes" class="block text-xs font-black text-slate-950 uppercase tracking-wider mb-1.5 flex items-center">
+                            <span class="w-5 h-5 rounded-md bg-emerald-700 text-white font-black inline-flex items-center justify-center text-xs mr-1.5 shadow-2xs">P</span>
+                            <span>Plan & Patient Advice</span>
                         </label>
                         <textarea 
                             name="plan_notes" 
                             id="plan_notes" 
                             rows="2" 
-                            class="form-input text-xs"
+                            class="form-input text-xs font-medium text-slate-950 border-slate-300 rounded-xl"
                             placeholder="Clinical management plan, lifestyle modifications, warning signs to watch for..."
                         ></textarea>
                     </div>
@@ -355,22 +358,22 @@
                     <!-- Follow-up Review Date -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
                         <div>
-                            <label for="follow_up_date" class="block text-xs font-bold text-slate-700 mb-1">
+                            <label for="follow_up_date" class="block text-xs font-black uppercase text-slate-900 mb-1">
                                 Follow-up Review Date (Optional)
                             </label>
                             <input 
                                 type="date" 
                                 name="follow_up_date" 
                                 id="follow_up_date" 
-                                class="form-input text-xs"
+                                class="form-input text-xs font-bold text-slate-950 border-slate-300 rounded-xl"
                             >
                         </div>
 
                         <div>
-                            <label for="doctor_name" class="block text-xs font-bold text-slate-700 mb-1">
+                            <label for="doctor_name" class="block text-xs font-black uppercase text-slate-900 mb-1">
                                 Attending Clinician
                             </label>
-                            <select name="doctor_name" id="doctor_name" class="form-select text-xs font-bold">
+                            <select name="doctor_name" id="doctor_name" class="form-select text-xs font-black text-slate-950 border-slate-300 rounded-xl">
                                 {% for doc in doctors_list %}
                                     <option value="{{ doc }}" {% if queue_entry and queue_entry.assigned_doctor == doc %}selected{% endif %}>{{ doc }}</option>
                                 {% endfor %}
@@ -381,52 +384,52 @@
                 </div>
 
                 <!-- Right 5-Cols: Three.js Interactive 3D Anatomical Body Examiner -->
-                <div class="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+                <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-4">
                     
-                    <div class="flex items-center justify-between pb-2 border-b border-slate-200">
+                    <div class="flex items-center justify-between pb-2.5 border-b border-slate-200">
                         <div>
-                            <h3 class="text-sm font-bold text-slate-900">3D Anatomical Body Examiner</h3>
-                            <p class="text-[11px] text-slate-500 font-mono">Interactive spatial pain & examination mapping</p>
+                            <h3 class="text-base font-black text-slate-950">3D Anatomical Body Examiner</h3>
+                            <p class="text-xs font-bold text-slate-700 mt-0.5">Interactive spatial pain & examination mapping</p>
                         </div>
-                        <span class="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                        <span class="text-xs font-bold bg-blue-100 text-blue-950 px-2.5 py-1 rounded-lg border border-blue-300 font-mono shadow-2xs">
                             Three.js 3D
                         </span>
                     </div>
 
                     <!-- Three.js Canvas Container -->
-                    <div class="relative w-full h-80 bg-slate-950 rounded-xl overflow-hidden shadow-inner flex items-center justify-center">
+                    <div class="relative w-full h-80 bg-slate-950 rounded-2xl overflow-hidden shadow-inner flex items-center justify-center border border-slate-800">
                         <canvas id="threeBodyCanvas" class="w-full h-full cursor-grab active:cursor-grabbing"></canvas>
                         
-                        <!-- 3D Overlay Help Badge -->
-                        <div class="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-xs border border-slate-800 text-[10px] font-mono text-slate-300 px-2 py-1 rounded">
-                            Drag to rotate &bull; Scroll to zoom
+                        <!-- 3D Overlay Help Badges (High Contrast) -->
+                        <div class="absolute top-2.5 left-2.5 bg-slate-900/95 border border-slate-700 text-xs font-mono font-bold text-white px-2.5 py-1 rounded-lg shadow-lg">
+                            🖐️ Drag to rotate &bull; Scroll to zoom
                         </div>
 
-                        <div class="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur-xs border border-slate-800 text-[10px] font-mono text-slate-300 px-2 py-1 rounded">
-                            Click node to tag region
+                        <div class="absolute bottom-2.5 right-2.5 bg-slate-900/95 border border-slate-700 text-xs font-mono font-bold text-amber-300 px-2.5 py-1 rounded-lg shadow-lg">
+                            🎯 Click node to tag region
                         </div>
                     </div>
 
-                    <!-- Quick Anatomical Tag Buttons -->
+                    <!-- Quick Anatomical Tag Buttons (High Contrast & Bold) -->
                     <div>
-                        <div class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Quick Anatomical Tagging</div>
+                        <div class="text-xs font-black text-slate-950 uppercase tracking-wider mb-2">Quick Anatomical Tagging</div>
                         <div class="grid grid-cols-2 gap-2 text-xs font-mono">
-                            <button type="button" @click="toggleRegion('Cranial / Head')" :class="hasRegion('Cranial / Head') ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'" class="p-1.5 rounded border border-slate-300 text-left transition-colors truncate">
+                            <button type="button" @click="toggleRegion('Cranial / Head')" :class="hasRegion('Cranial / Head') ? 'bg-slate-950 text-white font-bold border-slate-950' : 'bg-slate-100 hover:bg-slate-200 text-slate-950 font-bold border-slate-300'" class="p-2 rounded-xl border text-left transition-colors truncate cursor-pointer shadow-2xs">
                                 + Head & Cranium
                             </button>
-                            <button type="button" @click="toggleRegion('Thorax / Chest')" :class="hasRegion('Thorax / Chest') ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'" class="p-1.5 rounded border border-slate-300 text-left transition-colors truncate">
+                            <button type="button" @click="toggleRegion('Thorax / Chest')" :class="hasRegion('Thorax / Chest') ? 'bg-slate-950 text-white font-bold border-slate-950' : 'bg-slate-100 hover:bg-slate-200 text-slate-950 font-bold border-slate-300'" class="p-2 rounded-xl border text-left transition-colors truncate cursor-pointer shadow-2xs">
                                 + Thorax / Chest
                             </button>
-                            <button type="button" @click="toggleRegion('Abdomen & Pelvis')" :class="hasRegion('Abdomen & Pelvis') ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'" class="p-1.5 rounded border border-slate-300 text-left transition-colors truncate">
+                            <button type="button" @click="toggleRegion('Abdomen & Pelvis')" :class="hasRegion('Abdomen & Pelvis') ? 'bg-slate-950 text-white font-bold border-slate-950' : 'bg-slate-100 hover:bg-slate-200 text-slate-950 font-bold border-slate-300'" class="p-2 rounded-xl border text-left transition-colors truncate cursor-pointer shadow-2xs">
                                 + Abdomen & Pelvis
                             </button>
-                            <button type="button" @click="toggleRegion('Spine & Back')" :class="hasRegion('Spine & Back') ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'" class="p-1.5 rounded border border-slate-300 text-left transition-colors truncate">
+                            <button type="button" @click="toggleRegion('Spine & Back')" :class="hasRegion('Spine & Back') ? 'bg-slate-950 text-white font-bold border-slate-950' : 'bg-slate-100 hover:bg-slate-200 text-slate-950 font-bold border-slate-300'" class="p-2 rounded-xl border text-left transition-colors truncate cursor-pointer shadow-2xs">
                                 + Spine / Lumbar
                             </button>
-                            <button type="button" @click="toggleRegion('Upper Limbs')" :class="hasRegion('Upper Limbs') ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'" class="p-1.5 rounded border border-slate-300 text-left transition-colors truncate">
+                            <button type="button" @click="toggleRegion('Upper Limbs')" :class="hasRegion('Upper Limbs') ? 'bg-slate-950 text-white font-bold border-slate-950' : 'bg-slate-100 hover:bg-slate-200 text-slate-950 font-bold border-slate-300'" class="p-2 rounded-xl border text-left transition-colors truncate cursor-pointer shadow-2xs">
                                 + Upper Extremities
                             </button>
-                            <button type="button" @click="toggleRegion('Lower Limbs')" :class="hasRegion('Lower Limbs') ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'" class="p-1.5 rounded border border-slate-300 text-left transition-colors truncate">
+                            <button type="button" @click="toggleRegion('Lower Limbs')" :class="hasRegion('Lower Limbs') ? 'bg-slate-950 text-white font-bold border-slate-950' : 'bg-slate-100 hover:bg-slate-200 text-slate-950 font-bold border-slate-300'" class="p-2 rounded-xl border text-left transition-colors truncate cursor-pointer shadow-2xs">
                                 + Lower Extremities
                             </button>
                         </div>
