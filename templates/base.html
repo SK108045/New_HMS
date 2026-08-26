@@ -294,7 +294,7 @@
                         </a>
 
                     {% elif request.blueprint == 'pharmacy' %}
-                        <!-- =================== DEDICATED PHARMACY & DISPENSATION PORTAL =================== -->
+                        <!-- =================== DEDICATED PHARMACY & DISPENSING PORTAL =================== -->
                         <div class="px-3 pt-2 pb-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400">
                             Dispensation & Inventory
                         </div>
@@ -302,7 +302,7 @@
                         <!-- 1. Dispensing Command Center -->
                         <a 
                             href="{{ url_for('pharmacy.dashboard') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.dashboard' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                            class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.dashboard' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
                         >
                             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
@@ -313,7 +313,7 @@
                         <!-- 2. Live Prescription Queue -->
                         <a 
                             href="{{ url_for('pharmacy.queue') }}" 
-                            class="flex items-center justify-between px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.queue' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                            class="flex items-center justify-between px-3.5 py-2.5 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.queue' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
                         >
                             <div class="flex items-center gap-3">
                                 <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -331,7 +331,7 @@
                         <!-- 3. Pharmacy Inventory & Stock Levels -->
                         <a 
                             href="{{ url_for('pharmacy.inventory') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.inventory' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                            class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.inventory' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
                         >
                             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
@@ -342,7 +342,7 @@
                         <!-- 4. Stock & Expiry Alert Center -->
                         <a 
                             href="{{ url_for('pharmacy.alerts') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.alerts' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                            class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.alerts' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
                         >
                             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
@@ -350,18 +350,21 @@
                             <span>Stock & Expiry Alerts</span>
                         </a>
 
-                        <!-- 5. Dispensation History & Audit Logs -->
+                        <!-- 5. Batch Registry & FEFO Stock Movement -->
                         <a 
-                            href="{{ url_for('pharmacy.history') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.history' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                            href="{{ url_for('pharmacy.batches') }}" 
+                            class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.batches' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
                         >
                             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
                             </svg>
-                        <!-- 5. Dispensation Audit Logs -->
+                            <span>Batches & Stock Ledger</span>
+                        </a>
+
+                        <!-- 6. Dispensation Audit Logs & History -->
                         <a 
                             href="{{ url_for('pharmacy.history') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.history' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                            class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.history' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
                         >
                             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -369,10 +372,10 @@
                             <span>Dispensation Logs</span>
                         </a>
 
-                        <!-- 6. Purchase Orders & Procurement -->
+                        <!-- 7. Purchase Orders & Procurement -->
                         <a 
                             href="{{ url_for('pharmacy.purchase_orders') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.purchase_orders' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                            class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.purchase_orders' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
                         >
                             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
@@ -380,10 +383,10 @@
                             <span>Purchase Orders (LPO)</span>
                         </a>
 
-                        <!-- 7. Controlled Drugs Register -->
+                        <!-- 8. Controlled Drugs Register -->
                         <a 
                             href="{{ url_for('pharmacy.controlled_drugs') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.controlled_drugs' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                            class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.controlled_drugs' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
                         >
                             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
@@ -391,26 +394,15 @@
                             <span>Controlled Drugs Reg</span>
                         </a>
 
-                        <!-- 8. Expiry Quarantine Bin -->
+                        <!-- 9. Expiry Quarantine Bin -->
                         <a 
                             href="{{ url_for('pharmacy.quarantine') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.quarantine' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
+                            class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.quarantine' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
                         >
                             <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                             </svg>
                             <span>Expiry Quarantine</span>
-                        </a>
-
-                        <!-- 9. Batch Registry & Stock Movement -->
-                        <a 
-                            href="{{ url_for('pharmacy.batches') }}" 
-                            class="flex items-center gap-3 px-3.5 py-2 rounded-lg transition-all duration-150 {% if request.endpoint == 'pharmacy.batches' %}nav-active{% else %}text-slate-700 hover:text-slate-900 hover:bg-slate-100{% endif %}"
-                        >
-                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
-                            </svg>
-                            <span>Batch & Stock Ledger</span>
                         </a>
 
                     {% elif request.blueprint == 'billing' %}
