@@ -6,15 +6,15 @@
 <div class="space-y-6">
 
     <!-- Top Station Command Header & KPIs -->
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
+    <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-5">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-                <h1 class="text-xl font-bold text-slate-900 tracking-tight">Pharmacy & Dispensation Station</h1>
-                <p class="text-xs text-slate-500 mt-0.5 font-mono">e-Prescription verification, automatic stock deduction & FEFO batch control</p>
+                <h1 class="text-xl font-black text-slate-950 tracking-tight">Pharmacy & Dispensation Station</h1>
+                <p class="text-xs text-slate-600 font-sans font-medium mt-0.5">e-Prescription verification, automatic stock deduction & FEFO batch control</p>
             </div>
 
             <div class="flex items-center gap-2">
-                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-900 border border-slate-300 shadow-2xs">
                     <span class="w-2 h-2 rounded-full accent-dot animate-pulse"></span>
                     Pharmacy Dispensary Online
                 </span>
@@ -25,37 +25,37 @@
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
             
             <!-- Waiting Prescriptions -->
-            <div class="{% if waiting_rxs|length > 0 %}bg-amber-50 border-amber-300 text-amber-900{% else %}bg-slate-50 border-slate-200 text-slate-700{% endif %} border rounded-xl p-4 text-center">
-                <div class="text-xs font-semibold uppercase tracking-wider {% if waiting_rxs|length > 0 %}text-amber-800 font-bold{% else %}text-slate-500{% endif %}">
+            <div class="{% if waiting_rxs|length > 0 %}bg-amber-50/90 border-amber-300 text-amber-950{% else %}bg-slate-50 border-slate-200 text-slate-800{% endif %} border rounded-2xl p-4 text-center shadow-2xs">
+                <div class="text-xs sm:text-sm font-bold uppercase tracking-wider {% if waiting_rxs|length > 0 %}text-amber-900{% else %}text-slate-700{% endif %}">
                     Prescriptions Waiting
                 </div>
-                <div class="text-3xl font-extrabold font-mono mt-1 {% if waiting_rxs|length > 0 %}text-amber-700{% endif %}">
+                <div class="text-3xl font-black font-mono mt-1 {% if waiting_rxs|length > 0 %}text-amber-800{% else %}text-slate-900{% endif %}">
                     {{ waiting_rxs|length }}
                 </div>
             </div>
 
             <!-- Dispensed Today -->
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Dispensed Today</div>
-                <div class="text-3xl font-extrabold font-mono text-slate-900 mt-1">{{ today_dispensations|length }}</div>
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center shadow-2xs">
+                <div class="text-xs sm:text-sm text-slate-700 font-bold uppercase tracking-wider">Dispensed Today</div>
+                <div class="text-3xl font-black font-mono text-slate-950 mt-1">{{ today_dispensations|length }}</div>
             </div>
 
             <!-- Low Stock Warnings -->
-            <div class="{% if low_stock_count > 0 %}bg-rose-50 border-rose-200 text-rose-900{% else %}bg-slate-50 border-slate-200 text-slate-700{% endif %} border rounded-xl p-4 text-center">
-                <div class="text-xs font-semibold uppercase tracking-wider {% if low_stock_count > 0 %}text-rose-800 font-bold{% else %}text-slate-500{% endif %}">
+            <div class="{% if low_stock_count > 0 %}bg-rose-50/90 border-rose-300 text-rose-950{% else %}bg-slate-50 border-slate-200 text-slate-800{% endif %} border rounded-2xl p-4 text-center shadow-2xs">
+                <div class="text-xs sm:text-sm font-bold uppercase tracking-wider {% if low_stock_count > 0 %}text-rose-900{% else %}text-slate-700{% endif %}">
                     Low Stock Alerts
                 </div>
-                <div class="text-3xl font-extrabold font-mono mt-1 {% if low_stock_count > 0 %}text-rose-700{% endif %}">
+                <div class="text-3xl font-black font-mono mt-1 {% if low_stock_count > 0 %}text-rose-800{% else %}text-slate-900{% endif %}">
                     {{ low_stock_count }}
                 </div>
             </div>
 
             <!-- Near Expiry Batches (<90d) -->
-            <div class="{% if expiring_batches_count > 0 %}bg-amber-50 border-amber-200 text-amber-900{% else %}bg-slate-50 border-slate-200 text-slate-700{% endif %} border rounded-xl p-4 text-center">
-                <div class="text-xs font-semibold uppercase tracking-wider {% if expiring_batches_count > 0 %}text-amber-800 font-bold{% else %}text-slate-500{% endif %}">
+            <div class="{% if expiring_batches_count > 0 %}bg-amber-50/90 border-amber-300 text-amber-950{% else %}bg-slate-50 border-slate-200 text-slate-800{% endif %} border rounded-2xl p-4 text-center shadow-2xs">
+                <div class="text-xs sm:text-sm font-bold uppercase tracking-wider {% if expiring_batches_count > 0 %}text-amber-900{% else %}text-slate-700{% endif %}">
                     Batches Near Expiry (&lt;90d)
                 </div>
-                <div class="text-3xl font-extrabold font-mono mt-1 {% if expiring_batches_count > 0 %}text-amber-700{% endif %}">
+                <div class="text-3xl font-black font-mono mt-1 {% if expiring_batches_count > 0 %}text-amber-800{% else %}text-slate-900{% endif %}">
                     {{ expiring_batches_count }}
                 </div>
             </div>
@@ -67,13 +67,13 @@
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         <!-- Chart 1: 7-Day Dispensation & Prescription Volume (7 Cols) -->
-        <div class="lg:col-span-7 bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+        <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3">
             <div class="flex items-center justify-between pb-2 border-b border-slate-200">
                 <div>
-                    <h3 class="text-sm font-bold text-slate-900">7-Day Dispensation Fulfillment Trend</h3>
-                    <p class="text-xs text-slate-500 font-mono">Daily volume of doctor prescriptions filled and verified</p>
+                    <h3 class="text-sm font-bold text-slate-950">7-Day Dispensation Fulfillment Trend</h3>
+                    <p class="text-xs text-slate-600 font-sans font-medium">Daily volume of doctor prescriptions filled and verified</p>
                 </div>
-                <span class="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">Fulfillment</span>
+                <span class="text-xs font-mono font-bold bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-300">Fulfillment</span>
             </div>
 
             <div class="h-64 relative w-full">
@@ -82,14 +82,14 @@
         </div>
 
         <!-- Chart 2: Stock Health Donut & Top Dispensed Medications (5 Cols) -->
-        <div class="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-4">
             
             <div class="flex items-center justify-between pb-2 border-b border-slate-200">
                 <div>
-                    <h3 class="text-sm font-bold text-slate-900">Inventory Health & Expiry Risk</h3>
-                    <p class="text-xs text-slate-500 font-mono">Stock level balance and FEFO status</p>
+                    <h3 class="text-sm font-bold text-slate-950">Inventory Health & Expiry Risk</h3>
+                    <p class="text-xs text-slate-600 font-sans font-medium">Stock level balance and FEFO status</p>
                 </div>
-                <span class="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">Stock Health</span>
+                <span class="text-xs font-mono font-bold bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-300">Stock Health</span>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
@@ -98,8 +98,8 @@
                     <div class="relative w-32 h-32 flex items-center justify-center">
                         <canvas id="stockHealthDonutChart"></canvas>
                         <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span class="text-lg font-bold font-mono text-slate-900 leading-none">{{ stock_health_counts[0] + stock_health_counts[1] + stock_health_counts[2] }}</span>
-                            <span class="text-[10px] text-slate-500 font-mono">Products</span>
+                            <span class="text-lg font-black font-mono text-slate-950 leading-none">{{ stock_health_counts[0] + stock_health_counts[1] + stock_health_counts[2] }}</span>
+                            <span class="text-xs text-slate-600 font-semibold">Products</span>
                         </div>
                     </div>
                 </div>
@@ -110,10 +110,10 @@
                 </div>
             </div>
 
-            <div class="pt-3 border-t border-slate-200 flex items-center justify-center gap-3 text-[11px] font-mono text-slate-600">
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-900"></span> Adequate</span>
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Low Stock</span>
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span> Out / Expired</span>
+            <div class="pt-3 border-t border-slate-200 flex items-center justify-center gap-3 text-xs font-semibold text-slate-700">
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-teal-700"></span> Adequate</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Low Stock</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span> Out / Expired</span>
             </div>
 
         </div>
@@ -295,7 +295,7 @@
                     labels: labels,
                     datasets: [{
                         data: dataVals,
-                        backgroundColor: ['#18181b', '#f59e0b', '#e11d48', '#71717a'],
+                        backgroundColor: ['#0f766e', '#f59e0b', '#e11d48', '#64748b'],
                         borderWidth: 2,
                         borderColor: '#ffffff'
                     }]
@@ -329,8 +329,8 @@
                     datasets: [{
                         label: 'Units Dispensed',
                         data: tCounts,
-                        backgroundColor: '#18181b',
-                        borderRadius: 3
+                        backgroundColor: '#0f766e',
+                        borderRadius: 6
                     }]
                 },
                 options: {
@@ -339,8 +339,8 @@
                     indexAxis: 'y',
                     plugins: { legend: { display: false } },
                     scales: {
-                        x: { beginAtZero: true, grid: { color: '#f4f4f5' }, ticks: { font: { size: 9 } } },
-                        y: { grid: { display: false }, ticks: { font: { size: 9 } } }
+                        x: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10, weight: '600' }, color: '#475569' } },
+                        y: { grid: { display: false }, ticks: { font: { size: 10, weight: '600' }, color: '#334155' } }
                     }
                 }
             });

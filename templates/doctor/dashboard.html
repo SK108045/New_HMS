@@ -6,24 +6,24 @@
 <div class="space-y-6">
 
     <!-- Top Station Command Header & KPIs -->
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
+    <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-5">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-                <h1 class="text-xl font-bold text-slate-900 tracking-tight">Doctor & Clinical EMR Station</h1>
-                <p class="text-xs text-slate-500 mt-0.5 font-mono">Physician encounters, SOAP clinical notes, lab ordering & e-prescriptions</p>
+                <h1 class="text-xl font-black text-slate-950 tracking-tight">Doctor & Clinical EMR Station</h1>
+                <p class="text-xs text-slate-600 font-sans font-medium mt-0.5">Physician encounters, SOAP clinical notes, lab ordering & e-prescriptions</p>
             </div>
 
             <!-- Doctor Selector -->
             <div class="flex items-center gap-2">
                 <form method="GET" action="{{ url_for('doctor.dashboard') }}" class="flex items-center gap-2">
-                    <select name="doctor" onchange="this.form.submit()" class="form-select text-xs py-1.5 px-3 rounded-lg border-slate-300 font-bold">
+                    <select name="doctor" onchange="this.form.submit()" class="form-select text-xs py-2 px-3 rounded-xl border-slate-300 font-bold text-slate-900 shadow-2xs">
                         <option value="all" {% if selected_doctor == 'all' %}selected{% endif %}>All Consultation Rooms</option>
                         {% for doc in doctors_list %}
                             <option value="{{ doc }}" {% if selected_doctor == doc %}selected{% endif %}>{{ doc }}</option>
                         {% endfor %}
                     </select>
                 </form>
-                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-900 border border-slate-300 shadow-2xs">
                     <span class="w-2 h-2 rounded-full accent-dot animate-pulse"></span>
                     Room Online
                 </span>
@@ -34,31 +34,31 @@
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
             
             <!-- Patients in Waiting Room -->
-            <div class="{% if waiting_queue|length > 0 %}bg-amber-50 border-amber-300 text-amber-900{% else %}bg-slate-50 border-slate-200 text-slate-700{% endif %} border rounded-xl p-4 text-center">
-                <div class="text-xs font-semibold uppercase tracking-wider {% if waiting_queue|length > 0 %}text-amber-800 font-bold{% else %}text-slate-500{% endif %}">
+            <div class="{% if waiting_queue|length > 0 %}bg-amber-50/90 border-amber-300 text-amber-950{% else %}bg-slate-50 border-slate-200 text-slate-800{% endif %} border rounded-2xl p-4 text-center shadow-2xs">
+                <div class="text-xs sm:text-sm font-bold uppercase tracking-wider {% if waiting_queue|length > 0 %}text-amber-900{% else %}text-slate-700{% endif %}">
                     Waiting in Room
                 </div>
-                <div class="text-3xl font-extrabold font-mono mt-1 {% if waiting_queue|length > 0 %}text-amber-700{% endif %}">
+                <div class="text-3xl font-black font-mono mt-1 {% if waiting_queue|length > 0 %}text-amber-800{% else %}text-slate-900{% endif %}">
                     {{ waiting_queue|length }}
                 </div>
             </div>
 
             <!-- Consultations Completed Today -->
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Encounters Completed</div>
-                <div class="text-3xl font-extrabold font-mono text-slate-900 mt-1">{{ today_notes|length }}</div>
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center shadow-2xs">
+                <div class="text-xs sm:text-sm text-slate-700 font-bold uppercase tracking-wider">Encounters Completed</div>
+                <div class="text-3xl font-black font-mono text-slate-950 mt-1">{{ today_notes|length }}</div>
             </div>
 
             <!-- Lab Orders Issued -->
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Lab Requests Sent</div>
-                <div class="text-3xl font-extrabold font-mono text-slate-900 mt-1">{{ today_lab_count }}</div>
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center shadow-2xs">
+                <div class="text-xs sm:text-sm text-slate-700 font-bold uppercase tracking-wider">Lab Requests Sent</div>
+                <div class="text-3xl font-black font-mono text-slate-950 mt-1">{{ today_lab_count }}</div>
             </div>
 
             <!-- Prescriptions Issued -->
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider">e-Prescriptions Dispatched</div>
-                <div class="text-3xl font-extrabold font-mono text-slate-900 mt-1">{{ today_rx_count }}</div>
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center shadow-2xs">
+                <div class="text-xs sm:text-sm text-slate-700 font-bold uppercase tracking-wider">e-Prescriptions Dispatched</div>
+                <div class="text-3xl font-black font-mono text-slate-950 mt-1">{{ today_rx_count }}</div>
             </div>
 
         </div>
@@ -68,13 +68,13 @@
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         <!-- Chart 1: 7-Day Physician Encounter Trend (7 Cols) -->
-        <div class="lg:col-span-7 bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+        <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3">
             <div class="flex items-center justify-between pb-2 border-b border-slate-200">
                 <div>
-                    <h3 class="text-sm font-bold text-slate-900">7-Day Physician Consultation Volume</h3>
-                    <p class="text-xs text-slate-500 font-mono">Daily clinical workload and diagnostic encounters completed</p>
+                    <h3 class="text-sm font-bold text-slate-950">7-Day Physician Consultation Volume</h3>
+                    <p class="text-xs text-slate-600 font-sans font-medium">Daily clinical workload and diagnostic encounters completed</p>
                 </div>
-                <span class="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">Workload</span>
+                <span class="text-xs font-mono font-bold bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-300">Workload</span>
             </div>
 
             <div class="h-64 relative w-full">
@@ -83,14 +83,14 @@
         </div>
 
         <!-- Chart 2: Clinical Disposition Donut & Hourly Flow (5 Cols) -->
-        <div class="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-4">
             
             <div class="flex items-center justify-between pb-2 border-b border-slate-200">
                 <div>
-                    <h3 class="text-sm font-bold text-slate-900">Order Disposition Share & Flow</h3>
-                    <p class="text-xs text-slate-500 font-mono">Prescriptions vs Labs vs Advice</p>
+                    <h3 class="text-sm font-bold text-slate-950">Order Disposition Share & Flow</h3>
+                    <p class="text-xs text-slate-600 font-sans font-medium">Prescriptions vs Labs vs Advice</p>
                 </div>
-                <span class="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">Disposition</span>
+                <span class="text-xs font-mono font-bold bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-300">Disposition</span>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
@@ -99,8 +99,8 @@
                     <div class="relative w-32 h-32 flex items-center justify-center">
                         <canvas id="dispositionDonutChart"></canvas>
                         <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span class="text-lg font-bold font-mono text-slate-900 leading-none">{{ today_notes|length }}</span>
-                            <span class="text-[10px] text-slate-500 font-mono">Encounters</span>
+                            <span class="text-lg font-black font-mono text-slate-950 leading-none">{{ today_notes|length }}</span>
+                            <span class="text-xs text-slate-600 font-semibold">Encounters</span>
                         </div>
                     </div>
                 </div>
@@ -111,11 +111,11 @@
                 </div>
             </div>
 
-            <div class="pt-3 border-t border-slate-200 flex items-center justify-center gap-3 text-[11px] font-mono text-slate-600">
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-900"></span> e-Rx</span>
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Combined</span>
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span> Lab Only</span>
-                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span> Advice</span>
+            <div class="pt-3 border-t border-slate-200 flex items-center justify-center gap-3 text-xs font-semibold text-slate-700">
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span> e-Rx</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Combined</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span> Lab Only</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-slate-500"></span> Advice</span>
             </div>
 
         </div>
@@ -234,13 +234,13 @@
                     datasets: [{
                         label: 'Clinical Encounters',
                         data: counts,
-                        borderColor: '#18181b',
-                        backgroundColor: 'rgba(24, 24, 27, 0.08)',
+                        borderColor: '#4f46e5',
+                        backgroundColor: 'rgba(79, 70, 229, 0.12)',
                         fill: true,
                         tension: 0.35,
-                        borderWidth: 2,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#18181b'
+                        borderWidth: 2.5,
+                        pointRadius: 5,
+                        pointBackgroundColor: '#4f46e5'
                     }]
                 },
                 options: {
@@ -255,11 +255,14 @@
                         }
                     },
                     scales: {
-                        x: { grid: { display: false } },
+                        x: { 
+                            grid: { display: false },
+                            ticks: { font: { size: 11, weight: '600' }, color: '#475569', maxRotation: 0, padding: 6 }
+                        },
                         y: {
                             beginAtZero: true,
-                            ticks: { stepSize: 2 },
-                            grid: { color: '#f4f4f5' }
+                            ticks: { stepSize: 2, font: { size: 11, weight: '600' }, color: '#475569' },
+                            grid: { color: 'rgba(148, 163, 184, 0.25)' }
                         }
                     }
                 }
@@ -278,7 +281,7 @@
                     labels: labels,
                     datasets: [{
                         data: dataVals,
-                        backgroundColor: ['#18181b', '#f59e0b', '#e11d48', '#a1a1aa'],
+                        backgroundColor: ['#4f46e5', '#f59e0b', '#e11d48', '#64748b'],
                         borderWidth: 2,
                         borderColor: '#ffffff'
                     }]
@@ -312,8 +315,8 @@
                     datasets: [{
                         label: 'Encounters',
                         data: hCounts,
-                        backgroundColor: '#18181b',
-                        borderRadius: 3
+                        backgroundColor: '#4f46e5',
+                        borderRadius: 6
                     }]
                 },
                 options: {
@@ -321,8 +324,8 @@
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
-                        x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 0 } },
-                        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 9 } }, grid: { color: '#f4f4f5' } }
+                        x: { grid: { display: false }, ticks: { font: { size: 10, weight: '600' }, color: '#475569', maxRotation: 0 } },
+                        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10, weight: '600' }, color: '#475569' }, grid: { color: 'rgba(148, 163, 184, 0.25)' } }
                     }
                 }
             });

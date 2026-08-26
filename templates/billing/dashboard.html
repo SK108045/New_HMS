@@ -6,11 +6,11 @@
 <div class="space-y-6">
 
     <!-- Top Station Command Header & KPIs -->
-    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
+    <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-5">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-                <h1 class="text-xl font-bold text-slate-900 tracking-tight">Financial Command & Revenue Intelligence</h1>
-                <p class="text-xs text-slate-500 mt-0.5 font-mono">Real-time collections surveillance, split-tender velocity, and cashier station oversight</p>
+                <h1 class="text-xl font-black text-slate-950 tracking-tight">Financial Command & Revenue Intelligence</h1>
+                <p class="text-xs text-slate-600 font-sans font-medium mt-0.5">Real-time collections surveillance, split-tender velocity, and cashier station oversight</p>
             </div>
 
             <div class="flex items-center gap-2">
@@ -27,29 +27,29 @@
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
             
             <!-- Today's Collections -->
-            <div class="accent-surface rounded-xl p-4 text-center">
-                <div class="text-xs font-semibold uppercase tracking-wider text-slate-300">Today's Collections</div>
-                <div class="text-2xl sm:text-3xl font-extrabold font-mono mt-1">KES {{ "%.2f"|format(today_revenue) }}</div>
+            <div class="accent-surface rounded-2xl p-4 text-center shadow-xs">
+                <div class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-200">Today's Collections</div>
+                <div class="text-2xl sm:text-3xl font-black font-mono mt-1 text-white">KES {{ "%.2f"|format(today_revenue) }}</div>
             </div>
 
             <!-- M-Pesa Total -->
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider">M-Pesa Mobile</div>
-                <div class="text-2xl sm:text-3xl font-extrabold font-mono text-slate-900 mt-1">KES {{ "%.2f"|format(today_mpesa) }}</div>
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center shadow-2xs">
+                <div class="text-xs sm:text-sm text-slate-700 font-bold uppercase tracking-wider">M-Pesa Mobile</div>
+                <div class="text-2xl sm:text-3xl font-black font-mono text-slate-950 mt-1">KES {{ "%.2f"|format(today_mpesa) }}</div>
             </div>
 
             <!-- Cash Total -->
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Physical Cash</div>
-                <div class="text-2xl sm:text-3xl font-extrabold font-mono text-slate-900 mt-1">KES {{ "%.2f"|format(today_cash) }}</div>
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center shadow-2xs">
+                <div class="text-xs sm:text-sm text-slate-700 font-bold uppercase tracking-wider">Physical Cash</div>
+                <div class="text-2xl sm:text-3xl font-black font-mono text-slate-950 mt-1">KES {{ "%.2f"|format(today_cash) }}</div>
             </div>
 
             <!-- Unsettled Invoices Balance -->
-            <div class="{% if unsettled_balance > 0 %}bg-amber-50 border-amber-300 text-amber-900{% else %}bg-slate-50 border-slate-200 text-slate-700{% endif %} border rounded-xl p-4 text-center">
-                <div class="text-xs font-semibold uppercase tracking-wider {% if unsettled_balance > 0 %}text-amber-800 font-bold{% else %}text-slate-500{% endif %}">
+            <div class="{% if unsettled_balance > 0 %}bg-amber-50/90 border-amber-300 text-amber-950{% else %}bg-slate-50 border-slate-200 text-slate-800{% endif %} border rounded-2xl p-4 text-center shadow-2xs">
+                <div class="text-xs sm:text-sm font-bold uppercase tracking-wider {% if unsettled_balance > 0 %}text-amber-900{% else %}text-slate-700{% endif %}">
                     Unsettled Invoices ({{ unsettled_invoices_count }})
                 </div>
-                <div class="text-2xl sm:text-3xl font-extrabold font-mono mt-1 {% if unsettled_balance > 0 %}text-amber-700{% endif %}">
+                <div class="text-2xl sm:text-3xl font-black font-mono mt-1 {% if unsettled_balance > 0 %}text-amber-800{% else %}text-slate-900{% endif %}">
                     KES {{ "%.2f"|format(unsettled_balance) }}
                 </div>
             </div>
@@ -61,20 +61,20 @@
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         <!-- Chart 1: 7-Day Revenue Collections Trend (7 Cols) -->
-        <div class="lg:col-span-7 bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+        <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3">
             <div class="flex items-center justify-between pb-2 border-b border-slate-200">
                 <div>
-                    <h3 class="text-sm font-bold text-slate-900">7-Day Revenue Collections Trend</h3>
-                    <p class="text-xs text-slate-500 font-mono">Daily volume comparing M-Pesa, Cash, and Insurance claim billings</p>
+                    <h3 class="text-sm font-bold text-slate-950">7-Day Revenue Collections Trend</h3>
+                    <p class="text-xs text-slate-600 font-sans font-medium">Daily volume comparing M-Pesa, Cash, and Insurance claim billings</p>
                 </div>
-                <span class="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">Velocity</span>
+                <span class="text-xs font-mono font-bold bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-300">Velocity</span>
             </div>
 
             <div class="h-64 relative w-full">
                 <canvas id="revenueTrendChart"></canvas>
             </div>
 
-            <div class="pt-2 border-t border-slate-200 flex items-center justify-center gap-4 text-xs font-mono">
+            <div class="pt-2 border-t border-slate-200 flex items-center justify-center gap-4 text-xs font-semibold text-slate-700">
                 <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-slate-900"></span> M-Pesa Mobile</span>
                 <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-amber-500"></span> Cash</span>
                 <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-slate-400"></span> Insurance Claims</span>
@@ -82,14 +82,14 @@
         </div>
 
         <!-- Chart 2: Departmental Revenue Share & Tender Distribution (5 Cols) -->
-        <div class="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-4">
             
             <div class="flex items-center justify-between pb-2 border-b border-slate-200">
                 <div>
-                    <h3 class="text-sm font-bold text-slate-900">Department Revenue Share</h3>
-                    <p class="text-xs text-slate-500 font-mono">Clinical department financial breakdown</p>
+                    <h3 class="text-sm font-bold text-slate-950">Department Revenue Share</h3>
+                    <p class="text-xs text-slate-600 font-sans font-medium">Clinical department financial breakdown</p>
                 </div>
-                <span class="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">Share</span>
+                <span class="text-xs font-mono font-bold bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-300">Share</span>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
@@ -358,7 +358,7 @@
                     labels: labels,
                     datasets: [{
                         data: dataVals,
-                        backgroundColor: ['#18181b', '#3f3f46', '#71717a', '#a1a1aa', '#d4d4d8'],
+                        backgroundColor: ['#0f766e', '#4f46e5', '#f59e0b', '#0284c7', '#64748b'],
                         borderWidth: 2,
                         borderColor: '#ffffff'
                     }]
@@ -392,8 +392,8 @@
                     datasets: [{
                         label: 'Total Processed',
                         data: tCounts,
-                        backgroundColor: '#18181b',
-                        borderRadius: 3
+                        backgroundColor: '#0f766e',
+                        borderRadius: 6
                     }]
                 },
                 options: {
@@ -402,8 +402,8 @@
                     indexAxis: 'y',
                     plugins: { legend: { display: false } },
                     scales: {
-                        x: { beginAtZero: true, grid: { color: '#f4f4f5' }, ticks: { font: { size: 9 } } },
-                        y: { grid: { display: false }, ticks: { font: { size: 9 } } }
+                        x: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10, weight: '600' }, color: '#475569' } },
+                        y: { grid: { display: false }, ticks: { font: { size: 10, weight: '600' }, color: '#334155' } }
                     }
                 }
             });

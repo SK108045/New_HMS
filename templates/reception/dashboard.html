@@ -182,25 +182,25 @@
                         <span class="text-base">📋</span>
                         <h3 class="text-xs font-black text-slate-950 uppercase font-mono">Recent Patient Master Records</h3>
                     </div>
-                    <span class="text-[11px] text-slate-500 font-mono font-bold bg-slate-100 px-2 py-0.5 rounded">Latest 6 Registered</span>
+                    <span class="text-xs text-slate-700 font-sans font-semibold bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">Latest 6 Registered</span>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {% for p in recent_patients %}
-                        <div class="p-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all flex items-center justify-between gap-2">
-                            <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="p-3 rounded-xl border border-slate-200/90 bg-slate-50/50 hover:bg-slate-50 transition-all flex items-center justify-between gap-3 shadow-2xs">
+                            <div class="flex items-center gap-2.5 flex-1 min-w-0">
                                 {% if p.photo_filename %}
-                                    <img src="{{ url_for('static', filename='uploads/photos/' ~ p.photo_filename) }}" class="w-8 h-8 rounded-lg object-cover border border-slate-300 shrink-0">
+                                    <img src="{{ url_for('static', filename='uploads/photos/' ~ p.photo_filename) }}" class="w-9 h-9 rounded-xl object-cover border border-slate-300 shrink-0">
                                 {% else %}
-                                    <div class="w-8 h-8 rounded-lg bg-slate-200 text-slate-800 font-bold flex items-center justify-center font-mono text-xs border border-slate-300 shrink-0">
+                                    <div class="w-9 h-9 rounded-xl bg-slate-200 text-slate-900 font-black flex items-center justify-center font-mono text-xs border border-slate-300 shrink-0">
                                         {{ p.initials }}
                                     </div>
                                 {% endif %}
-                                <div class="min-w-0">
-                                    <a href="{{ url_for('reception.patient_detail', patient_id=p.id) }}" class="font-bold text-xs text-slate-900 hover:text-blue-900 truncate block">
+                                <div class="flex-1 min-w-0">
+                                    <a href="{{ url_for('reception.patient_detail', patient_id=p.id) }}" class="font-bold text-xs text-slate-950 hover:text-blue-900 block break-words leading-snug" title="{{ p.full_name }}">
                                         {{ p.full_name }}
                                     </a>
-                                    <span class="font-mono text-slate-500 text-[10px] block truncate">{{ p.hospital_id }} &bull; {{ p.phone }}</span>
+                                    <span class="font-sans font-medium text-slate-600 text-[11px] block truncate mt-0.5">{{ p.hospital_id }} &bull; {{ p.phone }}</span>
                                 </div>
                             </div>
                             
@@ -208,12 +208,12 @@
                                 <button 
                                     type="button" 
                                     @click="$dispatch('open-paystack-modal', { patientId: {{ p.id }}, patientName: '{{ p.full_name|replace('\'', '\\\'') }}', phone: '{{ p.phone }}', amount: 1.0 })"
-                                    class="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg text-[10px] flex items-center gap-0.5 shadow-2xs transition-colors cursor-pointer"
+                                    class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold rounded-lg text-xs flex items-center gap-0.5 shadow-2xs transition-colors cursor-pointer"
                                     title="Initiate Paystack MPesa Settlement"
                                 >
                                     <span>⚡ Pay</span>
                                 </button>
-                                <a href="{{ url_for('reception.patient_detail', patient_id=p.id) }}" class="p-1 text-slate-400 hover:text-slate-900 font-bold text-xs" title="View Profile">
+                                <a href="{{ url_for('reception.patient_detail', patient_id=p.id) }}" class="p-1.5 text-slate-500 hover:text-slate-950 font-bold text-xs" title="View Profile">
                                     &rarr;
                                 </a>
                             </div>
@@ -236,9 +236,9 @@
                             <span class="text-base">📅</span>
                             <h3 class="text-sm font-black text-slate-950 uppercase font-mono tracking-tight">Today's Appointments</h3>
                         </div>
-                        <p class="text-[11px] text-slate-500 font-mono mt-0.5">{{ today_appointments|length }} bookings scheduled for today</p>
+                        <p class="text-xs text-slate-600 font-sans font-medium mt-0.5">{{ today_appointments|length }} bookings scheduled for today</p>
                     </div>
-                    <a href="{{ url_for('reception.appointments') }}" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors flex items-center gap-1">
+                    <a href="{{ url_for('reception.appointments') }}" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold rounded-xl text-xs transition-colors flex items-center gap-1 border border-slate-300">
                         <span>Full Schedule &rarr;</span>
                     </a>
                 </div>
@@ -247,7 +247,7 @@
                 {% if today_appointments %}
                     <div class="max-h-[520px] overflow-y-auto space-y-2.5 pr-1 custom-scrollbar">
                         {% for app in today_appointments %}
-                            <div class="p-3 rounded-xl border border-slate-200 hover:border-slate-300 bg-slate-50/60 hover:bg-slate-50 transition-all flex items-center justify-between gap-3 text-xs">
+                            <div class="p-3 rounded-xl border border-slate-200/90 hover:border-slate-300 bg-slate-50/60 hover:bg-slate-50 transition-all flex items-center justify-between gap-3 text-xs shadow-2xs">
                                 
                                 <!-- Left: Time, Name, Info -->
                                 <div class="space-y-1 min-w-0">
@@ -255,12 +255,12 @@
                                         <span class="font-mono font-bold text-[11px] text-blue-950 bg-blue-100/80 px-2 py-0.5 rounded-md border border-blue-200 shrink-0">
                                             {{ app.scheduled_time }}
                                         </span>
-                                        <a href="{{ url_for('reception.patient_detail', patient_id=app.patient.id) }}" class="font-bold text-xs text-slate-900 hover:text-blue-900 truncate">
+                                        <a href="{{ url_for('reception.patient_detail', patient_id=app.patient.id) }}" class="font-bold text-xs text-slate-950 hover:text-blue-900 truncate">
                                             {{ app.patient.full_name }}
                                         </a>
                                     </div>
-                                    <div class="text-slate-500 font-mono text-[10px] flex items-center gap-2 truncate">
-                                        <span>{{ app.patient.hospital_id }}</span>
+                                    <div class="text-slate-600 font-sans font-medium text-[11px] flex items-center gap-2 truncate">
+                                        <span class="font-mono text-slate-700 font-semibold">{{ app.patient.hospital_id }}</span>
                                         <span>&bull;</span>
                                         <span class="text-slate-700 font-medium truncate">{{ app.doctor_name or app.department }}</span>
                                     </div>
@@ -270,22 +270,23 @@
                                 <div class="shrink-0">
                                     {% if app.status == 'scheduled' %}
                                         <form method="POST" action="{{ url_for('reception.checkin_from_appointment', appointment_id=app.id) }}">
-                                            <button type="submit" class="px-3 py-1.5 bg-blue-900 hover:bg-blue-950 text-white font-bold rounded-xl text-xs shadow-xs transition-all cursor-pointer">
+                                            <button type="submit" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-950 text-white font-bold rounded-xl text-xs shadow-xs transition-all cursor-pointer">
                                                 Check In &rarr;
                                             </button>
                                         </form>
                                     {% elif app.status == 'confirmed' %}
                                         <form method="POST" action="{{ url_for('reception.checkin_from_appointment', appointment_id=app.id) }}">
-                                            <button type="submit" class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl text-xs shadow-xs transition-all cursor-pointer" title="Confirmed appointment - Check In">
+                                            <button type="submit" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-950 text-white font-bold rounded-xl text-xs shadow-xs transition-all cursor-pointer" title="Confirmed appointment - Check In">
                                                 ✓ Check In
                                             </button>
                                         </form>
                                     {% elif app.status == 'checked_in' %}
-                                        <span class="px-2.5 py-1 bg-slate-200 text-slate-800 border border-slate-300 rounded-lg font-bold text-[11px] font-mono">
-                                            In Queue
+                                        <span class="px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-300 rounded-lg font-bold text-xs font-mono shadow-2xs inline-flex items-center gap-1.5">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                            <span>In Queue</span>
                                         </span>
                                     {% else %}
-                                        <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded font-medium text-[10px] font-mono">
+                                        <span class="px-2.5 py-1 bg-slate-100 text-slate-800 border border-slate-300 rounded-lg font-bold text-xs font-mono">
                                             {{ app.status|capitalize }}
                                         </span>
                                     {% endif %}

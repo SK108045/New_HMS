@@ -67,53 +67,53 @@
     <!-- Doctor Roster & Slot Capacity Matrix for the Day -->
     <div>
         <div class="flex items-center justify-between mb-2">
-            <h3 class="text-xs font-mono font-bold uppercase text-slate-600">Doctor Availability & Slot Capacity Matrix ({{ filter_date.strftime('%a, %d %b %Y') }})</h3>
-            <span class="text-[11px] text-slate-500 font-mono">Click card to filter appointments by doctor</span>
+            <h3 class="text-xs font-sans font-bold uppercase text-slate-700 tracking-wider">Doctor Availability & Slot Capacity Matrix ({{ filter_date.strftime('%a, %d %b %Y') }})</h3>
+            <span class="text-xs text-slate-600 font-sans font-medium">Click card to filter appointments by doctor</span>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             {% for doc in doctor_capacity_cards %}
                 {% set is_selected_doc = (doctor_filter == doc.schedule.doctor_name or (doctor_filter != 'all' and doctor_filter in doc.schedule.doctor_name)) %}
                 <a 
                     href="{{ url_for('reception.appointments', date=filter_date.strftime('%Y-%m-%d'), status=status_filter, doctor=('all' if is_selected_doc else doc.schedule.doctor_name)) }}"
-                    class="p-3.5 rounded-2xl border-2 shadow-xs transition-all block cursor-pointer
-                    {% if is_selected_doc %}ring-3 ring-blue-600 border-blue-600 bg-blue-50/80
-                    {% elif doc.is_full %}bg-rose-50 border-rose-300
-                    {% elif doc.schedule.duty_status != 'available' %}bg-slate-100 border-slate-300 opacity-75
-                    {% else %}bg-white border-slate-300 hover:border-blue-400 hover:shadow-md{% endif %}"
+                    class="p-3.5 rounded-2xl shadow-xs transition-all block cursor-pointer
+                    {% if is_selected_doc %}ring-4 ring-blue-600 border-2 border-blue-600 bg-blue-50/90 shadow-md
+                    {% elif doc.is_full %}bg-rose-50/90 border-2 border-rose-300
+                    {% elif doc.schedule.duty_status != 'available' %}bg-slate-100 border-2 border-slate-300 opacity-75
+                    {% else %}bg-white border-2 border-slate-300 hover:border-blue-400 hover:shadow-md{% endif %}"
                     title="{% if is_selected_doc %}Click to reset doctor filter{% else %}Filter appointments for {{ doc.schedule.doctor_name }}{% endif %}"
                 >
                     <div class="flex items-center justify-between">
-                        <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase
+                        <span class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase shadow-2xs
                             {% if is_selected_doc %}bg-blue-900 text-white
-                            {% elif doc.schedule.duty_status == 'available' %}bg-emerald-100 text-emerald-900
-                            {% elif doc.schedule.duty_status == 'in_surgery' %}bg-purple-100 text-purple-900
-                            {% elif doc.schedule.duty_status == 'on_leave' %}bg-rose-100 text-rose-900
-                            {% else %}bg-slate-200 text-slate-800{% endif %}">
+                            {% elif doc.schedule.duty_status == 'available' %}bg-emerald-100 text-emerald-950 border border-emerald-300
+                            {% elif doc.schedule.duty_status == 'in_surgery' %}bg-purple-100 text-purple-950 border border-purple-300
+                            {% elif doc.schedule.duty_status == 'on_leave' %}bg-rose-100 text-rose-950 border border-rose-300
+                            {% else %}bg-slate-200 text-slate-900 border border-slate-300{% endif %}">
                             {% if is_selected_doc %}✓ Active Filter{% else %}{{ doc.schedule.duty_status.replace('_', ' ').title() }}{% endif %}
                         </span>
-                        <span class="text-[10px] font-mono font-bold text-slate-500">{{ doc.schedule.start_time }}-{{ doc.schedule.end_time }}</span>
+                        <span class="text-[10px] font-mono font-bold text-slate-600">{{ doc.schedule.start_time }}-{{ doc.schedule.end_time }}</span>
                     </div>
 
-                    <div class="font-extrabold text-slate-950 text-xs mt-2 truncate" title="{{ doc.schedule.doctor_name }}">
+                    <div class="font-black text-slate-950 text-xs mt-2 truncate" title="{{ doc.schedule.doctor_name }}">
                         {{ doc.schedule.doctor_name }}
                     </div>
-                    <div class="text-[10px] text-slate-500 font-mono">{{ doc.schedule.notes or doc.schedule.department }}</div>
+                    <div class="text-[11px] text-slate-600 font-sans font-medium mt-0.5 truncate">{{ doc.schedule.notes or doc.schedule.department }}</div>
 
                     <!-- Capacity Progress Bar -->
                     <div class="mt-2.5 space-y-1">
                         <div class="flex items-center justify-between text-[10px] font-mono">
                             <span class="font-bold text-slate-700">Slots Booked:</span>
-                            <span class="font-black {% if doc.is_full %}text-rose-900{% else %}text-slate-900{% endif %}">
+                            <span class="font-black {% if doc.is_full %}text-rose-900{% else %}text-slate-950{% endif %}">
                                 {{ doc.booked_count }} / {{ doc.max_capacity }}
                             </span>
                         </div>
-                        <div class="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
                             <div class="h-full rounded-full {% if doc.is_full %}bg-rose-600{% else %}bg-blue-600{% endif %}"
                                  style="width: {{ [(doc.booked_count / doc.max_capacity * 100)|round, 100]|min }}%"></div>
                         </div>
-                        <div class="flex items-center justify-between text-[9px] text-slate-500 pt-0.5">
-                            <span>Rem: <strong>{{ doc.remaining_slots }}</strong></span>
-                            <span>Live Caseload: <strong>{{ doc.live_caseload }}</strong></span>
+                        <div class="flex items-center justify-between text-[10px] text-slate-700 font-semibold pt-0.5">
+                            <span>Rem: <strong class="text-slate-950 font-bold font-mono">{{ doc.remaining_slots }}</strong></span>
+                            <span>Live Caseload: <strong class="text-slate-950 font-bold font-mono">{{ doc.live_caseload }}</strong></span>
                         </div>
                     </div>
                 </a>
