@@ -464,6 +464,8 @@ def run_test_suite():
     print("19. Testing Controlled Drug Register & Expiry Quarantine Bin...")
     with app.app_context():
         ctrl_med = MedicationItem.query.filter_by(is_controlled=True).first()
+        ctrl_med.current_stock = max(ctrl_med.current_stock, 10)
+        db.session.commit()
         ctrl_id = ctrl_med.id
         ctrl_initial = ctrl_med.current_stock
 
