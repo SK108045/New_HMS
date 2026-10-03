@@ -35,9 +35,8 @@ class Invoice(db.Model):
     def generate_invoice_number(cls, session=None):
         today_str = date.today().strftime('%Y%m%d')
         sess = session or db.session
-        count = sess.query(cls).filter(
-            cls.invoice_number.like(f'INV-{today_str}-%')
-        ).count()
+        from services.identifiers import next_sequence
+        count = next_sequence(sess, cls.invoice_number, (f'INV-{today_str}-%').removesuffix("%")) - 1
         return f"INV-{today_str}-{count + 1:04d}"
 
     @property
@@ -56,6 +55,7 @@ class Payment(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     receipt_number = db.Column(db.String(60), unique=True, nullable=False)
+    idempotency_key = db.Column(db.String(160), unique=True, nullable=True)
     invoice_id = db.Column(db.Integer, db.ForeignKey('invoices.id'), nullable=False)
     patient_id = db.Column(db.Integer, db.ForeignKey('patients.id'), nullable=False)
 
@@ -96,9 +96,8 @@ class Payment(db.Model):
     def generate_receipt_number(cls, session=None):
         today_str = date.today().strftime('%Y%m%d')
         sess = session or db.session
-        count = sess.query(cls).filter(
-            cls.receipt_number.like(f'RCP-{today_str}-%')
-        ).count()
+        from services.identifiers import next_sequence
+        count = next_sequence(sess, cls.receipt_number, (f'RCP-{today_str}-%').removesuffix("%")) - 1
         return f"RCP-{today_str}-{count + 1:04d}"
 
     def __repr__(self):
@@ -135,9 +134,8 @@ class ShiftRegister(db.Model):
     def generate_shift_code(cls, session=None):
         today_str = date.today().strftime('%Y%m%d')
         sess = session or db.session
-        count = sess.query(cls).filter(
-            cls.shift_code.like(f'SHF-{today_str}-%')
-        ).count()
+        from services.identifiers import next_sequence
+        count = next_sequence(sess, cls.shift_code, (f'SHF-{today_str}-%').removesuffix("%")) - 1
         return f"SHF-{today_str}-{count + 1:02d}"
 
     def __repr__(self):
@@ -209,9 +207,8 @@ class InsuranceClaim(db.Model):
     def generate_claim_number(cls, session=None):
         today_str = date.today().strftime('%Y%m%d')
         sess = session or db.session
-        count = sess.query(cls).filter(
-            cls.claim_number.like(f'CLM-{today_str}-%')
-        ).count()
+        from services.identifiers import next_sequence
+        count = next_sequence(sess, cls.claim_number, (f'CLM-{today_str}-%').removesuffix("%")) - 1
         return f"CLM-{today_str}-{count + 1:04d}"
 
     def __repr__(self):
@@ -233,6 +230,8 @@ class CreditNote(db.Model):
     reason = db.Column(db.String(80), nullable=False) # billing_error, medication_returned, service_cancelled, overpayment
     status = db.Column(db.String(30), default='pending_approval') # pending_approval, approved, rejected
     requested_by = db.Column(db.String(120), nullable=False)
+    requested_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    approved_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     approved_by = db.Column(db.String(120), nullable=True)
     notes = db.Column(db.Text, nullable=True)
 
@@ -246,9 +245,8 @@ class CreditNote(db.Model):
     def generate_credit_note_number(cls, session=None):
         today_str = date.today().strftime('%Y%m%d')
         sess = session or db.session
-        count = sess.query(cls).filter(
-            cls.credit_note_number.like(f'CRN-{today_str}-%')
-        ).count()
+        from services.identifiers import next_sequence
+        count = next_sequence(sess, cls.credit_note_number, (f'CRN-{today_str}-%').removesuffix("%")) - 1
         return f"CRN-{today_str}-{count + 1:04d}"
 
     def __repr__(self):
@@ -271,6 +269,8 @@ class FeeWaiver(db.Model):
     justification = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(30), default='pending_approval') # pending_approval, approved, rejected
     requested_by = db.Column(db.String(120), nullable=False)
+    requested_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    approved_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     approved_by = db.Column(db.String(120), nullable=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -283,11 +283,49 @@ class FeeWaiver(db.Model):
     def generate_waiver_number(cls, session=None):
         today_str = date.today().strftime('%Y%m%d')
         sess = session or db.session
-        count = sess.query(cls).filter(
-            cls.waiver_number.like(f'WVR-{today_str}-%')
-        ).count()
+        from services.identifiers import next_sequence
+        count = next_sequence(sess, cls.waiver_number, (f'WVR-{today_str}-%').removesuffix("%")) - 1
         return f"WVR-{today_str}-{count + 1:04d}"
 
     def __repr__(self):
         return f"<FeeWaiver {self.waiver_number} Amount={self.amount} Status={self.status}>"
+
+
+class PaystackTransaction(db.Model):
+    """
+    Durable tracking ledger for Paystack Mobile Money (MPesa) and Card transactions.
+    Stores unique provider reference, patient, expected amount/currency, routing and settlement relation.
+    """
+    __tablename__ = 'paystack_transactions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    reference = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patients.id'), nullable=False)
+
+    amount = db.Column(db.Float, nullable=False)  # Expected / authorized amount in KES
+    currency = db.Column(db.String(10), default='KES', nullable=False)
+
+    status = db.Column(db.String(30), default='pending', nullable=False)  # pending, success, failed, settled, cancelled
+    channel = db.Column(db.String(40), default='mobile_money', nullable=False)
+    phone = db.Column(db.String(40), nullable=True)
+
+    destination_department = db.Column(db.String(100), default='General OPD', nullable=True)
+    assigned_doctor = db.Column(db.String(120), nullable=True)
+
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoices.id'), nullable=True)
+    payment_id = db.Column(db.Integer, db.ForeignKey('payments.id'), nullable=True)
+    queue_entry_id = db.Column(db.Integer, db.ForeignKey('queue_entries.id'), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    verified_at = db.Column(db.DateTime, nullable=True)
+    settled_at = db.Column(db.DateTime, nullable=True)
+
+    # Relationships
+    patient = db.relationship('Patient', backref=db.backref('paystack_transactions', lazy=True))
+    invoice = db.relationship('Invoice', backref=db.backref('paystack_transactions', lazy=True))
+    payment = db.relationship('Payment', backref=db.backref('paystack_transactions', lazy=True))
+    queue_entry = db.relationship('QueueEntry', backref=db.backref('paystack_transactions', lazy=True))
+
+    def __repr__(self):
+        return f"<PaystackTransaction {self.reference} Patient={self.patient_id} Amount={self.amount} Status={self.status}>"
 

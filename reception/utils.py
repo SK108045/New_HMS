@@ -1,6 +1,5 @@
 import os
 import base64
-import uuid
 from datetime import datetime, date
 from werkzeug.utils import secure_filename
 
@@ -12,31 +11,25 @@ def save_webcam_or_uploaded_photo(photo_payload, upload_folder: str) -> str:
     if not photo_payload:
         return None
 
-    os.makedirs(upload_folder, exist_ok=True)
-    filename = f"pt_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.jpg"
-    target_path = os.path.join(upload_folder, filename)
+    from services.private_files import store_photo
 
     # Check if payload is a base64 string from canvas / webcam
     if isinstance(photo_payload, str) and photo_payload.startswith('data:image'):
         try:
             # Extract header and base64 string
             header, encoded = photo_payload.split(',', 1)
-            file_data = base64.b64decode(encoded)
-            with open(target_path, 'wb') as f:
-                f.write(file_data)
-            return filename
+            file_data = base64.b64decode(encoded, validate=True)
+            return store_photo(file_data)
         except Exception as e:
-            print(f"Error decoding base64 photo: {e}")
-            return None
+            raise ValueError('The webcam photograph is invalid.') from e
 
     # Check if payload is a werkzeug FileStorage object
     if hasattr(photo_payload, 'filename') and photo_payload.filename:
         try:
-            photo_payload.save(target_path)
-            return filename
+            from flask import current_app
+            return store_photo(photo_payload.read(current_app.config['MAX_CONTENT_LENGTH'] + 1))
         except Exception as e:
-            print(f"Error saving uploaded photo: {e}")
-            return None
+            raise ValueError('Upload a valid JPEG, PNG, or WebP photograph.') from e
 
     return None
 

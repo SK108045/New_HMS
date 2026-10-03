@@ -7,7 +7,12 @@ import qrcode
 from flask import abort, current_app, render_template, request, redirect, url_for, flash, session
 from models import db, User, SecuritySetting, AuditLog
 from . import auth_bp
-from .decorators import login_user, logout_user, is_authenticated, get_current_user, is_pending_2fa
+from auth.decorators import stage_auth, pending_auth_valid
+from .decorators import (
+    login_user, logout_user, is_authenticated, get_current_user,
+    is_pending_2fa, is_pending_enrollment, clear_pending_auth_state
+)
+from .policy import is_safe_url, validate_password_policy
 
 PORTAL_META = {
     'reception': {
@@ -140,11 +145,14 @@ def handle_portal_login(portal_key):
     if is_authenticated():
         current_u = get_current_user()
         if current_u and current_u.can_access_portal(portal_key):
-            if next_url and next_url.startswith('/'):
+            if next_url and is_safe_url(next_url):
                 return redirect(next_url)
             return redirect(url_for(meta['home_endpoint']))
 
     if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
+        clear_pending_auth_state()
         username = request.form.get('username', '').strip().lower()
         password = request.form.get('password', '')
 
@@ -162,6 +170,7 @@ def handle_portal_login(portal_key):
                 f"Failed login attempt for unknown username: {username}",
                 severity='warning'
             )
+            db.session.commit()
             flash('Invalid clinical staff credentials. Please recheck your username and password.', 'error')
             return render_template('auth/login.html', meta=meta, portals=PORTAL_META, next_url=next_url, current_portal=portal_key)
 
@@ -176,6 +185,7 @@ def handle_portal_login(portal_key):
                 actor=user,
                 severity='security_breach'
             )
+            db.session.commit()
             flash(f'Account locked due to excessive failed attempts. Try again in {remaining_mins} minute(s) or contact an administrator.', 'error')
             return render_template('auth/login.html', meta=meta, portals=PORTAL_META, next_url=next_url, current_portal=portal_key)
 
@@ -190,6 +200,7 @@ def handle_portal_login(portal_key):
                 actor=user,
                 severity='warning'
             )
+            db.session.commit()
             if user.is_locked():
                 flash(f'Account locked for {settings.lockout_duration_minutes} minutes due to {settings.max_failed_attempts} failed login attempts.', 'error')
             else:
@@ -205,24 +216,39 @@ def handle_portal_login(portal_key):
                 actor=user,
                 severity='warning'
             )
+            db.session.commit()
             flash('Your account has been suspended or deactivated. Contact HMS Hospital Administrator.', 'error')
             return render_template('auth/login.html', meta=meta, portals=PORTAL_META, next_url=next_url, current_portal=portal_key)
 
         # Determine Mandatory Password Reset (First login or Admin Flagged)
         if user.force_password_change:
-            session['pending_force_pw_user_id'] = user.id
+            clear_pending_auth_state()
+            stage_auth(user, 'pending_force_pw_user_id')
             session['pending_target_portal'] = portal_key
-            session['pending_next_url'] = next_url
+            if next_url and is_safe_url(next_url):
+                session['pending_next_url'] = next_url
             flash('Hospital Security Policy requires updating your temporary password before accessing clinical stations.', 'warning')
             return redirect(url_for('auth.force_change_password'))
 
         # Determine 2FA Requirement (Google Authenticator)
         if user.is_2fa_enabled:
             # Stage 2FA challenge
-            session['pending_2fa_user_id'] = user.id
+            clear_pending_auth_state()
+            stage_auth(user, 'pending_2fa_user_id')
             session['pending_target_portal'] = portal_key
-            session['pending_next_url'] = next_url
+            if next_url and is_safe_url(next_url):
+                session['pending_next_url'] = next_url
             return redirect(url_for('auth.verify_2fa'))
+
+        # Enforce Mandatory 2FA Enrollment for unenrolled accounts
+        if user.requires_2fa(settings):
+            clear_pending_auth_state()
+            stage_auth(user, 'pending_2fa_enrollment_user_id')
+            session['pending_target_portal'] = portal_key
+            if next_url and is_safe_url(next_url):
+                session['pending_next_url'] = next_url
+            flash('Hospital Security Policy requires Two-Factor Authentication. Please complete 2FA setup to continue.', 'warning')
+            return redirect(url_for('auth.setup_2fa'))
 
         # Standard direct authentication without 2FA
         login_user(user, is_2fa_verified=True)
@@ -234,10 +260,11 @@ def handle_portal_login(portal_key):
             actor=user,
             severity='info'
         )
+        db.session.commit()
 
         if user.can_access_portal(portal_key):
             flash(f'Welcome back, {user.full_name}! Signed in to {meta["name"]}.', 'info')
-            if next_url and next_url.startswith('/') and not next_url.startswith('/login') and not next_url.startswith('/logout'):
+            if next_url and is_safe_url(next_url):
                 return redirect(next_url)
             return redirect(url_for(meta['home_endpoint']))
         else:
@@ -258,19 +285,42 @@ def handle_portal_login(portal_key):
 @auth_bp.route('/verify-2fa', methods=['GET', 'POST'])
 @auth_bp.route('/auth/verify-2fa', methods=['GET', 'POST'])
 def verify_2fa():
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     pending_uid = session.get('pending_2fa_user_id')
     if not pending_uid:
         flash('No active sign-in challenge found. Please sign in.', 'warning')
         return redirect(url_for('auth.login'))
 
     user = db.session.get(User, pending_uid)
-    if not user:
-        session.pop('pending_2fa_user_id', None)
+    if not pending_auth_valid(user):
+        logout_user()
         return redirect(url_for('auth.login'))
 
     target_portal = session.get('pending_target_portal', 'reception')
     next_url = session.get('pending_next_url')
     meta = PORTAL_META.get(target_portal, PORTAL_META['reception'])
+    settings = SecuritySetting.get_settings()
+
+    if user.status != 'active':
+        clear_pending_auth_state()
+        AuditLog.log_event(
+            '2fa_attempt_inactive_user',
+            'user',
+            user.id,
+            f"Attempted 2FA challenge on inactive/suspended user: {user.username}",
+            actor=user,
+            severity='warning'
+        )
+        db.session.commit()
+        flash('Your account has been suspended or deactivated. Contact HMS Hospital Administrator.', 'error')
+        return redirect(url_for('auth.login', portal=target_portal))
+
+    if user.is_locked():
+        remaining_mins = max(1, int((user.locked_until - datetime.utcnow()).total_seconds() / 60))
+        flash(f'Account locked due to excessive failed attempts. Try again in {remaining_mins} minute(s) or contact an administrator.', 'error')
+        return render_template('auth/verify_2fa.html', user=user, meta=meta)
 
     if request.method == 'POST':
         totp_code = request.form.get('totp_code', '').strip().replace(' ', '').replace('-', '')
@@ -278,19 +328,15 @@ def verify_2fa():
 
         is_valid = False
         if use_backup:
-            # Verify emergency single-use recovery code
             is_valid = user.verify_backup_code(totp_code)
             auth_method = "Emergency Backup Recovery Code"
         else:
-            # Verify 6-digit Google Authenticator code
             is_valid = user.verify_totp(totp_code)
             auth_method = "Google Authenticator TOTP"
 
         if is_valid:
-            # Successful 2FA verification
-            session.pop('pending_2fa_user_id', None)
-            session.pop('pending_target_portal', None)
-            session.pop('pending_next_url', None)
+            clear_pending_auth_state()
+            user.reset_failed_logins()
 
             login_user(user, is_2fa_verified=True)
             AuditLog.log_event(
@@ -301,9 +347,10 @@ def verify_2fa():
                 actor=user,
                 severity='info'
             )
+            db.session.commit()
 
             flash(f'Two-Factor Authentication verified. Welcome back, {user.full_name}!', 'success')
-            if next_url and next_url.startswith('/') and not next_url.startswith('/login') and not next_url.startswith('/logout'):
+            if next_url and is_safe_url(next_url):
                 return redirect(next_url)
 
             if user.can_access_portal(target_portal):
@@ -312,7 +359,7 @@ def verify_2fa():
                 user_meta = PORTAL_META.get(user.portal, PORTAL_META['reception'])
                 return redirect(url_for(user_meta['home_endpoint']))
         else:
-            user.record_failed_login(max_attempts=5, lockout_minutes=15)
+            user.record_failed_login(max_attempts=settings.max_failed_attempts, lockout_minutes=settings.lockout_duration_minutes)
             AuditLog.log_event(
                 '2fa_verification_failed',
                 'user',
@@ -321,7 +368,12 @@ def verify_2fa():
                 actor=user,
                 severity='warning'
             )
-            flash('Invalid 6-digit Authenticator code or recovery key. Please check your Google Authenticator app.', 'error')
+            db.session.commit()
+            if user.is_locked():
+                flash(f'Account locked for {settings.lockout_duration_minutes} minutes due to {settings.max_failed_attempts} failed attempts.', 'error')
+            else:
+                attempts_left = max(0, settings.max_failed_attempts - user.failed_login_attempts)
+                flash(f'Invalid 6-digit Authenticator code or recovery key. {attempts_left} attempt(s) remaining.', 'error')
 
     return render_template(
         'auth/verify_2fa.html',
@@ -337,9 +389,15 @@ def verify_2fa():
 @auth_bp.route('/auth/setup-2fa/<int:user_id>', methods=['GET', 'POST'])
 @auth_bp.route('/onboard-2fa/<token>', methods=['GET', 'POST'])
 @auth_bp.route('/auth/onboard-2fa/<token>', methods=['GET', 'POST'])
-@auth_bp.route('/onboard-2fa', methods=['GET', 'POST'])
-@auth_bp.route('/auth/onboard-2fa', methods=['GET', 'POST'])
 def setup_2fa(user_id=None, token=None):
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
+    # Pending 2FA challenge users cannot disclose secret or bypass challenge
+    if is_pending_2fa():
+        flash('Please complete your Two-Factor Authentication verification challenge.', 'warning')
+        return redirect(url_for('auth.verify_2fa'))
+
     token = token or request.args.get('token')
     current_u = get_current_user()
     user = None
@@ -351,28 +409,57 @@ def setup_2fa(user_id=None, token=None):
             flash('This 2FA onboarding link has expired or is invalid. Please request a new link from your hospital administrator.', 'error')
             return redirect(url_for('auth.login'))
     elif user_id is not None:
-        # Admin or the user themselves can view/setup
-        if not current_u or (current_u.role != 'admin' and current_u.id != user_id):
-            flash('Administrator access required to configure 2FA for other staff members.', 'error')
+        # Protected admin/self path requiring fully verified active current session
+        if not is_authenticated():
+            flash('Authentication required. Please sign in.', 'warning')
             return redirect(url_for('auth.login'))
+        if not current_u or current_u.status != 'active':
+            logout_user()
+            return redirect(url_for('auth.login'))
+        if current_u.is_locked():
+            logout_user()
+            return redirect(url_for('auth.login'))
+        if current_u.role != 'admin' and current_u.id != user_id:
+            return ("Forbidden: Administrator access required to configure 2FA for other staff members.", 403)
         user = db.session.get(User, user_id)
         if not user:
             flash('Staff user not found.', 'error')
             return redirect(url_for('admin.staff'))
+        if user.is_2fa_enabled:
+            flash('Two-Factor Authentication is already active on this account.', 'info')
+            return redirect(url_for('admin.staff') if current_u.role == 'admin' else url_for('admin.dashboard'))
+    elif session.get('pending_2fa_enrollment_user_id'):
+        # Password-authenticated enrollment session for mandatory 2FA
+        pending_enroll_uid = session.get('pending_2fa_enrollment_user_id')
+        user = db.session.get(User, pending_enroll_uid)
+        if not pending_auth_valid(user):
+            clear_pending_auth_state()
+            return redirect(url_for('auth.login'))
+        if user.is_2fa_enabled:
+            clear_pending_auth_state()
+            return redirect(url_for('auth.login'))
     else:
+        # Self path requires fully verified active current session
+        if not is_authenticated():
+            flash('Please sign in or use a valid employee 2FA setup link.', 'warning')
+            return redirect(url_for('auth.login'))
         user = current_u
-        if not user:
-            pending_uid = session.get('pending_2fa_user_id')
-            if pending_uid:
-                user = db.session.get(User, pending_uid)
+        if not user or user.status != 'active' or user.is_locked():
+            logout_user()
+            return redirect(url_for('auth.login'))
+        if user.is_2fa_enabled:
+            flash('Two-Factor Authentication is already active on your account.', 'info')
+            user_meta = PORTAL_META.get(user.portal, PORTAL_META['reception'])
+            return redirect(url_for(user_meta['home_endpoint']))
 
-    if not user:
+    if not user or user.is_2fa_enabled:
         flash('Please sign in or use a valid employee 2FA setup link.', 'warning')
         return redirect(url_for('auth.login'))
 
     # Generate or retrieve Base32 secret key
     secret = user.generate_totp_secret()
-    db.session.commit()
+    if request.method == 'GET':
+        db.session.commit()
     totp_uri = user.get_totp_uri(issuer="Apex Regional Medical Center")
 
     # Generate scannable QR Code image as base64 Data URL
@@ -392,25 +479,7 @@ def setup_2fa(user_id=None, token=None):
 
     # Generate Shareable Token Link for this employee using Network LAN URL
     onboarding_token = user.get_2fa_onboarding_token(current_app.config['SECRET_KEY'])
-    env_base = os.getenv('HMS_BASE_URL')
-    if env_base:
-        base_url = env_base.rstrip('/')
-    else:
-        req_host = request.host if request else ''
-        if req_host and not req_host.startswith(('127.0.0.1', 'localhost')):
-            base_url = f"{request.scheme or 'http'}://{req_host}"
-        else:
-            import socket
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            try:
-                s.connect(('8.8.8.8', 80))
-                lan_ip = s.getsockname()[0]
-            except Exception:
-                lan_ip = '127.0.0.1'
-            finally:
-                s.close()
-            port = req_host.split(':')[1] if ':' in req_host else '5000'
-            base_url = f"http://{lan_ip}:{port}"
+    base_url = (os.getenv('HMS_BASE_URL') or request.url_root).rstrip('/')
 
     shareable_link = f"{base_url}/auth/onboard-2fa/{onboarding_token}"
 
@@ -419,9 +488,10 @@ def setup_2fa(user_id=None, token=None):
 
         if user.verify_totp(verification_code):
             # Activate 2FA and generate 8 emergency recovery codes
+            user.auth_version = (user.auth_version or 0) + 1
             user.is_2fa_enabled = True
             backup_codes = user.generate_backup_codes(count=8)
-            db.session.commit()
+            db.session.flush()
 
             AuditLog.log_event(
                 '2fa_enabled',
@@ -432,11 +502,11 @@ def setup_2fa(user_id=None, token=None):
                 severity='info'
             )
 
-            # Establish authenticated session if user was signing in
-            if session.get('pending_2fa_user_id') == user.id:
-                session.pop('pending_2fa_user_id', None)
-                target_portal = session.pop('pending_target_portal', user.portal or 'reception')
+            # Establish authenticated session if user was completing mandatory enrollment
+            if session.get('pending_2fa_enrollment_user_id') == user.id or (current_u and current_u.id == user.id):
+                clear_pending_auth_state()
                 login_user(user, is_2fa_verified=True)
+            db.session.commit()
 
             flash(f"Google Authenticator 2FA activated successfully for {user.full_name}!", "success")
             return render_template(
@@ -479,15 +549,19 @@ def disable_2fa():
         flash('Authentication required.', 'error')
         return redirect(url_for('auth.login'))
 
+    if user.requires_2fa():
+        flash('Hospital policy requires 2FA; it cannot be disabled.', 'error')
+        return redirect(url_for('auth.change_password'))
     password = request.form.get('password', '')
     if not user.check_password(password):
         flash('Incorrect password confirmation. 2FA was not modified.', 'error')
         return redirect(request.referrer or url_for('admin.dashboard'))
 
+    user.auth_version = (user.auth_version or 0) + 1
     user.is_2fa_enabled = False
     user.totp_secret = None
     user.backup_codes_json = None
-    db.session.commit()
+    db.session.flush()
 
     AuditLog.log_event(
         '2fa_disabled',
@@ -497,6 +571,7 @@ def disable_2fa():
         actor=user,
         severity='critical'
     )
+    db.session.commit()
     flash('Two-Factor Authentication has been disabled for your account.', 'info')
     return redirect(request.referrer or url_for('admin.dashboard'))
 
@@ -515,6 +590,9 @@ def force_change_password():
         flash('Session expired. Please sign in.', 'warning')
         return redirect(url_for('auth.login'))
 
+    if user.status != 'active' or user.is_locked() or (pending_uid and not pending_auth_valid(user)):
+        logout_user()
+        return redirect(url_for('auth.login'))
     settings = SecuritySetting.get_settings()
 
     if request.method == 'POST':
@@ -526,8 +604,9 @@ def force_change_password():
             flash('Your current / temporary password is incorrect.', 'error')
             return render_template('auth/force_change_password.html', user=user, settings=settings)
 
-        if len(new_pw) < settings.password_min_length:
-            flash(f'New password must be at least {settings.password_min_length} characters long.', 'error')
+        is_valid, err_msg = validate_password_policy(new_pw, settings)
+        if not is_valid:
+            flash(err_msg, 'error')
             return render_template('auth/force_change_password.html', user=user, settings=settings)
 
         if new_pw != confirm_pw:
@@ -541,7 +620,7 @@ def force_change_password():
         # Set new password and clear forced flag
         user.set_password(new_pw)
         user.force_password_change = False
-        db.session.commit()
+        db.session.flush()
 
         AuditLog.log_event(
             'password_changed_forced',
@@ -551,6 +630,7 @@ def force_change_password():
             actor=user,
             severity='info'
         )
+        db.session.commit()
 
         session.pop('pending_force_pw_user_id', None)
         target_portal = session.get('pending_target_portal', user.portal or 'reception')
@@ -558,15 +638,29 @@ def force_change_password():
 
         # If 2FA is enabled, prompt for 2FA next
         if user.is_2fa_enabled:
-            session['pending_2fa_user_id'] = user.id
+            clear_pending_auth_state()
+            stage_auth(user, 'pending_2fa_user_id')
+            session['pending_target_portal'] = target_portal
+            if next_url and is_safe_url(next_url):
+                session['pending_next_url'] = next_url
             flash('Password updated successfully! Please complete Google Authenticator verification.', 'success')
             return redirect(url_for('auth.verify_2fa'))
+
+        # If 2FA is mandatory under hospital policy, prompt for enrollment next
+        if user.requires_2fa(settings):
+            clear_pending_auth_state()
+            stage_auth(user, 'pending_2fa_enrollment_user_id')
+            session['pending_target_portal'] = target_portal
+            if next_url and is_safe_url(next_url):
+                session['pending_next_url'] = next_url
+            flash('Password updated successfully! Hospital Security Policy requires Two-Factor Authentication setup.', 'info')
+            return redirect(url_for('auth.setup_2fa'))
 
         # Direct login to workstation
         login_user(user, is_2fa_verified=True)
         flash(f'Password updated successfully! Welcome to your workstation, {user.full_name}.', 'success')
         
-        if next_url and next_url.startswith('/') and not next_url.startswith('/login') and not next_url.startswith('/logout'):
+        if next_url and is_safe_url(next_url):
             return redirect(next_url)
 
         meta = PORTAL_META.get(target_portal, PORTAL_META['reception'])
@@ -594,8 +688,9 @@ def change_password():
             flash('Your current password does not match.', 'error')
             return redirect(request.referrer or url_for('admin.dashboard'))
 
-        if len(new_pw) < settings.password_min_length:
-            flash(f'New password must be at least {settings.password_min_length} characters in length.', 'error')
+        is_valid, err_msg = validate_password_policy(new_pw, settings)
+        if not is_valid:
+            flash(err_msg, 'error')
             return redirect(request.referrer or url_for('admin.dashboard'))
 
         if new_pw != confirm_pw:
@@ -607,7 +702,9 @@ def change_password():
             return redirect(request.referrer or url_for('admin.dashboard'))
 
         user.set_password(new_pw)
-        db.session.commit()
+        session['auth_version'] = user.auth_version
+        session['auth_password_changed_at'] = user.password_changed_at.isoformat() if user.password_changed_at else None
+        db.session.flush()
 
         AuditLog.log_event(
             'password_changed',
@@ -617,6 +714,7 @@ def change_password():
             actor=user,
             severity='info'
         )
+        db.session.commit()
 
         flash('Your password has been changed successfully.', 'success')
         return redirect(request.referrer or url_for('admin.dashboard'))
@@ -628,6 +726,7 @@ def change_password():
 def demo_login(portal_name):
     """
     Convenience instant 1-click test login for reviewers to seamlessly jump into any portal.
+    Demo login must not bypass enabled/required 2FA or password reset policies.
     """
     if not current_app.config.get('DEMO_LOGIN_ENABLED'):
         abort(404)
@@ -642,9 +741,43 @@ def demo_login(portal_name):
         flash('Demo user not found. Re-initializing seed credentials.', 'warning')
         return redirect(url_for('auth.login', portal=portal_name))
 
+    if user.status != 'active':
+        flash('Account suspended or deactivated.', 'error')
+        return redirect(url_for('auth.login', portal=portal_name))
+
+    if user.is_locked():
+        flash('Account is locked due to excessive failed attempts.', 'error')
+        return redirect(url_for('auth.login', portal=portal_name))
+
+    settings = SecuritySetting.get_settings()
+    clear_pending_auth_state()
+
+    # Must NOT bypass mandatory password reset
+    if user.force_password_change:
+        stage_auth(user, 'pending_force_pw_user_id')
+        session['pending_target_portal'] = portal_name
+        flash('Hospital Security Policy requires updating temporary password before accessing clinical stations.', 'warning')
+        return redirect(url_for('auth.force_change_password'))
+
+    # Must NOT bypass enabled 2FA
+    if user.is_2fa_enabled:
+        stage_auth(user, 'pending_2fa_user_id')
+        session['pending_target_portal'] = portal_name
+        return redirect(url_for('auth.verify_2fa'))
+
+    # Must NOT bypass mandatory 2FA enrollment
+    if user.requires_2fa(settings):
+        stage_auth(user, 'pending_2fa_enrollment_user_id')
+        session['pending_target_portal'] = portal_name
+        flash('Hospital Security Policy requires Two-Factor Authentication setup before accessing clinical stations.', 'warning')
+        return redirect(url_for('auth.setup_2fa'))
+
     login_user(user, is_2fa_verified=True)
+    AuditLog.log_event('demo_login', 'user', user.id, actor=user)
+    db.session.commit()
     flash(f'Signed in as {user.full_name} ({user.role.title()}) on {meta["name"]}.', 'info')
     return redirect(url_for(meta['home_endpoint']))
+
 
 @auth_bp.route('/logout')
 def logout():
@@ -652,6 +785,8 @@ def logout():
     user = get_current_user()
     if user:
         AuditLog.log_event('logout', 'user', user.id, f"User {user.username} signed out of {portal} workstation.", actor=user, severity='info')
+        db.session.commit()
+    clear_pending_auth_state()
     logout_user()
     flash('You have successfully signed out of the clinical workstation.', 'info')
     return redirect(url_for('auth.login', portal=portal))

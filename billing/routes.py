@@ -1,7 +1,7 @@
 import json
 import math
 from datetime import datetime, date, timedelta
-from flask import render_template, request, redirect, url_for, flash, jsonify
+from flask import abort, render_template, request, redirect, url_for, flash, jsonify
 from models.base import db
 from models.patient import Patient
 from models.queue import QueueEntry
@@ -34,22 +34,24 @@ STANDARD_TARIFFS = [
 ]
 
 
-def get_or_create_open_shift():
+def get_or_create_open_shift(create=False):
     """
     Retrieves the currently open cashier shift register or creates a new active shift.
     """
     shift = ShiftRegister.query.filter_by(status='open').order_by(ShiftRegister.id.desc()).first()
+    if not shift and not create:
+        return ShiftRegister(shift_code='No open shift', cashier_name='No active cashier', counter_number='POS-01', opening_float=0.0, cash_collected=0.0, mpesa_collected=0.0, insurance_billed=0.0, card_collected=0.0, total_revenue=0.0, status='closed')
     if not shift:
         shift = ShiftRegister(
             shift_code=ShiftRegister.generate_shift_code(db.session),
-            cashier_name='Cashier Joyce Wambui (Lead Cashier)',
+            cashier_name=get_current_user().full_name,
             counter_number='POS-01',
-            opening_float=5000.0,
+            opening_float=0.0,
             status='open',
             opened_at=datetime.utcnow()
         )
         db.session.add(shift)
-        db.session.commit()
+        db.session.flush()
     return shift
 
 
@@ -154,6 +156,8 @@ def pos(patient_id=None):
     """
     Modern POS Cashier Register Terminal with Patient Folio Selection,
     Real-time aggregated charges, and Split Payment Multi-Tender Engine.
+    Counts only un-invoiced staged items plus unpaid/partially_paid invoice balances (no double counting).
+    Correctly loads selected partially-paid invoices.
     """
     search_q = request.args.get('q', '').strip()
     selected_patient = None
@@ -177,55 +181,53 @@ def pos(patient_id=None):
     
     patients_pool = query.order_by(Patient.id.desc()).limit(20).all()
 
-    # Collect patient summary with unpaid amounts
+    # Collect patient summary: count only un-invoiced staged items plus all unpaid/partially_paid balances
     patient_folios = []
     for p in patients_pool:
-        # Sum of unpaid billing items
-        unpaid_items = BillingItem.query.filter_by(patient_id=p.id, status='staged').all()
-        existing_unpaid_inv = Invoice.query.filter_by(patient_id=p.id, status='unpaid').first()
-        
-        unpaid_total = sum(i.total_amount for i in unpaid_items)
-        if existing_unpaid_inv:
-            unpaid_total += existing_unpaid_inv.balance_due
+        # Count only un-invoiced staged items to prevent double counting
+        un_invoiced_items = BillingItem.query.filter(
+            BillingItem.patient_id == p.id,
+            BillingItem.status == 'staged',
+            BillingItem.invoice_id.is_(None)
+        ).all()
+
+        # All unpaid and partially_paid invoice balances
+        open_invoices = Invoice.query.filter(
+            Invoice.patient_id == p.id,
+            Invoice.status.in_(['unpaid', 'partially_paid'])
+        ).all()
+
+        unpaid_total = round(
+            sum(float(i.total_amount) for i in un_invoiced_items) +
+            sum(float(inv.balance_due) for inv in open_invoices),
+            2
+        )
+        unpaid_items_count = len(un_invoiced_items) + sum(len(inv.billing_items) for inv in open_invoices)
 
         patient_folios.append({
             'patient': p,
             'unpaid_total': unpaid_total,
-            'unpaid_items_count': len(unpaid_items)
+            'unpaid_items_count': unpaid_items_count
         })
 
     # 2. If a patient is selected, load their staged charges and invoice
     if patient_id:
         selected_patient = Patient.query.get_or_404(patient_id)
         
-        # Check if there is an existing unpaid invoice
-        selected_invoice = Invoice.query.filter_by(patient_id=selected_patient.id, status='unpaid').order_by(Invoice.id.desc()).first()
-        
-        # Get all staged billing items for this patient
-        staged_items = BillingItem.query.filter_by(patient_id=selected_patient.id, status='staged').order_by(BillingItem.id.asc()).all()
+        # Check if there is an existing unpaid or partially-paid invoice
+        selected_invoice = Invoice.query.filter(
+            Invoice.patient_id == selected_patient.id,
+            Invoice.status.in_(['unpaid', 'partially_paid'])
+        ).order_by(Invoice.id.desc()).first()
 
-        # If no invoice exists but staged items exist, create an invoice on the fly
-        if not selected_invoice and staged_items:
-            subtotal = sum(i.total_amount for i in staged_items)
-            selected_invoice = Invoice(
-                invoice_number=Invoice.generate_invoice_number(db.session),
-                patient_id=selected_patient.id,
-                subtotal=subtotal,
-                discount_amount=0.0,
-                tax_amount=0.0,
-                total_due=subtotal,
-                amount_paid=0.0,
-                balance_due=subtotal,
-                status='unpaid',
-                cashier_name='Cashier Joyce Wambui'
-            )
-            db.session.add(selected_invoice)
-            db.session.flush()
+        # Get un-invoiced staged billing items for this patient
+        un_invoiced_staged = BillingItem.query.filter(
+            BillingItem.patient_id == selected_patient.id,
+            BillingItem.status == 'staged',
+            BillingItem.invoice_id.is_(None)
+        ).order_by(BillingItem.id.asc()).all()
 
-            for item in staged_items:
-                item.invoice_id = selected_invoice.id
-
-            db.session.commit()
+        staged_items = selected_invoice.billing_items if selected_invoice else un_invoiced_staged
     elif patient_folios:
         # Default to first patient with unpaid charges if any
         for folio in patient_folios:
@@ -242,6 +244,7 @@ def pos(patient_id=None):
         selected_patient=selected_patient,
         selected_invoice=selected_invoice,
         staged_items=staged_items,
+        has_uninvoiced=bool(un_invoiced_staged) if patient_id else False,
         tariffs=STANDARD_TARIFFS,
         active_shift=active_shift,
         cashiers_list=CASHIERS_LIST,
@@ -255,17 +258,35 @@ def add_tariff_item(patient_id):
     """
     Adds a procedural or departmental charge line item directly to the active patient folio.
     """
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     patient = Patient.query.get_or_404(patient_id)
     service_type = request.form.get('service_type', 'procedure')
     item_description = request.form.get('item_description', '').strip()
-    quantity = int(request.form.get('quantity', 1))
-    unit_price = float(request.form.get('unit_price', 0.0))
+    try:
+        quantity = int(request.form.get('quantity', 1))
+        unit_price = float(request.form.get('unit_price', 0.0))
+    except (ValueError, TypeError):
+        flash('Invalid quantity or price.', 'danger')
+        return redirect(url_for('billing.pos', patient_id=patient.id))
+
+    if not math.isfinite(unit_price) or unit_price < 0 or quantity <= 0:
+        flash('Quantity and price must be positive finite numbers.', 'danger')
+        return redirect(url_for('billing.pos', patient_id=patient.id))
 
     if item_description and unit_price > 0:
-        total_amount = quantity * unit_price
+        total_amount = round(quantity * unit_price, 2)
         
-        # Get or create active unpaid invoice
-        inv = Invoice.query.filter_by(patient_id=patient.id, status='unpaid').first()
+        # Get or create active unpaid or partially-paid invoice
+        inv = Invoice.query.filter(
+            Invoice.patient_id == patient.id,
+            Invoice.status.in_(['unpaid', 'partially_paid'])
+        ).order_by(Invoice.id.desc()).first()
+
+        current_user = get_current_user()
+        cashier_name = current_user.full_name if current_user else 'Cashier Joyce Wambui'
+
         if not inv:
             inv = Invoice(
                 invoice_number=Invoice.generate_invoice_number(db.session),
@@ -277,14 +298,14 @@ def add_tariff_item(patient_id):
                 amount_paid=0.0,
                 balance_due=total_amount,
                 status='unpaid',
-                cashier_name='Cashier Joyce Wambui'
+                cashier_name=cashier_name
             )
             db.session.add(inv)
             db.session.flush()
         else:
-            inv.subtotal += total_amount
-            inv.total_due += total_amount
-            inv.balance_due += total_amount
+            inv.subtotal = round(inv.subtotal + total_amount, 2)
+            inv.total_due = max(0.0, round(inv.subtotal - inv.discount_amount + inv.tax_amount, 2))
+            inv.balance_due = max(0.0, round(inv.total_due - inv.amount_paid, 2))
 
         item = BillingItem(
             patient_id=patient.id,
@@ -297,6 +318,8 @@ def add_tariff_item(patient_id):
             status='staged'
         )
         db.session.add(item)
+        db.session.flush()
+        AuditLog.log_event('tariff_item_added', 'billing_item', item.id, actor=current_user)
         db.session.commit()
         flash(f"Added '{item_description}' (KES {total_amount:.2f}) to patient folio.", 'success')
 
@@ -308,12 +331,33 @@ def add_tariff_item(patient_id):
 def process_settlement(invoice_id):
     """
     Executes split payment checkout (Cash, M-Pesa, Insurance Co-pay, Card).
-    Calculates change, records tender breakdown, closes invoice, and transitions queue ticket.
+    Validates invoice patient, finite amounts, unique reference checks, and uses authenticated cashier.
+    Guards against repeat settlement and double payment.
     """
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     invoice = Invoice.query.get_or_404(invoice_id)
     patient = invoice.patient
 
-    if invoice.status in {'paid', 'waived', 'cancelled'} or invoice.balance_due <= 0:
+    # Validate invoice patient
+    req_patient_id = request.form.get('patient_id', type=int)
+    if req_patient_id and req_patient_id != invoice.patient_id:
+        flash("Security alert: Patient folio mismatch for selected invoice.", "danger")
+        return redirect(url_for('billing.pos', patient_id=patient.id))
+
+    request_key = request.form.get('idempotency_key', '').strip()
+    if not request_key or len(request_key) > 120:
+        flash('Reload the checkout form before submitting payment.', 'danger')
+        return redirect(url_for('billing.pos', patient_id=patient.id))
+    previous = Payment.query.filter_by(idempotency_key='pos:' + request_key).first()
+    if previous:
+        if previous.invoice_id != invoice.id:
+            return 'Payment request belongs to another invoice.', 409
+        return redirect(url_for('billing.receipt', payment_id=previous.id))
+
+    # Guard repeat settlement
+    if invoice.status in {'paid', 'waived', 'cancelled'} or invoice.balance_due <= 0.001:
         flash('This invoice is already settled and cannot accept another payment.', 'warning')
         return redirect(url_for('billing.pos', patient_id=patient.id))
 
@@ -326,25 +370,53 @@ def process_settlement(invoice_id):
         insurance_amount = float(request.form.get('insurance_amount') or 0.0)
         card_amount = float(request.form.get('card_amount') or 0.0)
         discount_amount = float(request.form.get('discount_amount') or 0.0)
-    except ValueError:
+    except (ValueError, TypeError):
         flash('Payment amounts must be valid numbers.', 'danger')
         return redirect(url_for('billing.pos', patient_id=patient.id))
-
-    mpesa_reference = request.form.get('mpesa_reference', '').strip().upper()
-    mpesa_phone = request.form.get('mpesa_phone', '').strip()
-    insurance_company = request.form.get('insurance_company', '').strip()
-    insurance_policy_number = request.form.get('insurance_policy_number', '').strip()
-    insurance_claim_number = request.form.get('insurance_claim_number', '').strip()
-    card_auth_code = request.form.get('card_auth_code', '').strip()
-    cashier_name = request.form.get('cashier_name', 'Cashier Joyce Wambui')
-    counseling_notes = request.form.get('notes', '').strip()
 
     payment_values = [cash_amount, cash_tendered, change_returned, mpesa_amount, insurance_amount, card_amount, discount_amount]
     if not all(math.isfinite(value) and value >= 0 for value in payment_values):
         flash('Payment amounts and discounts must be finite positive numbers.', 'danger')
         return redirect(url_for('billing.pos', patient_id=patient.id))
 
-    if cash_tendered and cash_tendered < cash_amount + change_returned:
+    # Decimal rounding / quantization to 2 decimal places
+    cash_amount = round(cash_amount, 2)
+    cash_tendered = round(cash_tendered, 2)
+    change_returned = round(change_returned, 2)
+    mpesa_amount = round(mpesa_amount, 2)
+    insurance_amount = round(insurance_amount, 2)
+    card_amount = round(card_amount, 2)
+    discount_amount = round(discount_amount, 2)
+
+    mpesa_reference = request.form.get('mpesa_reference', '').strip().upper()
+    mpesa_phone = request.form.get('mpesa_phone', '').strip()
+    insurance_company = request.form.get('insurance_company', '').strip()
+    insurance_policy_number = request.form.get('insurance_policy_number', '').strip()
+    insurance_claim_number = request.form.get('insurance_claim_number', '').strip()
+    card_auth_code = request.form.get('card_auth_code', '').strip().upper()
+    counseling_notes = request.form.get('notes', '').strip()
+
+    # Authenticated cashier check
+    current_user = get_current_user()
+    cashier_name = current_user.full_name if current_user else (request.form.get('cashier_name') or 'Lead Cashier')
+
+    # Validate duplicate references
+    if mpesa_amount > 0:
+        if not mpesa_reference:
+            flash('M-Pesa transaction reference is required for mobile money settlements.', 'danger')
+            return redirect(url_for('billing.pos', patient_id=patient.id))
+        dup_mpesa = Payment.query.filter_by(mpesa_reference=mpesa_reference).first()
+        if dup_mpesa:
+            flash(f'Duplicate payment reference: M-Pesa transaction {mpesa_reference} has already been recorded.', 'danger')
+            return redirect(url_for('billing.pos', patient_id=patient.id))
+
+    if card_amount > 0 and card_auth_code:
+        dup_card = Payment.query.filter_by(card_auth_code=card_auth_code).first()
+        if dup_card:
+            flash(f'Duplicate card authorization code: {card_auth_code} has already been recorded.', 'danger')
+            return redirect(url_for('billing.pos', patient_id=patient.id))
+
+    if cash_tendered and cash_tendered < round(cash_amount + change_returned, 2):
         flash('Cash tendered cannot be less than the cash payment plus change returned.', 'danger')
         return redirect(url_for('billing.pos', patient_id=patient.id))
 
@@ -352,14 +424,12 @@ def process_settlement(invoice_id):
         flash('Discount cannot exceed the invoice subtotal.', 'danger')
         return redirect(url_for('billing.pos', patient_id=patient.id))
 
-    total_payment = cash_amount + mpesa_amount + insurance_amount + card_amount
-
-    # Apply discount
     if discount_amount > 0:
-        invoice.discount_amount = discount_amount
-        invoice.total_due = max(0.0, invoice.subtotal - discount_amount)
+        flash('Request a fee waiver or credit note for independent approval before checkout.', 'danger')
+        return redirect(url_for('billing.pos', patient_id=patient.id))
 
-    remaining_balance = max(0.0, invoice.total_due - invoice.amount_paid)
+    total_payment = round(cash_amount + mpesa_amount + insurance_amount + card_amount, 2)
+    remaining_balance = max(0.0, round(invoice.total_due - invoice.amount_paid, 2))
 
     if total_payment <= 0:
         flash("Error: Payment amount must be greater than KES 0.00", 'danger')
@@ -382,11 +452,12 @@ def process_settlement(invoice_id):
 
     payment_summary = " + ".join(methods) if methods else "Direct Settlement"
 
-    active_shift = get_or_create_open_shift()
+    active_shift = get_or_create_open_shift(create=True)
 
     # Create Payment Record
     payment = Payment(
         receipt_number=Payment.generate_receipt_number(db.session),
+        idempotency_key="pos:" + request_key,
         invoice_id=invoice.id,
         patient_id=patient.id,
         total_amount_paid=total_payment,
@@ -395,45 +466,51 @@ def process_settlement(invoice_id):
         cash_tendered=cash_tendered,
         change_returned=change_returned,
         mpesa_amount=mpesa_amount,
-        mpesa_reference=mpesa_reference,
-        mpesa_phone=mpesa_phone,
+        mpesa_reference=mpesa_reference or None,
+        mpesa_phone=mpesa_phone or None,
         insurance_amount=insurance_amount,
-        insurance_company=insurance_company,
-        insurance_policy_number=insurance_policy_number,
-        insurance_claim_number=insurance_claim_number,
+        insurance_company=insurance_company or None,
+        insurance_policy_number=insurance_policy_number or None,
+        insurance_claim_number=insurance_claim_number or None,
         card_amount=card_amount,
-        card_auth_code=card_auth_code,
+        card_auth_code=card_auth_code or None,
         cashier_name=cashier_name,
         shift_code=active_shift.shift_code,
-        notes=counseling_notes,
+        notes=counseling_notes or None,
         created_at=datetime.utcnow()
     )
     db.session.add(payment)
 
     # Update Invoice Status
-    invoice.amount_paid += total_payment
-    invoice.balance_due = max(0.0, invoice.total_due - invoice.amount_paid)
-    if invoice.balance_due <= 0:
+    invoice.amount_paid = round(invoice.amount_paid + total_payment, 2)
+    invoice.balance_due = max(0.0, round(invoice.total_due - invoice.amount_paid, 2))
+    if invoice.balance_due <= 0.001:
         invoice.status = 'paid'
         invoice.paid_at = datetime.utcnow()
+        for item in invoice.billing_items:
+            item.status = 'paid'
     else:
         invoice.status = 'partially_paid'
 
-    if invoice.status == 'paid':
-        for item in invoice.billing_items:
-            item.status = 'paid'
-
     # Update Active Shift Totals
-    active_shift.cash_collected += cash_amount
-    active_shift.mpesa_collected += mpesa_amount
-    active_shift.insurance_billed += insurance_amount
-    active_shift.card_collected += card_amount
-    active_shift.total_revenue += total_payment
+    active_shift.cash_collected = round(active_shift.cash_collected + cash_amount, 2)
+    active_shift.mpesa_collected = round(active_shift.mpesa_collected + mpesa_amount, 2)
+    active_shift.insurance_billed = round(active_shift.insurance_billed + insurance_amount, 2)
+    active_shift.card_collected = round(active_shift.card_collected + card_amount, 2)
+    active_shift.total_revenue = round(active_shift.total_revenue + total_payment, 2)
 
     # Complete Patient Queue Entry if associated
     if invoice.queue_entry:
         invoice.queue_entry.status = 'completed'
         invoice.queue_entry.completed_at = datetime.utcnow()
+
+    db.session.flush()
+    AuditLog.log_event(
+        'payment_settled',
+        'payment',
+        payment.id,
+        f"Settlement of KES {total_payment:,.2f} recorded on invoice {invoice.invoice_number} by {cashier_name}."
+    )
 
     db.session.commit()
     flash(f"Settlement complete! Receipt {payment.receipt_number} issued for {patient.full_name}.", 'success')
@@ -524,8 +601,16 @@ def close_shift():
     Executes End-of-Day Register Closeout (Z-Report), logs physical cash count,
     calculates overage/shortage discrepancy, closes shift, and opens next shift register.
     """
+    from services.transactions import begin_write
+    begin_write()
     active_shift = get_or_create_open_shift()
-    counted_cash = float(request.form.get('counted_cash') or 0.0)
+    try:
+        counted_cash = float(request.form.get('counted_cash') or 0.0)
+        if not math.isfinite(counted_cash) or counted_cash < 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        flash('Counted cash must be a finite non-negative amount.', 'danger')
+        return redirect(url_for('billing.shift_report'))
     notes = request.form.get('notes', '').strip()
 
     expected_cash = active_shift.opening_float + active_shift.cash_collected
@@ -534,19 +619,12 @@ def close_shift():
     active_shift.counted_cash = counted_cash
     active_shift.discrepancy = discrepancy
     active_shift.notes = notes
+    if not active_shift.id:
+        flash('There is no open shift to close.', 'warning')
+        return redirect(url_for('billing.shift_report'))
     active_shift.status = 'closed'
     active_shift.closed_at = datetime.utcnow()
-
-    # Automatically initialize new open shift for next operator
-    new_shift = ShiftRegister(
-        shift_code=ShiftRegister.generate_shift_code(db.session),
-        cashier_name='Cashier Joyce Wambui (Lead Cashier)',
-        counter_number='POS-01',
-        opening_float=5000.0,
-        status='open',
-        opened_at=datetime.utcnow()
-    )
-    db.session.add(new_shift)
+    AuditLog.log_event('shift_closed', 'shift_register', active_shift.id, actor=get_current_user())
     db.session.commit()
 
     flash(f"Shift {active_shift.shift_code} closed successfully. Z-Report generated.", 'success')
@@ -717,31 +795,62 @@ def insurance_claims():
     )
 
 
+ALLOWED_CLAIM_TRANSITIONS = {
+    'preauth_pending': {'preauth_approved', 'rejected'},
+    'preauth_approved': {'submitted', 'rejected'},
+    'submitted': {'reimbursed', 'rejected', 'disputed'},
+    'disputed': {'submitted', 'rejected', 'reimbursed'},
+    'reimbursed': set(),
+    'rejected': set()
+}
+
 @billing_bp.route('/claims/create-preauth', methods=['POST'])
 def create_preauth_claim():
     """
     Submits a Pre-Authorisation request for an active patient invoice.
+    Starts as preauth_pending unless an explicit recorded provider approval code is provided.
     """
-    invoice_id = int(request.form.get('invoice_id'))
-    scheme_id = int(request.form.get('scheme_id'))
+    invoice_id = request.form.get('invoice_id', type=int)
+    if not invoice_id:
+        abort(400)
+    scheme_id = request.form.get('scheme_id', type=int)
+    if not scheme_id:
+        abort(400)
     member_number = request.form.get('member_number', '').strip()
     policy_number = request.form.get('policy_number', '').strip()
     preauth_code = request.form.get('preauth_code', '').strip().upper()
-    claimed_amount = float(request.form.get('claimed_amount') or 0.0)
+    try:
+        claimed_amount = float(request.form.get('claimed_amount') or 0.0)
+    except (ValueError, TypeError):
+        flash("Claimed amount must be a valid number.", "danger")
+        return redirect(url_for('billing.insurance_claims'))
+
+    if not math.isfinite(claimed_amount) or claimed_amount <= 0:
+        flash("Claimed amount must be a positive finite number.", "danger")
+        return redirect(url_for('billing.insurance_claims'))
+
     notes = request.form.get('notes', '').strip()
 
     invoice = Invoice.query.get_or_404(invoice_id)
     scheme = InsuranceScheme.query.get_or_404(scheme_id)
 
-    if not preauth_code:
-        # Generate standard pre-auth verification code
-        today_str = date.today().strftime('%Y%m%d')
-        preauth_code = f"AUTH-{scheme.code[:3]}-{today_str}-{invoice.id:03d}"
-
     # Calculate co-pay
     copay = scheme.copay_fixed_amount
     if scheme.copay_percentage > 0:
         copay += (claimed_amount * (scheme.copay_percentage / 100.0))
+    copay = round(copay, 2)
+
+    current_user = get_current_user()
+    created_by = current_user.full_name if current_user else 'Cashier Joyce Wambui'
+
+    # Insurance preauth starts pending and only becomes approved with explicit recorded provider approval/code
+    if preauth_code:
+        initial_status = 'preauth_approved'
+        approved_amt = max(0.0, round(claimed_amount - copay, 2))
+    else:
+        initial_status = 'preauth_pending'
+        approved_amt = 0.0
+        preauth_code = None
 
     claim = InsuranceClaim(
         claim_number=InsuranceClaim.generate_claim_number(db.session),
@@ -752,12 +861,12 @@ def create_preauth_claim():
         member_number=member_number,
         policy_number=policy_number,
         preauth_code=preauth_code,
-        claimed_amount=claimed_amount,
-        approved_amount=max(0.0, claimed_amount - copay),
+        claimed_amount=round(claimed_amount, 2),
+        approved_amount=approved_amt,
         copay_amount=copay,
-        status='preauth_approved',
+        status=initial_status,
         notes=notes,
-        created_by='Cashier Joyce Wambui'
+        created_by=created_by
     )
     db.session.add(claim)
     
@@ -765,11 +874,14 @@ def create_preauth_claim():
         'insurance_preauth_created',
         'insurance_claim',
         invoice.id,
-        f"Generated Pre-Authorisation {preauth_code} for {scheme.name} (Claimed: KES {claimed_amount:.2f}, Co-pay: KES {copay:.2f}).",
+        f"Recorded Pre-Authorisation request ({claim.claim_number}) for {scheme.name} (Claimed: KES {claimed_amount:.2f}, Status: {initial_status}).",
         severity='info'
     )
     db.session.commit()
-    flash(f"Pre-Authorisation approved for {scheme.name} (Code: {preauth_code}). Co-pay due: KES {copay:.2f}", "success")
+    if initial_status == 'preauth_approved':
+        flash(f"Pre-Authorisation recorded as approved for {scheme.name} (Code: {preauth_code}). Co-pay due: KES {copay:.2f}", "success")
+    else:
+        flash(f"Pre-Authorisation request {claim.claim_number} logged with status 'Pending Insurer Approval'. Co-pay: KES {copay:.2f}", "info")
     return redirect(url_for('billing.insurance_claims'))
 
 
@@ -777,20 +889,52 @@ def create_preauth_claim():
 def update_claim_status(claim_id):
     """
     Transitions claim through submission, reimbursement, or rejection.
+    Validates status transitions, numbers, and requires explicit recorded provider approval code.
     """
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     claim = InsuranceClaim.query.get_or_404(claim_id)
     new_status = request.form.get('status')
     rejection_reason = request.form.get('rejection_reason', '').strip()
-    approved_amount = float(request.form.get('approved_amount') or claim.claimed_amount)
+
+    allowed = ALLOWED_CLAIM_TRANSITIONS.get(claim.status, set())
+    if new_status not in allowed:
+        flash(f"Invalid status transition from '{claim.status}' to '{new_status}'.", "danger")
+        return redirect(url_for('billing.insurance_claims'))
+
+    if new_status == 'preauth_approved':
+        # Requires explicit recorded provider approval code
+        recorded_code = request.form.get('preauth_code', '').strip().upper() or claim.preauth_code
+        if not recorded_code:
+            flash("Provider Pre-Authorisation Approval Code is required to record preauth approval.", "danger")
+            return redirect(url_for('billing.insurance_claims'))
+        claim.preauth_code = recorded_code
+        claim.approved_amount = max(0.0, round(claim.claimed_amount - claim.copay_amount, 2))
+
+    elif new_status == 'submitted':
+        claim.submitted_at = datetime.utcnow()
+
+    elif new_status == 'reimbursed':
+        try:
+            approved_amount = float(request.form.get('approved_amount') or claim.approved_amount or claim.claimed_amount)
+        except (ValueError, TypeError):
+            flash("Reimbursed amount must be a valid number.", "danger")
+            return redirect(url_for('billing.insurance_claims'))
+
+        if not math.isfinite(approved_amount) or approved_amount < 0 or approved_amount > claim.claimed_amount:
+            flash("Reimbursed amount must be a non-negative finite number not exceeding the claimed amount.", "danger")
+            return redirect(url_for('billing.insurance_claims'))
+
+        claim.approved_amount = round(approved_amount, 2)
+        claim.settled_at = datetime.utcnow()
+
+    elif new_status == 'rejected':
+        if not rejection_reason:
+            rejection_reason = "Claim rejected by insurer."
+        claim.rejection_reason = rejection_reason
 
     claim.status = new_status
-    if new_status == 'submitted':
-        claim.submitted_at = datetime.utcnow()
-    elif new_status == 'reimbursed':
-        claim.approved_amount = approved_amount
-        claim.settled_at = datetime.utcnow()
-    elif new_status == 'rejected':
-        claim.rejection_reason = rejection_reason
 
     AuditLog.log_event(
         'insurance_claim_updated',
@@ -802,6 +946,7 @@ def update_claim_status(claim_id):
     db.session.commit()
     flash(f"Claim {claim.claim_number} updated to {new_status.replace('_', ' ').title()}.", "info")
     return redirect(url_for('billing.insurance_claims'))
+
 
 
 # =================== 12. CREDIT NOTES, REFUNDS & FEE WAIVERS ===================
@@ -831,88 +976,281 @@ def refunds_waivers():
 
 @billing_bp.route('/credit-notes/create', methods=['POST'])
 def create_credit_note():
-    invoice_id = int(request.form.get('invoice_id'))
-    amount = float(request.form.get('amount') or 0.0)
+    invoice_id = request.form.get('invoice_id', type=int)
+    if not invoice_id:
+        abort(400)
+    raw_amount = request.form.get('amount')
+    try:
+        amount = float(raw_amount or 0.0)
+    except (ValueError, TypeError):
+        flash("Credit note amount must be a valid number.", "danger")
+        return redirect(url_for('billing.refunds_waivers'))
+
+    invoice = Invoice.query.get_or_404(invoice_id)
+
+    if not math.isfinite(amount) or amount <= 0:
+        flash("Credit note amount must be a positive finite number.", "danger")
+        return redirect(url_for('billing.refunds_waivers'))
+
+    # Reject invalid/over-limit amounts
+    if invoice.status == "paid" or amount > invoice.balance_due:
+        flash(f"Credit note amount (KES {amount:,.2f}) cannot exceed invoice total due (KES {invoice.total_due:,.2f}).", "danger")
+        return redirect(url_for('billing.refunds_waivers'))
+
     reason = request.form.get('reason', 'billing_error')
     notes = request.form.get('notes', '').strip()
 
-    invoice = Invoice.query.get_or_404(invoice_id)
+    current_user = get_current_user()
+    requested_by = (current_user.full_name or current_user.username) if current_user else 'Cashier Joyce Wambui'
+
     cn = CreditNote(
         credit_note_number=CreditNote.generate_credit_note_number(db.session),
         invoice_id=invoice.id,
         patient_id=invoice.patient_id,
-        amount=amount,
+        amount=round(amount, 2),
         reason=reason,
         status='pending_approval',
-        requested_by='Cashier Joyce Wambui',
+        requested_by_id=current_user.id,
+        requested_by=requested_by,
         notes=notes
     )
     db.session.add(cn)
+    AuditLog.log_event(
+        'credit_note_requested',
+        'credit_note',
+        invoice.id,
+        f"Credit note {cn.credit_note_number} requested for KES {amount:.2f} on invoice {invoice.invoice_number} by {requested_by}."
+    )
     db.session.commit()
-    flash(f"Credit Note request {cn.credit_note_number} submitted for KES {amount:.2f}. Awaiting Finance Approval.", "info")
+    flash(f"Credit Note request {cn.credit_note_number} submitted for KES {amount:.2f}. Awaiting Administrator Approval.", "info")
     return redirect(url_for('billing.refunds_waivers'))
 
 
 @billing_bp.route('/credit-notes/<int:cn_id>/action', methods=['POST'])
 def action_credit_note(cn_id):
+    """
+    Admin-only approval for credit notes.
+    Cannot self-approve. Pending status transition applied atomically once.
+    Reconciles discount/total_due/balance_due without marking no-cash cancellations paid.
+    Rejects paid-invoice refunds with actionable message until supported.
+    """
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     action = request.form.get('action') # approve, reject
+    if action not in {'approve', 'reject'}:
+        return 'Invalid approval action.', 400
     cn = CreditNote.query.get_or_404(cn_id)
+
+    current_user = get_current_user()
+    # 1. Admin-only approvals
+    if not current_user or current_user.role != 'admin':
+        flash("Unauthorized: Only hospital administrators can approve or reject credit notes.", "danger")
+        return redirect(url_for('billing.refunds_waivers'))
+
+    # 2. Cannot self-approve
+    approver_identifiers = {current_user.full_name, current_user.username, current_user.staff_id}
+    if cn.requested_by_id == current_user.id or (cn.requested_by_id is None and cn.requested_by in approver_identifiers):
+        flash("Security Alert: Self-approval of credit notes is strictly prohibited. An independent administrator must review this request.", "danger")
+        return redirect(url_for('billing.refunds_waivers'))
+
+    # 3. Pending status transition atomically applied once
+    if cn.status != 'pending_approval':
+        flash(f"Credit Note {cn.credit_note_number} has already been processed with status '{cn.status}'.", "warning")
+        return redirect(url_for('billing.refunds_waivers'))
+
+    approver_name = current_user.full_name or current_user.username
+
     if action == 'approve':
+        # Reject invalid/negative amounts
+        if not math.isfinite(cn.amount) or cn.amount <= 0:
+            flash("Cannot approve credit note with invalid or non-positive amount.", "danger")
+            return redirect(url_for('billing.refunds_waivers'))
+
+        # Paid-invoice refunds require explicit reverse-payment accounting or reject approval with actionable message until supported
+        if cn.invoice.status == 'paid' or cn.amount > cn.invoice.balance_due:
+            flash(
+                "Paid-invoice refunds require explicit reverse-payment accounting which is currently not supported. "
+                "Approval rejected: Please route cash/M-Pesa refund disbursement through manual finance accounts.",
+                "danger"
+            )
+            return redirect(url_for('billing.refunds_waivers'))
+
         cn.status = 'approved'
-        cn.approved_by = 'Hospital Administrator'
+        cn.approved_by_id = current_user.id
+        cn.approved_by = approver_name
         cn.approved_at = datetime.utcnow()
-        # Adjust invoice balance
-        cn.invoice.balance_due = max(0.0, cn.invoice.balance_due - cn.amount)
-        if cn.invoice.balance_due == 0:
-            cn.invoice.status = 'paid'
+
+        # Reconcile discount/total_due/balance_due:
+        cn.invoice.discount_amount = round(cn.invoice.discount_amount + cn.amount, 2)
+        cn.invoice.total_due = max(0.0, round(cn.invoice.subtotal - cn.invoice.discount_amount + cn.invoice.tax_amount, 2))
+        cn.invoice.balance_due = max(0.0, round(cn.invoice.total_due - cn.invoice.amount_paid, 2))
+
+        # Don't mark no-cash cancellations paid!
+        if cn.invoice.balance_due <= 0.001:
+            if cn.invoice.amount_paid <= 0:
+                cn.invoice.status = 'cancelled'
+            else:
+                cn.invoice.status = 'paid'
+                cn.invoice.paid_at = datetime.utcnow()
+
+        AuditLog.log_event(
+            'credit_note_approved',
+            'credit_note',
+            cn.id,
+            f"Credit Note {cn.credit_note_number} (KES {cn.amount:.2f}) approved by {approver_name} and reconciled against {cn.invoice.invoice_number}."
+        )
+        db.session.commit()
         flash(f"Credit Note {cn.credit_note_number} approved and applied to {cn.invoice.invoice_number}.", "success")
     else:
         cn.status = 'rejected'
+        cn.approved_by_id = current_user.id
+        cn.approved_by = approver_name
+        cn.approved_at = datetime.utcnow()
+        AuditLog.log_event(
+            'credit_note_rejected',
+            'credit_note',
+            cn.id,
+            f"Credit Note {cn.credit_note_number} rejected by {approver_name}."
+        )
+        db.session.commit()
         flash(f"Credit Note {cn.credit_note_number} rejected.", "warning")
+
     db.session.commit()
     return redirect(url_for('billing.refunds_waivers'))
 
 
 @billing_bp.route('/waivers/create', methods=['POST'])
 def create_fee_waiver():
-    invoice_id = int(request.form.get('invoice_id'))
-    amount = float(request.form.get('amount') or 0.0)
-    category = request.form.get('category', 'indigent_patient')
-    justification = request.form.get('justification', '').strip()
+    invoice_id = request.form.get('invoice_id', type=int)
+    if not invoice_id:
+        abort(400)
+    raw_amount = request.form.get('amount')
+    try:
+        amount = float(raw_amount or 0.0)
+    except (ValueError, TypeError):
+        flash("Waiver amount must be a valid number.", "danger")
+        return redirect(url_for('billing.refunds_waivers'))
 
     invoice = Invoice.query.get_or_404(invoice_id)
+
+    if not math.isfinite(amount) or amount <= 0:
+        flash("Waiver amount must be a positive finite number.", "danger")
+        return redirect(url_for('billing.refunds_waivers'))
+
+    # Reject invalid/over-limit amounts
+    if amount > invoice.balance_due:
+        flash(f"Waiver amount (KES {amount:,.2f}) cannot exceed outstanding invoice balance (KES {invoice.balance_due:,.2f}).", "danger")
+        return redirect(url_for('billing.refunds_waivers'))
+
+    category = request.form.get('category', 'indigent_patient')
+    justification = request.form.get('justification', '').strip()
+    if not justification:
+        flash("Clinical or administrative justification is required for fee waivers.", "danger")
+        return redirect(url_for('billing.refunds_waivers'))
+
+    current_user = get_current_user()
+    requested_by = (current_user.full_name or current_user.username) if current_user else 'Cashier Joyce Wambui'
+
     waiver = FeeWaiver(
         waiver_number=FeeWaiver.generate_waiver_number(db.session),
         invoice_id=invoice.id,
         patient_id=invoice.patient_id,
-        amount=amount,
+        amount=round(amount, 2),
         category=category,
         justification=justification,
         status='pending_approval',
-        requested_by='Cashier Joyce Wambui'
+        requested_by_id=current_user.id,
+        requested_by=requested_by
     )
     db.session.add(waiver)
+    AuditLog.log_event(
+        'fee_waiver_requested',
+        'fee_waiver',
+        invoice.id,
+        f"Fee waiver {waiver.waiver_number} (KES {amount:.2f}) requested for {invoice.patient.full_name} by {requested_by}."
+    )
     db.session.commit()
-    flash(f"Fee Waiver request {waiver.waiver_number} submitted for KES {amount:.2f}. Awaiting Medical Superintendent Approval.", "info")
+    flash(f"Fee Waiver request {waiver.waiver_number} submitted for KES {amount:.2f}. Awaiting Administrator Approval.", "info")
     return redirect(url_for('billing.refunds_waivers'))
 
 
 @billing_bp.route('/waivers/<int:wv_id>/action', methods=['POST'])
 def action_fee_waiver(wv_id):
+    """
+    Admin-only approval for fee waivers.
+    Cannot self-approve. Pending status transition applied atomically once.
+    Reconciles discount/total_due/balance_due without marking no-cash cancellations paid.
+    """
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     action = request.form.get('action') # approve, reject
+    if action not in {'approve', 'reject'}:
+        return 'Invalid approval action.', 400
     waiver = FeeWaiver.query.get_or_404(wv_id)
+
+    current_user = get_current_user()
+    # 1. Admin-only approvals
+    if not current_user or current_user.role != 'admin':
+        flash("Unauthorized: Only hospital administrators can approve fee waivers.", "danger")
+        return redirect(url_for('billing.refunds_waivers'))
+
+    # 2. Cannot self-approve
+    approver_identifiers = {current_user.full_name, current_user.username, current_user.staff_id}
+    if waiver.requested_by_id == current_user.id or (waiver.requested_by_id is None and waiver.requested_by in approver_identifiers):
+        flash("Security Alert: Self-approval of fee waivers is strictly prohibited. An independent administrator must review this waiver.", "danger")
+        return redirect(url_for('billing.refunds_waivers'))
+
+    # 3. Pending status transition atomically applied once
+    if waiver.status != 'pending_approval':
+        flash(f"Fee Waiver {waiver.waiver_number} has already been processed with status '{waiver.status}'.", "warning")
+        return redirect(url_for('billing.refunds_waivers'))
+
+    approver_name = current_user.full_name or current_user.username
+
     if action == 'approve':
+        if not math.isfinite(waiver.amount) or waiver.amount <= 0 or waiver.amount > waiver.invoice.balance_due:
+            flash("Invalid or over-limit waiver amount.", "danger")
+            return redirect(url_for('billing.refunds_waivers'))
+
         waiver.status = 'approved'
-        waiver.approved_by = 'Medical Superintendent'
+        waiver.approved_by_id = current_user.id
+        waiver.approved_by = approver_name
         waiver.approved_at = datetime.utcnow()
-        # Waive invoice amount
-        waiver.invoice.balance_due = max(0.0, waiver.invoice.balance_due - waiver.amount)
-        if waiver.invoice.balance_due == 0:
-            waiver.invoice.status = 'waived'
+
+        # Reconcile discount/total_due/balance_due
+        waiver.invoice.discount_amount = round(waiver.invoice.discount_amount + waiver.amount, 2)
+        waiver.invoice.total_due = max(0.0, round(waiver.invoice.subtotal - waiver.invoice.discount_amount + waiver.invoice.tax_amount, 2))
+        waiver.invoice.balance_due = max(0.0, round(waiver.invoice.total_due - waiver.invoice.amount_paid, 2))
+
+        if waiver.invoice.balance_due <= 0.001:
+            waiver.invoice.status = 'paid' if waiver.invoice.amount_paid > 0 else 'waived'
+            if waiver.invoice.amount_paid > 0:
+                waiver.invoice.paid_at = datetime.utcnow()
+
+        AuditLog.log_event(
+            'fee_waiver_approved',
+            'fee_waiver',
+            waiver.id,
+            f"Fee Waiver {waiver.waiver_number} (KES {waiver.amount:.2f}) approved for {waiver.patient.full_name} by {approver_name}."
+        )
+        db.session.commit()
         flash(f"Fee Waiver {waiver.waiver_number} approved for {waiver.patient.full_name}.", "success")
     else:
         waiver.status = 'rejected'
+        waiver.approved_by_id = current_user.id
+        waiver.approved_by = approver_name
+        waiver.approved_at = datetime.utcnow()
+        AuditLog.log_event(
+            'fee_waiver_rejected',
+            'fee_waiver',
+            waiver.id,
+            f"Fee Waiver {waiver.waiver_number} rejected by {approver_name}."
+        )
+        db.session.commit()
         flash(f"Fee Waiver {waiver.waiver_number} rejected.", "warning")
+
     db.session.commit()
     return redirect(url_for('billing.refunds_waivers'))
 
@@ -964,7 +1302,10 @@ def financial_reports():
     insurance_total = sum(p.insurance_amount for p in today_payments)
     card_total = sum(p.card_amount for p in today_payments)
     gross_revenue = cash_total + mpesa_total + insurance_total + card_total
-    vat_16_tax = gross_revenue * 0.16
+    recorded_tax = round(sum(
+        p.total_amount_paid * p.invoice.tax_amount / p.invoice.total_due
+        for p in today_payments if p.invoice and p.invoice.total_due > 0
+    ), 2)
 
     return render_template(
         'billing/reports.html',
@@ -974,7 +1315,31 @@ def financial_reports():
         insurance_total=insurance_total,
         card_total=card_total,
         gross_revenue=gross_revenue,
-        vat_16_tax=vat_16_tax,
+        recorded_tax=recorded_tax,
         today=date.today()
     )
 
+
+
+@billing_bp.route('/pos/<int:patient_id>/stage-invoice', methods=['POST'])
+def stage_invoice(patient_id):
+    from services.transactions import begin_write
+    begin_write()
+    patient = Patient.query.get_or_404(patient_id)
+    items = BillingItem.query.filter_by(patient_id=patient.id, status='staged', invoice_id=None).all()
+    if not items:
+        return redirect(url_for('billing.pos', patient_id=patient.id))
+    invoice = Invoice.query.filter(Invoice.patient_id == patient.id, Invoice.status.in_(['unpaid', 'partially_paid'])).order_by(Invoice.id.desc()).first()
+    if not invoice:
+        invoice = Invoice(invoice_number=Invoice.generate_invoice_number(db.session), patient_id=patient.id,
+                          subtotal=0, discount_amount=0, tax_amount=0, total_due=0, amount_paid=0,
+                          balance_due=0, status='unpaid', cashier_name=get_current_user().full_name)
+        db.session.add(invoice); db.session.flush()
+    invoice.subtotal = round(invoice.subtotal + sum(item.total_amount for item in items), 2)
+    invoice.total_due = round(invoice.subtotal - invoice.discount_amount + invoice.tax_amount, 2)
+    invoice.balance_due = round(invoice.total_due - invoice.amount_paid, 2)
+    for item in items:
+        item.invoice_id = invoice.id
+    AuditLog.log_event('invoice_staged', 'invoice', invoice.id, actor=get_current_user())
+    db.session.commit()
+    return redirect(url_for('billing.pos', patient_id=patient.id))

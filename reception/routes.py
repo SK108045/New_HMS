@@ -192,10 +192,11 @@ def register():
         uploaded_file = request.files.get('photo_file')
         photo_payload = webcam_data if (webcam_data and webcam_data.startswith('data:image')) else uploaded_file
         
-        photo_filename = save_webcam_or_uploaded_photo(
-            photo_payload, 
-            current_app.config['UPLOAD_FOLDER']
-        )
+        try:
+            photo_filename = save_webcam_or_uploaded_photo(photo_payload, current_app.config['UPLOAD_FOLDER'])
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return render_template('reception/register.html', form_data=request.form, available_doctors=DoctorSchedule.query.all()), 400
 
         full_name = f"{first_name} {last_name}"
         hospital_id = Patient.generate_hospital_id(db.session)
@@ -307,7 +308,12 @@ def edit_patient(patient_id):
         photo_payload = webcam_data if (webcam_data and webcam_data.startswith('data:image')) else uploaded_file
         
         if photo_payload:
-            new_photo = save_webcam_or_uploaded_photo(photo_payload, current_app.config['UPLOAD_FOLDER'])
+            try:
+                new_photo = save_webcam_or_uploaded_photo(photo_payload, current_app.config['UPLOAD_FOLDER'])
+            except ValueError as exc:
+                db.session.rollback()
+                flash(str(exc), "error")
+                return render_template('reception/edit_patient.html', patient=patient), 400
             if new_photo:
                 patient.photo_filename = new_photo
 
@@ -546,7 +552,7 @@ def appointments():
             status='scheduled'
         )
         db.session.add(new_app)
-        db.session.commit()
+        db.session.flush()
 
         AuditLog.log_event(
             'appointment_booked',
@@ -554,6 +560,7 @@ def appointments():
             new_app.id,
             f"Appointment {new_app.appointment_number} booked for {patient.full_name} with {doctor_name or 'General OPD'} on {parsed_date} at {scheduled_time}."
         )
+        db.session.commit()
 
         flash(f"Appointment {new_app.appointment_number} booked for {patient.full_name} on {parsed_date} at {scheduled_time}.", "success")
         return redirect(url_for('reception.appointments', date=parsed_date.strftime('%Y-%m-%d')))
@@ -655,7 +662,7 @@ def cancel_appointment(appointment_id):
     app_entry.cancellation_reason = reason
     app_entry.cancelled_at = datetime.utcnow()
     app_entry.cancelled_by = 'Reception Desk'
-    db.session.commit()
+    db.session.flush()
 
     AuditLog.log_event(
         'appointment_cancelled',
@@ -664,6 +671,7 @@ def cancel_appointment(appointment_id):
         f"Appointment {app_entry.appointment_number or app_entry.id} cancelled. Reason: {reason}",
         severity='warning'
     )
+    db.session.commit()
     flash(f"Appointment cancelled for {app_entry.patient.full_name}.", "info")
     return redirect(url_for('reception.appointments', date=app_entry.scheduled_date.strftime('%Y-%m-%d')))
 
@@ -682,15 +690,16 @@ def send_appointment_reminder(appointment_id):
 
     if channel in ['sms', 'both']:
         sms_result = sms_service.send_appointment_reminder(app_entry.id)
-        app_entry.reminder_sent_sms = True
+        app_entry.reminder_sent_sms = bool(sms_result.get("success") and not sms_result.get("simulated"))
 
     if channel in ['whatsapp', 'both']:
-        app_entry.reminder_sent_whatsapp = True
+        # A link is prepared locally; delivery is not confirmed.
+        app_entry.reminder_sent_whatsapp = False
 
     db.session.commit()
 
     if sms_result and sms_result.get('success'):
-        msg = f"✓ Live SMS reminder successfully delivered to {patient.full_name} ({patient.phone}) via Africa's Talking!"
+        msg = "SMS reminder simulated; no message was sent." if sms_result.get("simulated") else "SMS reminder accepted by the gateway."
         flash(msg, "success")
     elif sms_result and not sms_result.get('success'):
         msg = f"⚠ SMS delivery failed: {sms_result.get('error', 'Unknown gateway error')}"
@@ -733,7 +742,7 @@ def checkin_from_appointment(appointment_id):
     )
     db.session.add(queue_entry)
     app_entry.status = 'checked_in'
-    db.session.commit()
+    db.session.flush()
 
     AuditLog.log_event(
         'appointment_checked_in',
@@ -741,6 +750,7 @@ def checkin_from_appointment(appointment_id):
         app_entry.id,
         f"Checked in patient {patient.full_name} from appointment {app_entry.appointment_number or app_entry.id} as ticket {ticket_number} (Assigned: {app_entry.doctor_name or 'General OPD'})."
     )
+    db.session.commit()
 
     flash(f"Checked in {patient.full_name} from appointment as ticket {ticket_number}.", "success")
     return redirect(url_for('reception.dashboard'))
@@ -830,7 +840,7 @@ def send_patient_otp():
 
     if res.get('success'):
         mode_label = "via Africa's Talking Live SMS" if not res.get('simulated') else "(Safe Simulation Mode)"
-        flash(f"✓ 6-Digit OTP code ({res.get('otp_code_preview')}) generated {mode_label}! Valid for 10 minutes.", "success")
+        flash("Verification code delivery simulated; phone ownership remains unverified." if res.get("simulated") else "Verification code sent. Ask the patient to enter it within 10 minutes.", "success")
     else:
         flash(f"⚠ Failed to dispatch OTP: {res.get('error')}", "error")
 
@@ -878,52 +888,71 @@ def send_queue_sms(queue_id):
 
 
 # =================== PAYSTACK IN-PORTAL CONSULTATION SETTLEMENT ===================
+import math
+from models.billing import PaystackTransaction
+from auth.decorators import get_current_user
 
 @reception_bp.route('/paystack/prompt', methods=['POST'])
 def paystack_prompt():
     """
-    Triggers an in-portal Paystack MPesa STK Push prompt for consultation fee (KES 500).
-    Called asynchronously from the in-portal modal.
+    Triggers an in-portal Paystack MPesa STK Push prompt for consultation fee.
+    Uses server tariff config CONSULTATION_FEE=500 and persisted patient metadata;
+    never accepts arbitrary browser charge amount.
+    Durable PaystackTransaction model records pending transaction.
     """
     if request.is_json:
-        req_data = request.get_json()
+        req_data = request.get_json() or {}
     else:
         req_data = request.form
 
     patient_id = req_data.get('patient_id')
-    phone = req_data.get('phone', '').strip()
-    amount = float(req_data.get('amount', 500.0))
-    department = req_data.get('department', 'General OPD')
-    doctor_name = req_data.get('doctor_name')
+    if not patient_id:
+        return jsonify({"success": False, "error": "Patient ID is required."}), 400
 
-    patient = None
-    if patient_id:
-        patient = Patient.query.get(int(patient_id))
-        if patient and not phone:
-            phone = patient.phone
+    try:
+        patient_id = int(patient_id)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Patient ID must be an integer.'}), 400
+    patient = Patient.query.get(patient_id)
+    if not patient:
+        return jsonify({"success": False, "error": f"Patient #{patient_id} not found."}), 404
 
+    phone = req_data.get('phone', '').strip() or (patient.phone or '').strip()
     if not phone:
         return jsonify({"success": False, "error": "Patient phone number is required for MPesa STK Push prompt."}), 400
 
-    patient_name = patient.full_name if patient else "Walk-in Patient"
-    
-    # Trigger Paystack MPesa Charge
-    res = paystack_service.prompt_mpesa_charge(
-        phone=phone,
-        amount_kes=amount,
-        patient_name=patient_name
-    )
+    # Server consultation tariff config: CONSULTATION_FEE=500 (default 500.0)
+    consultation_fee = float(current_app.config.get('CONSULTATION_FEE', 500.0))
+    if not math.isfinite(consultation_fee) or consultation_fee <= 0:
+        consultation_fee = 500.0
 
+    department = req_data.get('department', 'General OPD')
+    doctor_name = req_data.get('doctor_name')
+
+    import uuid
+    reference = 'HMS-' + uuid.uuid4().hex
+    tx = PaystackTransaction(reference=reference, patient_id=patient.id, amount=consultation_fee,
+                            currency='KES', status='pending', channel='mobile_money', phone=phone,
+                            destination_department=department, assigned_doctor=doctor_name)
+    db.session.add(tx)
+    db.session.commit()  # Persist authorization before a charge or callback can arrive.
+    res = paystack_service.prompt_mpesa_charge(phone=phone, amount_kes=consultation_fee,
+                                               patient_name=patient.full_name, patient_id=patient.id,
+                                               reference=reference)
+    if res.get('success') and res.get('reference') != reference:
+        return jsonify({'success': False, 'error': 'Gateway returned a different transaction reference.'}), 502
     if res.get('success'):
+        db.session.commit()  # Commit the initiation audit record, without changing webhook settlement state.
         return jsonify({
             "success": True,
-            "reference": res.get('reference'),
+            "reference": reference,
             "status": res.get('status'),
             "display_text": res.get('display_text'),
             "phone": res.get('phone'),
-            "amount": amount,
-            "patient_id": patient.id if patient else None,
-            "patient_name": patient_name,
+            "amount": consultation_fee,
+            "currency": "KES",
+            "patient_id": patient.id,
+            "patient_name": patient.full_name,
             "department": department,
             "doctor_name": doctor_name
         })
@@ -934,47 +963,100 @@ def paystack_prompt():
         }), 400
 
 
-@reception_bp.route('/paystack/verify/<reference>', methods=['GET'])
+@reception_bp.route('/paystack/verify/<reference>', methods=['GET', 'POST'])
 def paystack_verify(reference):
     """
-    Checks payment verification status with Paystack.
-    If paid, settles invoice, issues receipt, creates triage queue ticket, and returns success payload.
+    Paystack Verification Endpoint:
+    - GET: Status-only check without state mutation (safe for silent polling read).
+    - POST: Validates provider reference, status, amount, and currency against persisted
+      transaction, executes idempotent database settlement, issues receipt, and routes queue ticket.
     """
-    patient_id = request.args.get('patient_id', type=int)
-    amount = request.args.get('amount', default=500.0, type=float)
-    department = request.args.get('department', default='General OPD')
-    doctor_name = request.args.get('doctor_name')
+    tx = PaystackTransaction.query.filter_by(reference=reference).first()
+    if not tx:
+        return jsonify({"paid": False, "status": "failed", "error": f"Unknown transaction reference: {reference}"}), 404
+
+    # GET is status-only without mutation
+    if request.method == 'GET':
+        if tx.status == 'settled':
+            return jsonify({
+                "paid": True,
+                "status": "success",
+                "settled": True,
+                "reference": tx.reference,
+                "amount": tx.amount,
+                "ticket_number": tx.queue_entry.ticket_number if tx.queue_entry else None,
+                "invoice_number": tx.invoice.invoice_number if tx.invoice else None,
+                "receipt_number": tx.payment.receipt_number if tx.payment else None,
+                "message": f"Payment of KES {tx.amount:.2f} is settled."
+            })
+
+        verify_res = paystack_service.verify_transaction(reference)
+        return jsonify({
+            "paid": verify_res.get('paid', False),
+            "status": verify_res.get('status', 'pending'),
+            "reference": reference,
+            "amount": tx.amount,
+            "message": verify_res.get('message', "Awaiting customer authorization on phone...")
+        })
+
+    # POST verification: mutates and settles if valid
+    if tx.status == 'settled' and tx.payment_id:
+        # Idempotent response for repeat verification
+        return jsonify({
+            "paid": True,
+            "status": "success",
+            "message": f"Payment of KES {tx.amount:.2f} verified via Paystack! Patient fast-tracked to Queue (#{tx.queue_entry.ticket_number if tx.queue_entry else ''}).",
+            "payment_id": tx.payment_id,
+            "ticket_number": tx.queue_entry.ticket_number if tx.queue_entry else "",
+            "invoice_number": tx.invoice.invoice_number if tx.invoice else "",
+            "receipt_number": tx.payment.receipt_number if tx.payment else "",
+            "receipt_url": url_for('reception.receipt_view', payment_id=tx.payment_id, format='thermal'),
+            "receipt_a4_url": url_for('reception.receipt_view', payment_id=tx.payment_id, format='a4'),
+            "redirect_url": url_for('reception.dashboard')
+        })
 
     verify_res = paystack_service.verify_transaction(reference)
 
-    if verify_res.get('paid'):
-        if patient_id:
-            settlement = paystack_service.settle_consultation_payment(
-                patient_id=patient_id,
-                reference=reference,
-                amount=amount,
-                destination_dept=department,
-                assigned_doctor=doctor_name
-            )
+    if verify_res.get('paid') and verify_res.get('status') == 'success':
+        # Validate provider reference, amount, and currency against persisted transaction
+        provider_amount = verify_res.get('amount')
+        provider_currency = verify_res.get('currency')
+        provider_ref = verify_res.get('reference')
+
+        if provider_ref != tx.reference:
+            return jsonify({"paid": False, "status": "failed", "error": "Provider reference mismatch."}), 400
+
+        if not provider_currency or provider_currency != tx.currency:
+            return jsonify({"paid": False, "status": "failed", "error": f"Currency mismatch: expected {tx.currency}, got {provider_currency}."}), 400
+
+        if provider_amount is None or not math.isfinite(float(provider_amount)) or round(float(provider_amount), 2) != round(float(tx.amount), 2):
             return jsonify({
-                "paid": True,
-                "status": "success",
-                "message": f"Payment of KES {amount:.2f} verified via Paystack! Patient fast-tracked to Queue (#{settlement['ticket_number']}).",
-                "payment_id": settlement.get('payment_id'),
-                "ticket_number": settlement['ticket_number'],
-                "invoice_number": settlement['invoice_number'],
-                "receipt_number": settlement['receipt_number'],
-                "receipt_url": url_for('reception.receipt_view', payment_id=settlement.get('payment_id'), format='thermal'),
-                "receipt_a4_url": url_for('reception.receipt_view', payment_id=settlement.get('payment_id'), format='a4'),
-                "redirect_url": url_for('reception.dashboard')
-            })
-        else:
-            return jsonify({
-                "paid": True,
-                "status": "success",
-                "message": f"Payment of KES {amount:.2f} verified on Paystack! (Reference: {reference})",
-                "redirect_url": url_for('reception.dashboard')
-            })
+                "paid": False,
+                "status": "failed",
+                "error": f"Amount tamper detected: expected KES {tx.amount:.2f}, got KES {provider_amount}."
+            }), 400
+
+        settlement = paystack_service.settle_consultation_payment(
+            reference=reference,
+            destination_dept=tx.destination_department,
+            assigned_doctor=tx.assigned_doctor,
+            patient_id=tx.patient_id,
+            amount=tx.amount,
+            verification=verify_res
+        )
+
+        return jsonify({
+            "paid": True,
+            "status": "success",
+            "message": f"Payment of KES {tx.amount:.2f} verified via Paystack! Patient fast-tracked to Queue (#{settlement['ticket_number']}).",
+            "payment_id": settlement.get('payment_id'),
+            "ticket_number": settlement['ticket_number'],
+            "invoice_number": settlement['invoice_number'],
+            "receipt_number": settlement['receipt_number'],
+            "receipt_url": url_for('reception.receipt_view', payment_id=settlement.get('payment_id'), format='thermal'),
+            "receipt_a4_url": url_for('reception.receipt_view', payment_id=settlement.get('payment_id'), format='a4'),
+            "redirect_url": url_for('reception.dashboard')
+        })
 
     elif verify_res.get('status') == 'pending':
         return jsonify({
@@ -993,24 +1075,48 @@ def paystack_verify(reference):
 @reception_bp.route('/paystack/manual-settle', methods=['POST'])
 def paystack_manual_settle():
     """
-    Manual confirmation / cash override for receptionist to immediately fast-track patient to triage.
+    Manual cash settlement: separate accounting type and authenticated actor,
+    validates positive finite amounts and idempotency, not mislabeled Paystack gateway.
     """
     patient_id = request.form.get('patient_id', type=int)
-    amount = float(request.form.get('amount', 500.0))
-    department = request.form.get('department', 'General OPD')
-    doctor_name = request.form.get('doctor_name')
-    reference = request.form.get('reference') or f"PAYSTACK-MANUAL-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+    if not patient_id:
+        flash("Patient ID is required for cash settlement.", "danger")
+        return redirect(url_for('reception.dashboard'))
 
     patient = Patient.query.get_or_404(patient_id)
-    settlement = paystack_service.settle_consultation_payment(
+
+    raw_amount = current_app.config.get('CONSULTATION_FEE', 500.0)
+    try:
+        amount = float(raw_amount or current_app.config.get('CONSULTATION_FEE', 500.0))
+    except (ValueError, TypeError):
+        flash("Settlement amount must be a valid number.", "danger")
+        return redirect(url_for('reception.dashboard'))
+
+    if not math.isfinite(amount) or amount <= 0:
+        flash("Settlement amount must be a positive finite number.", "danger")
+        return redirect(url_for('reception.dashboard'))
+
+    department = request.form.get('department', 'General OPD')
+    doctor_name = request.form.get('doctor_name')
+    reference = request.form.get('reference', '').strip()
+    if not reference or len(reference) > 120:
+        flash('Reload the cash payment form before submitting.', 'danger')
+        return redirect(url_for('reception.dashboard'))
+
+    # Identify authenticated actor
+    current_user = get_current_user()
+    cashier_name = current_user.full_name if current_user else (request.form.get('cashier_name') or "Reception Cashier")
+
+    settlement = paystack_service.settle_cash_consultation(
         patient_id=patient.id,
-        reference=reference,
         amount=amount,
+        cashier_name=cashier_name,
         destination_dept=department,
-        assigned_doctor=doctor_name
+        assigned_doctor=doctor_name,
+        reference=reference
     )
 
-    flash(f"✓ Consultation fee (KES {amount:.2f}) settled for {patient.full_name}! Fast-tracked to queue as Ticket #{settlement['ticket_number']}.", "success")
+    flash(f"✓ Consultation fee (KES {amount:.2f}) settled in Cash for {patient.full_name}! Fast-tracked to queue as Ticket #{settlement['ticket_number']}.", "success")
     return redirect(url_for('reception.dashboard'))
 
 

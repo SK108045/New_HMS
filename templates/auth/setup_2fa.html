@@ -104,7 +104,8 @@
                 </div>
 
                 <!-- Activation Form -->
-                <form method="POST" action="{% if token %}{{ url_for('auth.setup_2fa', token=token) }}{% else %}{{ url_for('auth.setup_2fa_user', user_id=user.id) }}{% endif %}" class="space-y-3 pt-1">
+                <form method="POST" action="{% if token %}{{ url_for('auth.setup_2fa', token=token) }}{% elif session.get('pending_2fa_enrollment_user_id') %}{{ url_for('auth.setup_2fa') }}{% else %}{{ url_for('auth.setup_2fa_user', user_id=user.id) }}{% endif %}" class="space-y-3 pt-1">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div>
                         <input 
                             type="text" 
@@ -128,7 +129,7 @@
                 </form>
 
                 <!-- Shareable Link Section (For Admin to send to employee) -->
-                {% if shareable_link %}
+                {% if shareable_link and not token and session.get('role') == 'admin' %}
                 <div class="pt-2 border-t border-slate-200" x-data="{ linkCopied: false }">
                     <div class="flex items-center justify-between text-[11px] font-bold text-slate-600 mb-1">
                         <span>📲 Share Onboarding Link with Employee:</span>

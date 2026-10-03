@@ -138,9 +138,8 @@ class DispensationRecord(db.Model):
     def generate_dispensation_number(cls, session=None):
         today_str = date.today().strftime('%Y%m%d')
         sess = session or db.session
-        count = sess.query(cls).filter(
-            cls.dispensation_number.like(f'DSP-{today_str}-%')
-        ).count()
+        from services.identifiers import next_sequence
+        count = next_sequence(sess, cls.dispensation_number, (f'DSP-{today_str}-%').removesuffix("%")) - 1
         return f"DSP-{today_str}-{count + 1:04d}"
 
     @property
@@ -228,9 +227,8 @@ class PurchaseOrder(db.Model):
     def generate_po_number(cls, session=None):
         today_str = date.today().strftime('%Y%m%d')
         sess = session or db.session
-        count = sess.query(cls).filter(
-            cls.po_number.like(f'LPO-{today_str}-%')
-        ).count()
+        from services.identifiers import next_sequence
+        count = next_sequence(sess, cls.po_number, (f'LPO-{today_str}-%').removesuffix("%")) - 1
         return f"LPO-{today_str}-{count + 1:04d}"
 
     def __repr__(self):
@@ -293,9 +291,8 @@ class ControlledDrugLog(db.Model):
     def generate_entry_number(cls, session=None):
         today_str = date.today().strftime('%Y%m%d')
         sess = session or db.session
-        count = sess.query(cls).filter(
-            cls.entry_number.like(f'CDL-{today_str}-%')
-        ).count()
+        from services.identifiers import next_sequence
+        count = next_sequence(sess, cls.entry_number, (f'CDL-{today_str}-%').removesuffix("%")) - 1
         return f"CDL-{today_str}-{count + 1:04d}"
 
     def __repr__(self):
@@ -329,9 +326,8 @@ class QuarantineRecord(db.Model):
     def generate_record_number(cls, session=None):
         today_str = date.today().strftime('%Y%m%d')
         sess = session or db.session
-        count = sess.query(cls).filter(
-            cls.record_number.like(f'QRN-{today_str}-%')
-        ).count()
+        from services.identifiers import next_sequence
+        count = next_sequence(sess, cls.record_number, (f'QRN-{today_str}-%').removesuffix("%")) - 1
         return f"QRN-{today_str}-{count + 1:04d}"
 
     def __repr__(self):

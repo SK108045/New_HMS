@@ -95,6 +95,7 @@ class Admission(db.Model):
     isolation_required = db.Column(db.Boolean, default=False)
     nursing_acuity = db.Column(db.String(30), default='Moderate Care (Level 2)')
     deposit_amount = db.Column(db.Float, default=0.0)
+    initial_bed_rate = db.Column(db.Float, nullable=True)
     
     # Emergency Contact
     emergency_contact_name = db.Column(db.String(120), nullable=True)
@@ -140,10 +141,124 @@ class Admission(db.Model):
         # Minimum 1 day for billing calculation
         return max(1, days if delta.seconds < 43200 and days > 0 else days + 1)
 
+    def get_bed_stay_segments(self, discharge_time=None):
+        """
+        Calculates bed stay segments using transfer timestamps and rate snapshots.
+        Preserves existing minimum-stay convention (minimum 1 day, 12h threshold for extra day).
+        Uses Decimal rounding.
+        Returns a list of dicts:
+        [{
+            'ward_name': str,
+            'bed_number': str,
+            'start_time': datetime,
+            'end_time': datetime,
+            'rate': Decimal,
+            'days': Decimal,
+            'charge': Decimal
+        }, ...]
+        """
+        from decimal import Decimal, ROUND_HALF_UP
+
+        end_time = discharge_time or self.actual_discharge_date or datetime.utcnow()
+        if end_time < self.admitted_at:
+            end_time = self.admitted_at
+
+        total_delta = end_time - self.admitted_at
+        days_int = total_delta.days
+        if days_int == 0:
+            total_days_convention = Decimal('1')
+        else:
+            if total_delta.seconds < 43200:
+                total_days_convention = Decimal(str(days_int))
+            else:
+                total_days_convention = Decimal(str(days_int + 1))
+
+        transfers = sorted(self.transfers, key=lambda t: t.transferred_at)
+        segments = []
+
+        if not transfers:
+            rate_val = self.initial_bed_rate
+            if rate_val is None:
+                rate_val = self.bed.daily_rate if self.bed else 1500.0
+            rate = Decimal(str(rate_val))
+            charge = (total_days_convention * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            segments.append({
+                'ward_name': self.ward.name if self.ward else 'General Ward',
+                'bed_number': self.bed.bed_number if self.bed else 'Bed',
+                'start_time': self.admitted_at,
+                'end_time': end_time,
+                'rate': rate,
+                'days': total_days_convention,
+                'charge': charge
+            })
+            return segments
+
+        # Build raw segments
+        current_time = self.admitted_at
+        current_ward = transfers[0].from_ward or self.ward
+        current_bed = transfers[0].from_bed or self.bed
+        first_rate_val = transfers[0].from_bed_rate or self.initial_bed_rate
+        if first_rate_val is None:
+            first_rate_val = current_bed.daily_rate if current_bed else 1500.0
+        current_rate = Decimal(str(first_rate_val))
+
+        raw_segments = []
+        for tr in transfers:
+            seg_end = tr.transferred_at
+            if seg_end > end_time:
+                seg_end = end_time
+            seg_duration = max(0.0, (seg_end - current_time).total_seconds())
+            raw_segments.append({
+                'ward_name': current_ward.name if current_ward else 'General Ward',
+                'bed_number': current_bed.bed_number if current_bed else 'Bed',
+                'start_time': current_time,
+                'end_time': seg_end,
+                'rate': current_rate,
+                'duration_seconds': seg_duration
+            })
+            current_time = seg_end
+            current_ward = tr.to_ward
+            current_bed = tr.to_bed
+            tr_rate_val = tr.to_bed_rate
+            if tr_rate_val is None:
+                tr_rate_val = current_bed.daily_rate if current_bed else 1500.0
+            current_rate = Decimal(str(tr_rate_val))
+
+        if end_time > current_time or not raw_segments:
+            seg_duration = max(0.0, (end_time - current_time).total_seconds())
+            raw_segments.append({
+                'ward_name': (self.ward.name if self.ward else (current_ward.name if current_ward else 'General Ward')),
+                'bed_number': (self.bed.bed_number if self.bed else (current_bed.bed_number if current_bed else 'Bed')),
+                'start_time': current_time,
+                'end_time': end_time,
+                'rate': current_rate,
+                'duration_seconds': seg_duration
+            })
+
+        total_raw_seconds = sum(s['duration_seconds'] for s in raw_segments)
+        if total_raw_seconds <= 0:
+            total_raw_seconds = 1.0
+
+        for s in raw_segments:
+            fraction = Decimal(str(s['duration_seconds'])) / Decimal(str(total_raw_seconds))
+            seg_days = (total_days_convention * fraction).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            seg_charge = (seg_days * s['rate']).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            segments.append({
+                'ward_name': s['ward_name'],
+                'bed_number': s['bed_number'],
+                'start_time': s['start_time'],
+                'end_time': s['end_time'],
+                'rate': s['rate'],
+                'days': seg_days,
+                'charge': seg_charge
+            })
+
+        return segments
+
     @property
     def total_bed_charge(self):
-        rate = self.bed.daily_rate if self.bed else 1500.0
-        return self.length_of_stay_days * rate
+        segments = self.get_bed_stay_segments()
+        return float(sum(s['charge'] for s in segments))
 
 
 class BedTransfer(db.Model):
@@ -161,6 +276,9 @@ class BedTransfer(db.Model):
     to_ward_id = db.Column(db.Integer, db.ForeignKey('wards.id'), nullable=False)
     to_bed_id = db.Column(db.Integer, db.ForeignKey('beds.id'), nullable=False)
     
+    from_bed_rate = db.Column(db.Float, nullable=True)
+    to_bed_rate = db.Column(db.Float, nullable=True)
+
     transfer_reason = db.Column(db.String(255), nullable=False)
     transferred_by = db.Column(db.String(120), nullable=False)
     transferred_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

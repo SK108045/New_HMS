@@ -49,15 +49,12 @@ class QueueEntry(db.Model):
         Generates daily sequential ticket number: TRG-001, TRG-002, etc.
         Resets sequence each day.
         """
-        target_session = session or db.session
+        from services.identifiers import next_sequence
         today_start = datetime.combine(date.today(), datetime.min.time())
-        
-        count_today = target_session.query(func.count(cls.id)).filter(
-            cls.checked_in_at >= today_start
-        ).scalar() or 0
-
-        next_num = count_today + 1
-        return f"TRG-{next_num:03d}"
+        value = next_sequence(session or db.session, cls.ticket_number, 'TRG-',
+                              scope='queue-' + date.today().isoformat(),
+                              filters=(cls.checked_in_at >= today_start,))
+        return f"TRG-{value:03d}"
 
     def __repr__(self):
         return f"<QueueEntry {self.ticket_number} - Patient #{self.patient_id} [{self.priority.upper()}]>"

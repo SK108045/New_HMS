@@ -1,3 +1,4 @@
+from auth.decorators import get_current_user
 import json
 from datetime import datetime, date, timedelta
 from flask import render_template, request, redirect, url_for, flash, jsonify
@@ -64,16 +65,13 @@ def dashboard():
         seven_day_labels.append(d.strftime('%a, %d %b') if i == 0 else d.strftime('%d %b'))
         seven_day_dispensed.append(cnt)
 
-    if sum(seven_day_dispensed) < 5:
-        seven_day_dispensed = [8, 12, 15, 11, 14, 18, max(len(today_dispensations), 5)]
-
     # 5. Chart 2: Inventory Valuation by Therapeutic Category
     categories = ['Antibiotics', 'Analgesics', 'Antihypertensives', 'Antidiabetics', 'Antihistamines', 'GI / Antacids']
     cat_valuations = []
     for cat in categories:
         meds = MedicationItem.query.filter(MedicationItem.category.ilike(f'%{cat[:5]}%')).all()
         val = sum([m.current_stock * m.unit_price for m in meds])
-        cat_valuations.append(val if val > 0 else 4500.0)
+        cat_valuations.append(val)
 
     # 6. Chart 3: Stock Health & Expiry Spectrum Donut
     adequate_stock = MedicationItem.query.filter(MedicationItem.current_stock > MedicationItem.reorder_level).count()
@@ -83,11 +81,25 @@ def dashboard():
     ).count()
     out_of_stock = MedicationItem.query.filter(MedicationItem.current_stock <= 0).count()
     stock_health_labels = ['Adequate Stock', 'Low Stock Alert', 'Out of Stock', 'Near Expiry (<90d)']
-    stock_health_counts = [max(adequate_stock, 6), max(low_stock, 2), max(out_of_stock, 1), max(expiring_batches_count, 2)]
+    stock_health_counts = [adequate_stock, low_stock, out_of_stock, expiring_batches_count]
 
-    # 7. Chart 4: Top Dispensed Medications
-    top_drug_labels = ['Amoxicillin 500mg', 'Paracetamol 500mg', 'Metformin 500mg', 'Omeprazole 20mg', 'Amlodipine 5mg']
-    top_drug_counts = [24, 38, 18, 15, 12]
+    # 7. Chart 4: Top Dispensed Medications from transaction logs
+    from sqlalchemy import func
+    top_dispensed_query = db.session.query(
+        MedicationItem.name,
+        func.sum(StockTransaction.quantity_change).label('total_dispensed')
+    ).join(StockTransaction, StockTransaction.medication_id == MedicationItem.id)\
+     .filter(StockTransaction.transaction_type == 'dispense')\
+     .group_by(MedicationItem.name)\
+     .order_by(func.abs(func.sum(StockTransaction.quantity_change)).desc())\
+     .limit(5).all()
+
+    if top_dispensed_query:
+        top_drug_labels = [row[0] for row in top_dispensed_query]
+        top_drug_counts = [abs(int(row[1] or 0)) for row in top_dispensed_query]
+    else:
+        top_drug_labels = []
+        top_drug_counts = []
 
     is_htmx = request.headers.get('HX-Request') == 'true'
     target = request.headers.get('HX-Target', '')
@@ -151,6 +163,71 @@ def queue():
     )
 
 
+def resolve_prescribed_medication(item):
+    """
+    Resolves prescribed item to MedicationItem:
+    1. By medication_id if submitted in prescriptions.
+    2. Exact unambiguous legacy name fallback.
+    3. Validates medication ID and strength, rejecting ambiguities and mismatches.
+    Returns (med_item, error_message).
+    """
+    med_id = item.get('medication_id')
+    drug_name = (item.get('drug') or '').strip()
+    dosage = (item.get('dosage') or '').strip()
+
+    if med_id:
+        try:
+            med_id_int = int(med_id)
+            med = db.session.get(MedicationItem, med_id_int)
+            if not med:
+                return None, f"Prescribed medication ID #{med_id} not found in inventory."
+            if med.strength and dosage:
+                s_med = med.strength.lower().replace(' ', '')
+                s_dos = dosage.lower().replace(' ', '')
+                if s_med != s_dos:
+                    return None, f"Strength mismatch: prescribed '{dosage}', but inventory item {med.name} is '{med.strength}'."
+            return med, None
+        except (ValueError, TypeError):
+            return None, f"Invalid medication ID '{med_id}'."
+
+    if not drug_name:
+        return None, "Prescription medication name is missing."
+
+    # Exact unambiguous name fallback (case-insensitive)
+    matches = MedicationItem.query.filter(
+        db.func.lower(MedicationItem.name) == drug_name.lower()
+    ).all()
+
+    if len(matches) == 1:
+        med = matches[0]
+        if med.strength and dosage:
+            s_med = med.strength.lower().replace(' ', '')
+            s_dos = dosage.lower().replace(' ', '')
+            if s_med != s_dos:
+                return None, f"Strength mismatch for {med.name}: prescribed '{dosage}', but inventory item is '{med.strength}'."
+        return med, None
+    elif len(matches) > 1:
+        return None, f"Ambiguous medication name '{drug_name}' matches multiple inventory items."
+
+    # Exact match on generic_name fallback
+    gen_matches = MedicationItem.query.filter(
+        db.func.lower(MedicationItem.generic_name) == drug_name.lower()
+    ).all()
+
+    if len(gen_matches) == 1:
+        med = gen_matches[0]
+        if med.strength and dosage:
+            s_med = med.strength.lower().replace(' ', '')
+            s_dos = dosage.lower().replace(' ', '')
+            if s_med != s_dos:
+                return None, f"Strength mismatch for {med.name}: prescribed '{dosage}', but inventory item is '{med.strength}'."
+        return med, None
+    elif len(gen_matches) > 1:
+        return None, f"Ambiguous generic medication name '{drug_name}' matches multiple inventory items."
+
+    return None, f"Medication '{drug_name}' could not be matched to an active inventory item."
+
+
 # =================== 3. DISPENSATION DESK & INVENTORY DEDUCTION ===================
 @pharmacy_bp.route('/dispense/<int:prescription_id>', methods=['GET', 'POST'])
 def dispense(prescription_id):
@@ -162,32 +239,33 @@ def dispense(prescription_id):
     - Deduct stock automatically
     - Print prescription label & route to Cashier / Billing
     """
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     prescription = Prescription.query.get_or_404(prescription_id)
     patient = prescription.patient
 
-    # Fetch live stock info for each prescribed medication
+    # Fetch live stock info for each prescribed medication (GET does not mutate state)
     med_stock_info = []
+    today_d = date.today()
+
     for item in prescription.medication_list:
-        d_name = item.get('drug', '')
-        # Match medication item by name
-        med_item = MedicationItem.query.filter(
-            db.or_(
-                MedicationItem.name.ilike(f"%{d_name.split()[0]}%"),
-                MedicationItem.name == d_name
-            )
-        ).first()
+        med_item, match_err = resolve_prescribed_medication(item)
 
         batches = []
         if med_item:
+            # Only active and non-expired batches with quantity remaining > 0
             batches = DrugBatch.query.filter(
                 DrugBatch.medication_id == med_item.id,
                 DrugBatch.quantity_remaining > 0,
-                DrugBatch.status == 'active'
+                DrugBatch.status == 'active',
+                DrugBatch.expiry_date >= today_d
             ).order_by(DrugBatch.expiry_date.asc()).all()
 
         med_stock_info.append({
             "item": item,
             "med_item": med_item,
+            "match_err": match_err,
             "batches": batches,
             "in_stock": med_item.current_stock if med_item else 0,
             "shelf": med_item.location_shelf if med_item else 'General',
@@ -196,68 +274,126 @@ def dispense(prescription_id):
 
     if request.method == 'POST':
         if prescription.status not in {'pending_dispense', 'partially_dispensed'}:
-            flash(f"Prescription {prescription.rx_number} has already been processed and cannot be dispensed again.", 'warning')
+            flash(f"Prescription {prescription.rx_number} has already been processed and cannot be re-dispensed.", 'warning')
             return redirect(url_for('pharmacy.queue'))
 
-        pharmacist_name = request.form.get('pharmacist_name', 'Pharm. Evans Omondi (Lead Pharmacist)')
+        pharmacist_name = get_current_user().full_name
         counseling = request.form.get('counseling_notes', '').strip()
-        dispensed_items = []
+
+        # Step 1: Pre-validate all items before executing any inventory mutations
+        validated_items = []
         total_dispensed_amount = 0.0
 
         for i, info in enumerate(med_stock_info):
             item = info['item']
             med_item = info['med_item']
+
+            if not med_item:
+                err_msg = info.get('match_err') or f"{item.get('drug', 'This medication')} could not be matched."
+                flash(err_msg, 'error')
+                return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
+
             try:
                 qty_to_dispense = int(request.form.get(f'qty_dispensed_{i}', item.get('quantity', 1)))
             except (TypeError, ValueError):
                 flash('Dispensed quantities must be whole numbers.', 'error')
                 return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
 
-            prescribed_quantity = item.get('quantity', 1)
-            if qty_to_dispense != prescribed_quantity:
-                flash('Dispense the prescribed quantity for every medication; partial dispensing is not supported yet.', 'error')
+            if qty_to_dispense <= 0:
+                flash(f"Quantity to dispense for {med_item.name} must be a positive number.", 'error')
                 return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
 
-            if not med_item:
-                flash(f"{item.get('drug', 'This medication')} is not available in inventory.", 'error')
+            prescribed_quantity = item.get('quantity', 1)
+            if qty_to_dispense != prescribed_quantity:
+                flash('Dispense the prescribed quantity for every medication; partial dispensing is not supported.', 'error')
                 return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
 
             batch_id = request.form.get(f'batch_id_{i}')
-
-            batch = None
-            if batch_id and batch_id.isdigit():
-                batch = db.session.get(DrugBatch, int(batch_id))
-                if not batch or batch.medication_id != (med_item.id if med_item else None):
-                    flash('Choose a valid stock batch for each medication.', 'error')
-                    return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
-
-            if not batch:
-                flash(f"Choose an active stock batch for {med_item.name}.", 'error')
+            if not batch_id or not batch_id.isdigit():
+                flash(f"Choose a valid active stock batch for {med_item.name}.", 'error')
                 return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
 
-            # Deduct Inventory
-            if qty_to_dispense > med_item.current_stock:
-                flash(f"Insufficient stock for {med_item.name}.", 'error')
+            batch = db.session.get(DrugBatch, int(batch_id))
+            if not batch or batch.medication_id != med_item.id:
+                flash(f"Selected batch does not belong to {med_item.name}.", 'error')
                 return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
+
+            if batch.status != 'active':
+                flash(f"Batch {batch.batch_number} is not active (status: {batch.status}).", 'error')
+                return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
+
+            if batch.expiry_date < today_d:
+                flash(f"Batch {batch.batch_number} has expired on {batch.expiry_date.strftime('%Y-%m-%d')} and cannot be dispensed.", 'error')
+                return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
+
             if qty_to_dispense > batch.quantity_remaining:
-                flash(f"Batch {batch.batch_number} does not contain enough stock.", 'error')
+                flash(f"Batch {batch.batch_number} does not contain enough stock ({batch.quantity_remaining} available).", 'error')
+                return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
+
+            if qty_to_dispense > med_item.current_stock:
+                flash(f"Insufficient overall inventory stock for {med_item.name}.", 'error')
+                return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
+
+            item_cost = float(item.get('cost', 0.0))
+            total_dispensed_amount += item_cost
+
+            validated_items.append({
+                "item": item,
+                "med_item": med_item,
+                "batch": batch,
+                "qty": qty_to_dispense,
+                "item_cost": item_cost
+            })
+
+        # Step 2: Perform atomic compare-and-update to prevent concurrent race conditions
+        dispensed_items_records = []
+        for v in validated_items:
+            batch = v['batch']
+            med_item = v['med_item']
+            qty = v['qty']
+            item = v['item']
+            item_cost = v['item_cost']
+
+            # Atomic compare and decrement for batch
+            updated_batch_count = DrugBatch.query.filter(
+                DrugBatch.id == batch.id,
+                DrugBatch.status == 'active',
+                DrugBatch.expiry_date >= today_d,
+                DrugBatch.quantity_remaining >= qty
+            ).update({
+                DrugBatch.quantity_remaining: DrugBatch.quantity_remaining - qty,
+                DrugBatch.status: db.case(
+                    (DrugBatch.quantity_remaining - qty == 0, 'depleted'),
+                    else_=DrugBatch.status
+                )
+            }, synchronize_session='fetch')
+
+            if updated_batch_count == 0:
+                db.session.rollback()
+                flash(f"Concurrent update conflict: Batch {batch.batch_number} stock changed or is insufficient.", 'error')
                 return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
 
             prev_stock = med_item.current_stock
-            med_item.current_stock -= qty_to_dispense
-            new_stock = med_item.current_stock
+            updated_med_count = MedicationItem.query.filter(
+                MedicationItem.id == med_item.id,
+                MedicationItem.current_stock >= qty
+            ).update({
+                MedicationItem.current_stock: MedicationItem.current_stock - qty
+            }, synchronize_session='fetch')
 
-            # Deduct batch
-            batch.quantity_remaining -= qty_to_dispense
-            if batch.quantity_remaining == 0:
-                batch.status = 'depleted'
+            if updated_med_count == 0:
+                db.session.rollback()
+                flash(f"Concurrent update conflict: Inventory for {med_item.name} stock changed or is insufficient.", 'error')
+                return redirect(url_for('pharmacy.dispense', prescription_id=prescription.id))
+
+            new_stock = prev_stock - qty
 
             # Record Stock Transaction
             st = StockTransaction(
                 medication_id=med_item.id,
                 batch_id=batch.id,
                 transaction_type='dispense',
-                quantity_change=-qty_to_dispense,
+                quantity_change=-qty,
                 previous_stock=prev_stock,
                 new_stock=new_stock,
                 reference_id=prescription.rx_number,
@@ -266,17 +402,14 @@ def dispense(prescription_id):
             )
             db.session.add(st)
 
-            item_cost = item.get('cost', 0.0)
-            total_dispensed_amount += item_cost
-
-            dispensed_items.append({
+            dispensed_items_records.append({
                 "drug": item.get('drug'),
                 "dosage": item.get('dosage'),
                 "frequency": item.get('frequency'),
-                "quantity": qty_to_dispense,
-                "batch_number": batch.batch_number if batch else 'GEN-STOCK',
-                "expiry_date": batch.expiry_date.strftime('%Y-%m-%d') if batch else 'N/A',
-                "shelf_location": med_item.location_shelf if med_item else 'A-01',
+                "quantity": qty,
+                "batch_number": batch.batch_number,
+                "expiry_date": batch.expiry_date.strftime('%Y-%m-%d'),
+                "shelf_location": med_item.location_shelf or 'A-01',
                 "instructions": item.get('instructions', 'Take as directed'),
                 "cost": item_cost
             })
@@ -288,7 +421,7 @@ def dispense(prescription_id):
             patient_id=patient.id,
             queue_entry_id=prescription.queue_entry_id,
             pharmacist_name=pharmacist_name,
-            dispensed_items_json=json.dumps(dispensed_items),
+            dispensed_items_json=json.dumps(dispensed_items_records),
             counseling_notes=counseling,
             total_amount=total_dispensed_amount
         )
@@ -302,7 +435,18 @@ def dispense(prescription_id):
             prescription.queue_entry.stage = 'billing'
             prescription.queue_entry.status = 'waiting'
 
+        db.session.flush()
+
+        AuditLog.log_event(
+            'dispensed_prescription',
+            'prescription',
+            prescription.id,
+            f"Prescription {prescription.rx_number} dispensed by {pharmacist_name}. Total KES {total_dispensed_amount:,.2f}.",
+            actor=get_current_user(),
+            severity='info'
+        )
         db.session.commit()
+
         flash(f"Prescription {prescription.rx_number} successfully verified and dispensed for {patient.full_name}. Inventory updated.", 'success')
         return redirect(url_for('pharmacy.dispense_label', dispense_id=dispense_rec.id))
 
@@ -665,6 +809,9 @@ def create_purchase_order():
 
 @pharmacy_bp.route('/purchase-orders/<int:po_id>/receive', methods=['POST'])
 def receive_purchase_order(po_id):
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     po = PurchaseOrder.query.get_or_404(po_id)
     batch_number = request.form.get('batch_number', '').strip().upper()
     expiry_str = request.form.get('expiry_date')
@@ -879,6 +1026,9 @@ def create_quarantine_record():
 
 @pharmacy_bp.route('/quarantine/<int:rec_id>/action', methods=['POST'])
 def action_quarantine(rec_id):
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     disposition = request.form.get('disposition') # returned_to_supplier, destroyed
     rec = QuarantineRecord.query.get_or_404(rec_id)
     rec.disposition = disposition

@@ -42,6 +42,7 @@
 
         <!-- Verification Form -->
         <form method="POST" action="{{ url_for('auth.verify_2fa') }}" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="use_backup" :value="useBackup ? 'true' : 'false'">
 
             <!-- Google Authenticator 6-Digit Mode -->

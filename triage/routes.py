@@ -87,12 +87,6 @@ def dashboard():
         seven_day_yellow.append(sum(1 for r in day_records if r.triage_category == 'yellow'))
         seven_day_red.append(sum(1 for r in day_records if r.triage_category == 'red'))
 
-    # If dataset has minimal points, provide sensible baseline so visual charts look populated
-    if sum(seven_day_green) + sum(seven_day_yellow) + sum(seven_day_red) < 5:
-        seven_day_green = [3, 4, 6, 5, 4, 6, max(green_count, 2)]
-        seven_day_yellow = [1, 2, 2, 3, 1, 2, max(yellow_count, 1)]
-        seven_day_red = [0, 1, 0, 1, 0, 1, max(red_count, 1)]
-
     # 3. Destination Clinic Routing Breakdown
     clinic_labels = ['General OPD', 'Casualty / ER', 'Pediatrics', 'Cardiology', 'OB / GYN', 'Orthopedic']
     clinic_counts = [0] * len(clinic_labels)
@@ -107,9 +101,6 @@ def dashboard():
     for v in today_vitals:
         idx = clinic_alias.get(v.destination_clinic, 0)
         clinic_counts[idx] += 1
-    # Ensure baseline display
-    if sum(clinic_counts) == 0:
-        clinic_counts = [4, 2, 2, 1, 1, 1]
 
     # 4. Clinical Vital Flag Alerts
     alert_bp = sum(1 for v in today_vitals if v.is_bp_abnormal)

@@ -44,9 +44,13 @@
                                 <span class="px-2.5 py-0.5 rounded text-xs font-bold font-mono bg-slate-100 text-slate-800 border border-slate-300 flex items-center gap-1">
                                     <span>✓ Reviewed & Signed</span>
                                 </span>
+                            {% elif order.status == 'completed' %}
+                                <span class="px-2.5 py-0.5 rounded text-xs font-bold font-mono bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                    Results Ready &bull; Needs Sign-Off
+                                </span>
                             {% else %}
                                 <span class="px-2.5 py-0.5 rounded text-xs font-bold font-mono bg-amber-100 text-amber-800 border border-amber-300">
-                                    Needs Physician Sign-Off
+                                    Awaiting Lab Results
                                 </span>
                             {% endif %}
                         </div>
@@ -70,34 +74,93 @@
                         </div>
                     </div>
 
-                    <!-- Test Results Grid -->
-                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                        <div class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Laboratory Diagnostic Findings:</div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {% for key, val in order.results_dict.items() %}
-                                <div class="p-2.5 bg-white border border-slate-200 rounded-lg shadow-xs">
-                                    <div class="text-[11px] text-slate-500 font-mono truncate">{{ key }}</div>
-                                    <div class="text-xs font-bold font-mono mt-0.5 {% if 'High' in val or 'Positive' in val or 'Trace' in val %}text-rose-700{% else %}text-slate-900{% endif %}">
-                                        {{ val }}
-                                    </div>
-                                </div>
-                            {% endfor %}
+                    <!-- Test Results Section -->
+                    {% if order.status == 'completed' and order.result_data %}
+                        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                            <div class="flex items-center justify-between">
+                                <div class="text-xs font-bold text-slate-800 uppercase tracking-wider">Laboratory Diagnostic Findings:</div>
+                                {% if order.results_dict.get('_provenance') %}
+                                    <span class="text-[10px] text-slate-500 font-mono">
+                                        Recorded by: {{ order.results_dict._provenance.recorded_by }} ({{ order.results_dict._provenance.recorded_at }})
+                                    </span>
+                                {% endif %}
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {% for key, val in order.results_dict.items() %}
+                                    {% if not key.startswith('_') %}
+                                        <div class="p-2.5 bg-white border border-slate-200 rounded-lg shadow-xs">
+                                            <div class="text-[11px] text-slate-500 font-mono truncate">{{ key }}</div>
+                                            <div class="text-xs font-bold font-mono mt-0.5 {% if 'High' in val or 'Positive' in val or 'Trace' in val %}text-rose-700{% else %}text-slate-900{% endif %}">
+                                                {{ val }}
+                                            </div>
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
                         </div>
-                    </div>
+                    {% else %}
+                        <!-- Honest Pending State & Deliberate Result Entry Form -->
+                        <div class="p-4 bg-amber-50/60 border border-amber-200 rounded-xl space-y-3" x-data="{ showEntry: false }">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                    <div class="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                                        <span class="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                                        Laboratory Analysis In Progress
+                                    </div>
+                                    <p class="text-[11px] text-amber-700 mt-0.5">Diagnostic specimens are queued or in analysis. Official verified findings have not been recorded yet.</p>
+                                </div>
+                                <button type="button" @click="showEntry = !showEntry" class="btn-secondary text-xs py-1 px-3 self-start sm:self-auto">
+                                    <span x-text="showEntry ? '✕ Hide Result Entry' : '+ Enter Lab Results'"></span>
+                                </button>
+                            </div>
+
+                            <!-- Deliberate Authenticated Result-Entry Form -->
+                            <form
+                                x-show="showEntry"
+                                method="POST"
+                                action="{{ url_for('doctor.record_lab_results', order_id=order.id) }}"
+                                class="pt-3 border-t border-amber-200 space-y-3 bg-white p-3.5 rounded-lg border border-slate-200 text-xs"
+                            >
+                                <div class="font-bold text-slate-800 uppercase tracking-wide text-[11px]">Enter Diagnostic Results for Order {{ order.order_number }}:</div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {% for t in order.test_list %}
+                                        {% set tname = t.name if t.name is defined else t %}
+                                        <div>
+                                            <label class="block text-[11px] font-bold text-slate-700 mb-0.5">{{ tname }} Finding</label>
+                                            <input type="text" name="result_{{ tname }}" placeholder="e.g. Negative / 14.2 g/dL (Normal)" class="form-input text-xs w-full">
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Clinical Findings & Remarks</label>
+                                    <textarea name="findings" rows="2" placeholder="Overall pathology evaluation and technician observations..." class="form-input text-xs w-full"></textarea>
+                                </div>
+                                <div class="flex justify-end gap-2 pt-1">
+                                    <button type="submit" class="btn-primary text-xs py-1.5 px-4">
+                                        Save & Set Completed
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    {% endif %}
 
                     <!-- Action Bar -->
                     <div class="flex items-center justify-between pt-2 border-t border-slate-100">
                         <span class="text-xs text-slate-400 font-mono">Ordered by: {{ order.doctor_name }}</span>
                         
                         <div class="flex items-center gap-2">
-                            {% if not order.reviewed_by_doctor %}
-                                <form method="POST" action="{{ url_for('doctor.review_lab_order', order_id=order.id) }}">
-                                    <button type="submit" class="btn-primary text-xs py-1.5 px-3">
-                                        ✓ Sign Off & Archive to Chart
-                                    </button>
-                                </form>
+                            {% if order.status == 'completed' %}
+                                {% if not order.reviewed_by_doctor %}
+                                    <form method="POST" action="{{ url_for('doctor.review_lab_order', order_id=order.id) }}">
+                                        <button type="submit" class="btn-primary text-xs py-1.5 px-3">
+                                            ✓ Sign Off & Archive to Chart
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <span class="text-xs text-slate-500 font-mono">Signed off on {{ order.reviewed_at.strftime('%d %b %H:%M') if order.reviewed_at else 'Today' }}</span>
+                                {% endif %}
                             {% else %}
-                                <span class="text-xs text-slate-500 font-mono">Signed off on {{ order.reviewed_at.strftime('%d %b %H:%M') if order.reviewed_at else 'Today' }}</span>
+                                <span class="text-xs text-slate-500 font-mono italic">Sign-off enabled after results are completed</span>
                             {% endif %}
 
                             <a href="{{ url_for('doctor.direct_consult', patient_id=order.patient.id) }}" class="btn-secondary text-xs py-1.5 px-3">

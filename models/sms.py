@@ -43,6 +43,8 @@ class PatientOTP(db.Model):
     patient_id = db.Column(db.Integer, db.ForeignKey('patients.id'), nullable=True, index=True)
     phone = db.Column(db.String(30), nullable=False, index=True)
     otp_code = db.Column(db.String(10), nullable=False)
+    otp_hash = db.Column(db.String(256), nullable=True)
+    failed_attempts = db.Column(db.Integer, nullable=False, default=0)
     purpose = db.Column(db.String(50), default='patient_verification')  # 'patient_verification', 'intake_consent', 'telephony_auth'
     is_verified = db.Column(db.Boolean, default=False)
     expires_at = db.Column(db.DateTime, nullable=False)
@@ -55,4 +57,4 @@ class PatientOTP(db.Model):
         return datetime.utcnow() > self.expires_at
 
     def __repr__(self):
-        return f"<PatientOTP #{self.id} for {self.phone}: {self.otp_code} (Verified: {self.is_verified})>"
+        return f"<PatientOTP #{self.id} (Verified: {self.is_verified})>"

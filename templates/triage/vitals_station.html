@@ -34,7 +34,7 @@
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div class="flex items-center gap-4">
             {% if patient.photo_filename %}
-                <img src="{{ url_for('static', filename='uploads/photos/' ~ patient.photo_filename) }}" alt="{{ patient.full_name }}" class="w-14 h-14 rounded-xl object-cover border border-slate-200 shrink-0 shadow-xs">
+                <img src="{{ url_for('patient_photo', patient_id=patient.id) }}" alt="{{ patient.full_name }}" class="w-14 h-14 rounded-xl object-cover border border-slate-200 shrink-0 shadow-xs">
             {% else %}
                 <div class="w-14 h-14 rounded-xl bg-slate-200 text-slate-800 font-bold flex items-center justify-center font-mono text-lg border border-slate-300 shrink-0">
                     {{ patient.initials }}

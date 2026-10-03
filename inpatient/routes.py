@@ -128,6 +128,9 @@ def admissions():
 # =================== 3. PATIENT ADMISSION INTAKE ===================
 @inpatient_bp.route('/admit', methods=['GET', 'POST'])
 def admit():
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     patient_id = request.args.get('patient_id', type=int)
     selected_patient = db.session.get(Patient, patient_id) if patient_id else None
 
@@ -143,7 +146,18 @@ def admit():
         dietary_plan = request.form.get('dietary_plan', 'Normal Hospital Diet')
         isolation_required = bool(request.form.get('isolation_required'))
         nursing_acuity = request.form.get('nursing_acuity', 'Moderate Care (Level 2)')
-        deposit_amount = float(request.form.get('deposit_amount') or 0.0)
+        import math
+        deposit_val = 0.0
+        deposit_str = request.form.get('deposit_amount', '').strip()
+        if deposit_str:
+            try:
+                deposit_val = float(deposit_str)
+                if math.isnan(deposit_val) or math.isinf(deposit_val) or deposit_val < 0:
+                    flash('Deposit amount must be a positive finite number.', 'error')
+                    return redirect(url_for('inpatient.admit', patient_id=p_id))
+            except (ValueError, TypeError):
+                flash('Invalid deposit amount provided.', 'error')
+                return redirect(url_for('inpatient.admit', patient_id=p_id))
         
         emergency_name = request.form.get('emergency_contact_name', '').strip()
         emergency_phone = request.form.get('emergency_contact_phone', '').strip()
@@ -161,8 +175,18 @@ def admit():
             flash('Invalid patient, ward, or bed selection.', 'error')
             return redirect(url_for('inpatient.admit'))
 
-        if bed.status != 'available':
-            flash(f'Bed {bed.bed_number} is currently {bed.status}. Please choose an available bed.', 'error')
+        final_emergency_name = emergency_name or patient.next_of_kin_name
+        final_emergency_phone = emergency_phone or patient.next_of_kin_phone
+        final_emergency_relation = emergency_relation or patient.next_of_kin_relation
+
+        # Validate ward/bed linkage
+        if bed.ward_id != ward.id:
+            flash(f'Bed {bed.bed_number} does not belong to {ward.name}.', 'error')
+            return redirect(url_for('inpatient.admit', patient_id=p_id))
+
+        # Validate bed rate
+        if not bed.daily_rate or math.isnan(bed.daily_rate) or math.isinf(bed.daily_rate) or bed.daily_rate <= 0:
+            flash('Bed daily rate must be a positive finite amount.', 'error')
             return redirect(url_for('inpatient.admit', patient_id=p_id))
 
         # Check if patient already has an active admission
@@ -171,6 +195,17 @@ def admit():
             flash(f'{patient.full_name} is already admitted in {existing_adm.ward.name} (Bed {existing_adm.bed.bed_number}).', 'warning')
             return redirect(url_for('inpatient.patient_chart', admission_id=existing_adm.id))
 
+        # Atomically reserve available bed
+        reserved = Bed.query.filter(
+            Bed.id == bed_id,
+            Bed.ward_id == ward_id,
+            Bed.status == 'available'
+        ).update({Bed.status: 'occupied'}, synchronize_session='fetch')
+
+        if reserved == 0:
+            flash(f'Bed {bed.bed_number} is currently not available. Please choose an available bed.', 'error')
+            return redirect(url_for('inpatient.admit', patient_id=p_id))
+
         expected_date = None
         if expected_date_str:
             try:
@@ -178,15 +213,16 @@ def admit():
             except ValueError:
                 pass
 
-        # Generate Admission Number: ADM-YYYY-XXXX
-        total_admissions_count = Admission.query.count() + 1
-        admission_number = f"ADM-{datetime.utcnow().year}-{total_admissions_count:04d}"
+        from services.identifiers import next_sequence
+        prefix = f'ADM-{date.today().year}-'
+        admission_number = prefix + f'{next_sequence(db.session, Admission.admission_number, prefix):04d}'
 
         admission = Admission(
             admission_number=admission_number,
             patient_id=p_id,
             ward_id=ward_id,
             bed_id=bed_id,
+            initial_bed_rate=bed.daily_rate,
             admitting_doctor=admitting_doctor,
             admitting_diagnosis=admitting_diagnosis,
             icd10_code=icd10_code,
@@ -197,17 +233,14 @@ def admit():
             dietary_plan=dietary_plan,
             isolation_required=isolation_required,
             nursing_acuity=nursing_acuity,
-            deposit_amount=deposit_amount,
-            emergency_contact_name=emergency_name or patient.emergency_contact_name,
-            emergency_contact_phone=emergency_phone or patient.emergency_contact_phone,
-            emergency_contact_relation=emergency_relation or patient.emergency_contact_relation
+            deposit_amount=deposit_val,
+            emergency_contact_name=final_emergency_name,
+            emergency_contact_phone=final_emergency_phone,
+            emergency_contact_relation=final_emergency_relation
         )
 
-        # Mark Bed as Occupied
-        bed.status = 'occupied'
-
         db.session.add(admission)
-        db.session.commit()
+        db.session.flush()
 
         log_inpatient_audit(
             'patient_admitted',
@@ -296,7 +329,7 @@ def add_nursing_note(admission_id):
     )
 
     db.session.add(note)
-    db.session.commit()
+    db.session.flush()
 
     log_inpatient_audit(
         'nursing_note_added',
@@ -339,7 +372,7 @@ def add_ward_round(admission_id):
     )
 
     db.session.add(round_note)
-    db.session.commit()
+    db.session.flush()
 
     log_inpatient_audit(
         'ward_round_recorded',
@@ -356,13 +389,19 @@ def add_ward_round(admission_id):
 # =================== 7. INTER-WARD & BED TRANSFER ===================
 @inpatient_bp.route('/patient/<int:admission_id>/transfer', methods=['POST'])
 def transfer_bed(admission_id):
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     admission = Admission.query.get_or_404(admission_id)
     actor = get_current_user()
+    if admission.status != 'admitted':
+        flash('Only an active admission can be transferred.', 'error')
+        return redirect(url_for('inpatient.patient_chart', admission_id=admission.id))
 
     to_ward_id = request.form.get('to_ward_id', type=int)
     to_bed_id = request.form.get('to_bed_id', type=int)
     reason = request.form.get('transfer_reason', '').strip()
-    transferred_by = request.form.get('transferred_by', '').strip() or (actor.full_name if actor else 'Ward Nurse')
+    transferred_by = actor.full_name
 
     if not to_ward_id or not to_bed_id or not reason:
         flash('Destination Ward, Destination Bed, and Transfer Reason are required.', 'error')
@@ -377,22 +416,41 @@ def transfer_bed(admission_id):
         flash('Invalid destination ward or bed.', 'error')
         return redirect(url_for('inpatient.patient_chart', admission_id=admission.id))
 
-    if new_bed.status != 'available':
-        flash(f'Bed {new_bed.bed_number} is not available.', 'error')
+    # Validate ward/bed linkage
+    if new_bed.ward_id != new_ward.id:
+        flash(f'Bed {new_bed.bed_number} does not belong to {new_ward.name}.', 'error')
+        return redirect(url_for('inpatient.patient_chart', admission_id=admission.id))
+
+    # Validate positive finite rate
+    import math
+    if not new_bed.daily_rate or math.isnan(new_bed.daily_rate) or math.isinf(new_bed.daily_rate) or new_bed.daily_rate <= 0:
+        flash('Destination bed rate must be a positive finite amount.', 'error')
+        return redirect(url_for('inpatient.patient_chart', admission_id=admission.id))
+
+    # Reserve new bed atomically
+    reserved = Bed.query.filter(
+        Bed.id == to_bed_id,
+        Bed.ward_id == to_ward_id,
+        Bed.status == 'available'
+    ).update({Bed.status: 'occupied'}, synchronize_session='fetch')
+
+    if reserved == 0:
+        flash(f'Bed {new_bed.bed_number} is no longer available.', 'error')
         return redirect(url_for('inpatient.patient_chart', admission_id=admission.id))
 
     # Free previous bed & occupy new bed
-    old_bed.status = 'cleaning'
-    new_bed.status = 'occupied'
+    Bed.query.filter_by(id=old_bed.id).update({Bed.status: 'cleaning'}, synchronize_session='fetch')
 
-    # Create transfer record
+    # Create transfer record with rate snapshots
     transfer_log = BedTransfer(
         admission_id=admission.id,
         patient_id=admission.patient_id,
         from_ward_id=old_ward.id,
         from_bed_id=old_bed.id,
+        from_bed_rate=(admission.transfers[0].to_bed_rate if admission.transfers else admission.initial_bed_rate) or old_bed.daily_rate,
         to_ward_id=new_ward.id,
         to_bed_id=new_bed.id,
+        to_bed_rate=new_bed.daily_rate,
         transfer_reason=reason,
         transferred_by=transferred_by,
         transferred_at=datetime.utcnow()
@@ -402,7 +460,7 @@ def transfer_bed(admission_id):
     admission.bed_id = new_bed.id
 
     db.session.add(transfer_log)
-    db.session.commit()
+    db.session.flush()
 
     log_inpatient_audit(
         'bed_transfer',
@@ -419,6 +477,9 @@ def transfer_bed(admission_id):
 # =================== 8. PATIENT DISCHARGE & BILLING INTEGRATION ===================
 @inpatient_bp.route('/patient/<int:admission_id>/discharge', methods=['GET', 'POST'])
 def discharge(admission_id):
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     admission = Admission.query.get_or_404(admission_id)
     patient = admission.patient
 
@@ -434,7 +495,7 @@ def discharge(admission_id):
         instructions = request.form.get('discharge_instructions', '').strip()
         followup_date_str = request.form.get('followup_date', '')
         followup_clinic = request.form.get('followup_clinic', 'General OPD')
-        discharged_by = request.form.get('discharged_by', '').strip() or (actor.full_name if actor else 'Dr. Sarah Kamau')
+        discharged_by = actor.full_name
         
         meds_json_str = request.form.get('discharge_medications_json', '[]')
         try:
@@ -470,10 +531,10 @@ def discharge(admission_id):
         if bed:
             bed.status = 'cleaning'
 
-        # Stage Inpatient Bed Accommodation Charges into Billing Folio
-        los_days = admission.length_of_stay_days
-        rate = bed.daily_rate if bed else 1500.0
-        total_bed_charge = los_days * rate
+        # Stage Inpatient Bed Accommodation Charges per bed-stay segment
+        from decimal import Decimal
+        segments = admission.get_bed_stay_segments(discharge_time=admission.actual_discharge_date)
+        total_bed_charge = Decimal('0.00')
 
         # Check for open patient invoice or create one
         invoice = Invoice.query.filter_by(patient_id=patient.id, status='unpaid').order_by(Invoice.created_at.desc()).first()
@@ -497,30 +558,36 @@ def discharge(admission_id):
             db.session.add(invoice)
             db.session.flush()
 
-        bed_item = BillingItem(
-            patient_id=patient.id,
-            invoice_id=invoice.id,
-            service_type='bed',
-            item_description=f"Inpatient Bed Accommodation: {admission.ward.name} - {bed.bed_number if bed else 'Bed'} ({los_days} Day{'s' if los_days != 1 else ''} @ KES {rate:,.2f}/day)",
-            quantity=los_days,
-            unit_price=rate,
-            total_amount=total_bed_charge,
-            status='staged',
-            created_at=datetime.utcnow()
-        )
-        db.session.add(bed_item)
+        for seg in segments:
+            seg_charge = seg['charge']
+            total_bed_charge += seg_charge
+            seg_days = seg['days']
+            seg_rate = seg['rate']
 
-        invoice.subtotal += total_bed_charge
+            bed_item = BillingItem(
+                patient_id=patient.id,
+                invoice_id=invoice.id,
+                service_type='bed',
+                item_description=f"Inpatient Bed Accommodation: {seg['ward_name']} - {seg['bed_number']} ({seg_days} Day{'s' if seg_days != 1 else ''} @ KES {seg_rate:,.2f}/day)",
+                quantity=float(seg_days),
+                unit_price=float(seg_rate),
+                total_amount=float(seg_charge),
+                status='staged',
+                created_at=datetime.utcnow()
+            )
+            db.session.add(bed_item)
+
+        invoice.subtotal += float(total_bed_charge)
         invoice.total_due = max(0.0, invoice.subtotal - invoice.discount_amount + invoice.tax_amount)
         invoice.balance_due = max(0.0, invoice.total_due - invoice.amount_paid)
 
-        db.session.commit()
+        db.session.flush()
 
         log_inpatient_audit(
             'patient_discharged',
             'admission',
             admission.id,
-            f"Discharged {patient.full_name} ({admission.admission_number}). Length of stay: {los_days} days. Bed charge KES {total_bed_charge:,.2f} billed to Invoice #{invoice.invoice_number}."
+            f"Discharged {patient.full_name} ({admission.admission_number}). Length of stay: {admission.length_of_stay_days} days. Bed charge KES {total_bed_charge:,.2f} billed to Invoice #{invoice.invoice_number}."
         )
         db.session.commit()
 
@@ -554,6 +621,9 @@ def print_discharge_summary(admission_id):
 @inpatient_bp.route('/beds', methods=['GET', 'POST'])
 def beds():
     if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
+    if request.method == 'POST':
         bed_id = request.form.get('bed_id', type=int)
         new_status = request.form.get('status')
         
@@ -564,7 +634,7 @@ def beds():
             else:
                 old_status = bed.status
                 bed.status = new_status
-                db.session.commit()
+                db.session.flush()
                 log_inpatient_audit('bed_status_updated', 'bed', bed.id, f"Changed Bed {bed.bed_number} status from {old_status} to {new_status}.")
                 db.session.commit()
                 flash(f"Bed {bed.bed_number} status updated to {new_status.title()}.", 'success')

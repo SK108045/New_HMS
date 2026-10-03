@@ -129,7 +129,7 @@
                     <!-- Video / Canvas / Current Photo Container -->
                     <div class="relative w-full aspect-4/3 bg-slate-200 rounded-lg overflow-hidden border border-slate-300 flex items-center justify-center">
                         <video id="webcam-video" autoplay playsinline class="w-full h-full object-cover hidden"></video>
-                        <img id="photo-preview" src="{% if patient.photo_filename %}{{ url_for('static', filename='uploads/photos/' ~ patient.photo_filename) }}{% endif %}" alt="{{ patient.full_name }}" class="w-full h-full object-cover {% if not patient.photo_filename %}hidden{% endif %}">
+                        <img id="photo-preview" src="{% if patient.photo_filename %}{{ url_for('patient_photo', patient_id=patient.id) }}{% endif %}" alt="{{ patient.full_name }}" class="w-full h-full object-cover {% if not patient.photo_filename %}hidden{% endif %}">
                         
                         <div id="webcam-placeholder" class="text-center p-4 {% if patient.photo_filename %}hidden{% endif %}">
                             <div class="w-10 h-10 mx-auto rounded-full bg-slate-300 text-slate-600 flex items-center justify-center mb-2">

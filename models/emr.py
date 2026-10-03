@@ -91,9 +91,8 @@ class LabOrder(db.Model):
     def generate_order_number(cls, session=None):
         today_str = date.today().strftime('%Y%m%d')
         sess = session or db.session
-        count = sess.query(cls).filter(
-            cls.order_number.like(f'LAB-{today_str}-%')
-        ).count()
+        from services.identifiers import next_sequence
+        count = next_sequence(sess, cls.order_number, (f'LAB-{today_str}-%').removesuffix("%")) - 1
         return f"LAB-{today_str}-{count + 1:04d}"
 
     @property
@@ -149,9 +148,8 @@ class Prescription(db.Model):
     def generate_rx_number(cls, session=None):
         today_str = date.today().strftime('%Y%m%d')
         sess = session or db.session
-        count = sess.query(cls).filter(
-            cls.rx_number.like(f'RX-{today_str}-%')
-        ).count()
+        from services.identifiers import next_sequence
+        count = next_sequence(sess, cls.rx_number, (f'RX-{today_str}-%').removesuffix("%")) - 1
         return f"RX-{today_str}-{count + 1:04d}"
 
     @property
