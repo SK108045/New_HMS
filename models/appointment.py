@@ -60,7 +60,8 @@ class Appointment(db.Model):
         today_str = date.today().strftime('%Y%m%d')
         prefix = f"APT-{today_str}-"
         query = session.query(cls) if session else cls.query
-        count = query.filter(cls.appointment_number.like(f"{prefix}%")).count()
+        from services.identifiers import next_sequence
+        count = next_sequence((session or db.session), cls.appointment_number, (f'{prefix}%').removesuffix("%")) - 1
         return f"{prefix}{count + 1:03d}"
 
     @property

@@ -115,10 +115,12 @@
                                 {% if cn.status == 'pending_approval' %}
                                     <div class="inline-flex items-center gap-1">
                                         <form method="POST" action="{{ url_for('billing.action_credit_note', cn_id=cn.id) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <input type="hidden" name="action" value="approve">
                                             <button type="submit" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold">✓ Approve</button>
                                         </form>
                                         <form method="POST" action="{{ url_for('billing.action_credit_note', cn_id=cn.id) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <input type="hidden" name="action" value="reject">
                                             <button type="submit" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold">✕ Reject</button>
                                         </form>
@@ -179,10 +181,12 @@
                                 {% if w.status == 'pending_approval' %}
                                     <div class="inline-flex items-center gap-1">
                                         <form method="POST" action="{{ url_for('billing.action_fee_waiver', wv_id=w.id) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <input type="hidden" name="action" value="approve">
                                             <button type="submit" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold">✓ Approve</button>
                                         </form>
                                         <form method="POST" action="{{ url_for('billing.action_fee_waiver', wv_id=w.id) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <input type="hidden" name="action" value="reject">
                                             <button type="submit" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold">✕ Reject</button>
                                         </form>
@@ -210,6 +214,7 @@
                 <button type="button" @click="showCreditModal = false" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
             </div>
             <form method="POST" action="{{ url_for('billing.create_credit_note') }}" class="space-y-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div>
                     <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Select Invoice *</label>
                     <select name="invoice_id" required class="form-select text-xs w-full rounded-xl border-slate-300">
@@ -251,6 +256,7 @@
                 <button type="button" @click="showWaiverModal = false" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
             </div>
             <form method="POST" action="{{ url_for('billing.create_fee_waiver') }}" class="space-y-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div>
                     <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Select Invoice *</label>
                     <select name="invoice_id" required class="form-select text-xs w-full rounded-xl border-slate-300">

@@ -37,7 +37,7 @@
             <!-- Patient Demographics -->
             <div class="flex items-center gap-4">
                 {% if patient.photo_filename %}
-                    <img src="{{ url_for('static', filename='uploads/photos/' ~ patient.photo_filename) }}" alt="{{ patient.full_name }}" class="w-14 h-14 rounded-2xl object-cover border border-slate-300 shrink-0 shadow-xs">
+                    <img src="{{ url_for('patient_photo', patient_id=patient.id) }}" alt="{{ patient.full_name }}" class="w-14 h-14 rounded-2xl object-cover border border-slate-300 shrink-0 shadow-xs">
                 {% else %}
                     <div class="w-14 h-14 rounded-2xl bg-slate-200 text-slate-900 font-black flex items-center justify-center font-mono text-lg border border-slate-300 shrink-0">
                         {{ patient.initials }}
@@ -525,6 +525,7 @@
                         <button 
                             type="button" 
                             @click="addPrescriptionPreset({
+                                medication_id: '{{ drug.id if drug.id is defined else "" }}',
                                 name: '{{ drug.name }}',
                                 dosage: '{{ drug.default_dosage }}',
                                 frequency: '{{ drug.default_freq }}',
@@ -551,6 +552,7 @@
                             <div class="sm:col-span-4">
                                 <label class="block text-[11px] font-bold text-slate-700 mb-0.5">Drug Name & Formulation</label>
                                 <input type="text" name="drug_name[]" x-model="item.name" placeholder="e.g. Amoxicillin 500mg" class="form-input text-xs font-bold" required>
+                                <input type="hidden" name="medication_id[]" :value="item.medication_id || ''">
                             </div>
 
                             <!-- Dosage -->
@@ -1032,6 +1034,7 @@
 
             addPrescriptionRow() {
                 this.prescriptions.push({
+                    medication_id: '',
                     name: '',
                     dosage: '',
                     frequency: '1 tab TID (8-hourly)',

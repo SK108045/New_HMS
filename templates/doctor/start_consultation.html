@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Start consultation{% endblock %}
+{% block content %}
+<div class="max-w-lg mx-auto bg-white border rounded-xl p-6">
+<h1 class="text-xl font-bold">{{ patient.full_name }}</h1>
+<p class="mt-2">No consultation is active for this patient today.</p>
+<form method="post" action="{{ url_for('doctor.direct_consult', patient_id=patient.id) }}" class="mt-4">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<button class="btn-primary" type="submit">Start consultation</button>
+</form></div>
+{% endblock %}

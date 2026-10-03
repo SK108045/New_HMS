@@ -37,6 +37,50 @@ class SecuritySetting(db.Model):
         return settings
 
 
+CANONICAL_PERMISSIONS = [
+    # Patient Records
+    ("patient:view", "View Patient Records & History", "Patients", "Access demographic profiles and outpatient history"),
+    ("patient:register", "Register New Patients", "Patients", "Create new patient records and allocate hospital IDs"),
+    ("patient:edit", "Edit Patient Demographics", "Patients", "Modify patient contact info and insurance particulars"),
+
+    # Clinical Consultation & EMR
+    ("clinical:consult", "Perform Medical Consultations", "Clinical", "Document clinical notes, examinations, and diagnoses"),
+    ("clinical:prescribe", "Prescribe Medications (Rx)", "Clinical", "Generate electronic prescriptions sent to pharmacy"),
+    ("clinical:order_labs", "Order Diagnostic Tests", "Clinical", "Request lab tests and radiology imaging"),
+    ("clinical:record_results", "Record Diagnostic & Lab Results", "Clinical", "Document and finalize laboratory investigation findings"),
+
+    # Clinical Documents
+    ("documents:generate_cert", "Issue Medical Sick-Off Certificates", "Documents", "Generate stamped clinical sick leave notes"),
+    ("documents:generate_referral", "Issue Specialist Referral Letters", "Documents", "Draft official hospital referral documents"),
+    ("documents:upload", "Upload & Manage Patient Attachments", "Documents", "Upload radiological scans, PDFs, and ID records"),
+
+    # Inpatient Care & Wards
+    ("inpatient:admit", "Admit Patient to Wards", "Inpatient", "Assign ward beds and document intake clinical orders"),
+    ("inpatient:transfer", "Execute Inter-Ward Bed Transfers", "Inpatient", "Reassign beds and log transfer rationale"),
+    ("inpatient:chart", "Document Nursing & Ward Rounds", "Inpatient", "Record shift nursing notes and daily doctor progress"),
+    ("inpatient:discharge", "Clinical Inpatient Discharge", "Inpatient", "Finalize discharge clearance and generate certificates"),
+
+    # Pharmacy & Dispensing
+    ("pharmacy:dispense", "Dispense Prescriptions", "Pharmacy", "Clear and dispense pharmaceutical orders with counseling"),
+    ("pharmacy:manage_stock", "Manage Drug Inventory & Batches", "Pharmacy", "Adjust stock, manage batches, and log purchase entries"),
+
+    # Billing & Financials
+    ("billing:create_invoice", "Create & Stage Invoices", "Billing", "Compile invoices and apply departmental fee schedules"),
+    ("billing:collect_payment", "Collect Tender Payments", "Billing", "Process cash, M-Pesa, card, and insurance settlements"),
+    ("billing:waive_discount", "Waive Charges & Authorize Discounts", "Billing", "Grant authorized discounts and fee waivers"),
+
+    # Telephony & Communications
+    ("telephony:send", "Send SMS & OTP Communications", "Telephony", "Dispatch patient SMS notifications, queue alerts, and OTPs"),
+
+    # Hospital Administration & Security
+    ("admin:manage_users", "Manage Staff User Accounts", "Admin", "Create, edit, suspend, and reset staff credentials"),
+    ("admin:security_config", "Configure Security Policies & 2FA", "Admin", "Manage global 2FA and password requirements"),
+    ("admin:view_audit", "Access Immutable Audit Trail", "Admin", "Inspect all clinical and financial activity logs")
+]
+
+DEFAULT_PERMISSIONS = CANONICAL_PERMISSIONS
+
+
 class Permission(db.Model):
     """
     Canonical system permissions catalog.

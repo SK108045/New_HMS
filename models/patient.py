@@ -78,22 +78,9 @@ class Patient(db.Model):
         current_year = datetime.utcnow().year
         prefix = f"HSP-{current_year}-"
         
-        target_session = session or db.session
-        # Query highest sequence for current year
-        last_patient = target_session.query(cls).filter(
-            cls.hospital_id.like(f"{prefix}%")
-        ).order_by(cls.id.desc()).first()
-
-        if last_patient and last_patient.hospital_id:
-            try:
-                last_seq = int(last_patient.hospital_id.split('-')[-1])
-                new_seq = last_seq + 1
-            except (ValueError, IndexError):
-                new_seq = 1
-        else:
-            new_seq = 1
-
-        return f"{prefix}{new_seq:04d}"
+        from services.identifiers import next_sequence
+        value = next_sequence(session or db.session, cls.hospital_id, prefix)
+        return f"{prefix}{value:04d}"
 
     def __repr__(self):
         return f"<Patient {self.hospital_id}: {self.full_name}>"

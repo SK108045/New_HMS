@@ -1,3 +1,4 @@
+import math
 import os
 import json
 from datetime import datetime, date, timedelta
@@ -128,20 +129,45 @@ def dashboard():
         seven_day_labels.append(d.strftime('%a, %d %b') if i == 0 else d.strftime('%d %b'))
         seven_day_encounters.append(cnt)
 
-    if sum(seven_day_encounters) < 5:
-        seven_day_encounters = [4, 6, 8, 7, 5, 9, max(len(today_notes), 3)]
+    # 2. Top ICD-10 Diagnoses Managed (Honest aggregate from ConsultationNote)
+    from sqlalchemy import func
+    top_diagnoses = db.session.query(
+        ConsultationNote.icd10_description,
+        ConsultationNote.icd10_code,
+        func.count(ConsultationNote.id).label('cnt')
+    ).filter(
+        ConsultationNote.icd10_description.isnot(None),
+        ConsultationNote.icd10_description != ''
+    ).group_by(
+        ConsultationNote.icd10_description,
+        ConsultationNote.icd10_code
+    ).order_by(func.count(ConsultationNote.id).desc()).limit(6).all()
 
-    # 2. Top ICD-10 Diagnoses Managed
-    icd10_top_labels = ['Hypertension (I10)', 'Malaria (B54)', 'URTI (J06.9)', 'Type 2 Diabetes (E11.9)', 'Gastritis (K29.7)', 'Bronchitis (J20.9)']
-    icd10_top_counts = [5, 4, 6, 3, 4, 2]
+    if top_diagnoses:
+        icd10_top_labels = [f"{desc} ({code})" if code else desc for desc, code, _ in top_diagnoses]
+        icd10_top_counts = [int(cnt) for _, _, cnt in top_diagnoses]
+    else:
+        icd10_top_labels = []
+        icd10_top_counts = []
 
-    # 3. Clinical Order Disposition Share (Donut)
-    rx_only = max(today_rx_count - today_lab_count, 1)
-    lab_only = max(today_lab_count - today_rx_count, 0)
-    combined = min(today_lab_count, today_rx_count) if today_lab_count > 0 else 1
-    advice_only = max(len(today_notes) - today_lab_count - today_rx_count, 1)
+    # 3. Clinical Order Disposition Share (Honest count from today's notes)
+    rx_only = 0
+    lab_only = 0
+    combined = 0
+    advice_only = 0
+    for note in today_notes:
+        has_lab = bool(note.lab_orders)
+        has_rx = bool(note.prescriptions)
+        if has_lab and has_rx:
+            combined += 1
+        elif has_rx:
+            rx_only += 1
+        elif has_lab:
+            lab_only += 1
+        else:
+            advice_only += 1
     disposition_labels = ['e-Prescription Only', 'Combined (Lab + Rx)', 'Lab Request Only', 'Clinical Advice / Review']
-    disposition_counts = [rx_only, combined, max(lab_only, 1), advice_only]
+    disposition_counts = [rx_only, combined, lab_only, advice_only]
 
     # 4. Hourly Flow Today (08:00 - 17:00)
     hourly_labels = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00']
@@ -190,10 +216,17 @@ def consultation(queue_id):
     - Electronic Lab Requester & e-Prescription Pad
     - One-Click Dispatch & Billing Staging
     """
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     queue_entry = QueueEntry.query.get_or_404(queue_id)
     patient = queue_entry.patient
 
     if request.method == 'POST':
+        if request.form.getlist('drug_name[]') and not get_current_user().has_permission('clinical:prescribe'):
+            return 'Forbidden: clinical:prescribe required.', 403
+        if request.form.getlist('lab_tests') and not get_current_user().has_permission('clinical:order_labs'):
+            return 'Forbidden: clinical:order_labs required.', 403
         queue_entry.status = 'in_progress'
 
         # 1. Parse SOAP Fields
@@ -205,7 +238,7 @@ def consultation(queue_id):
         assessment = request.form.get('assessment_notes', '').strip()
         plan = request.form.get('plan_notes', '').strip()
         follow_up_str = request.form.get('follow_up_date', '').strip()
-        doctor_name = request.form.get('doctor_name', queue_entry.assigned_doctor or 'Dr. Sarah Kamau (General OPD)')
+        doctor_name = get_current_user().full_name
         action_route = request.form.get('action_route', 'pharmacy')
 
         follow_up_date = None
@@ -234,19 +267,27 @@ def consultation(queue_id):
         db.session.add(encounter)
         db.session.flush()
 
-        # Staged consultation charge
-        consult_fee = BillingItem(
-            patient_id=patient.id,
-            consultation_id=encounter.id,
+        # Staged consultation charge - avoid duplicate fee if already paid for this queue visit
+        already_paid_fee = BillingItem.query.filter_by(
             queue_entry_id=queue_entry.id,
             service_type='consultation',
-            item_description=f"Physician Consultation - {doctor_name}",
-            quantity=1,
-            unit_price=1000.0,
-            total_amount=1000.0,
-            status='staged'
-        )
-        db.session.add(consult_fee)
+            status='paid'
+        ).first()
+
+        if not already_paid_fee:
+            consult_fee_val = float(current_app.config.get('CONSULTATION_FEE', 500))
+            consult_fee = BillingItem(
+                patient_id=patient.id,
+                consultation_id=encounter.id,
+                queue_entry_id=queue_entry.id,
+                service_type='consultation',
+                item_description=f"Physician Consultation - {doctor_name}",
+                quantity=1,
+                unit_price=consult_fee_val,
+                total_amount=consult_fee_val,
+                status='staged'
+            )
+            db.session.add(consult_fee)
 
         # 2. Parse Selected Lab Tests
         selected_lab_ids = request.form.getlist('lab_tests')
@@ -293,6 +334,9 @@ def consultation(queue_id):
         quantities = request.form.getlist('drug_quantity[]')
         instructions = request.form.getlist('drug_instructions[]')
         prices = request.form.getlist('drug_price[]')
+        medication_ids = request.form.getlist('medication_id[]')
+
+        from models import MedicationItem
 
         med_items = []
         rx_total = 0.0
@@ -300,12 +344,32 @@ def consultation(queue_id):
         for i in range(len(drug_names)):
             d_name = drug_names[i].strip()
             if d_name:
-                qty = int(quantities[i]) if i < len(quantities) and quantities[i].isdigit() else 1
-                price = float(prices[i]) if i < len(prices) and prices[i].replace('.', '', 1).isdigit() else 20.0
-                item_total = price * qty
+                try:
+                    qty = int(quantities[i])
+                    if qty <= 0:
+                        raise ValueError()
+                except (ValueError, IndexError):
+                    db.session.rollback()
+                    flash('Every medication requires a positive whole-number quantity.', 'error')
+                    return redirect(url_for('doctor.consultation', queue_id=queue_id))
+                from pharmacy.routes import resolve_prescribed_medication
+                medication_input = {'drug': d_name, 'dosage': dosages[i] if i < len(dosages) else '',
+                                    'medication_id': medication_ids[i] if i < len(medication_ids) else None}
+                medication, error = resolve_prescribed_medication(medication_input)
+                if error:
+                    db.session.rollback()
+                    flash(error, 'error')
+                    return redirect(url_for('doctor.consultation', queue_id=queue_id))
+                med_id_val = medication.id
+                price = float(medication.unit_price)
+                if not math.isfinite(price) or price < 0:
+                    db.session.rollback()
+                    return 'Medication price is invalid; contact inventory administration.', 400
+                item_total = round(price * qty, 2)
                 rx_total += item_total
 
                 med_obj = {
+                    "medication_id": med_id_val,
                     "drug": d_name,
                     "dosage": dosages[i] if i < len(dosages) else '',
                     "frequency": frequencies[i] if i < len(frequencies) else '',
@@ -395,11 +459,14 @@ def patient_chart(patient_id):
     return direct_consult(patient_id)
 
 
-@doctor_bp.route('/patient/<int:patient_id>/consult', methods=['GET'])
+@doctor_bp.route('/patient/<int:patient_id>/consult', methods=['GET', 'POST'])
 def direct_consult(patient_id):
     """
     Directly initiate consultation for a patient (e.g. from Appointment or Lab results).
     """
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     patient = Patient.query.get_or_404(patient_id)
     today_start = datetime.combine(date.today(), datetime.min.time())
 
@@ -409,6 +476,8 @@ def direct_consult(patient_id):
         QueueEntry.stage == 'consultation'
     ).first()
 
+    if not q and request.method == 'GET':
+        return render_template('doctor/start_consultation.html', patient=patient)
     if not q:
         t_num = QueueEntry.generate_daily_ticket(db.session)
         q = QueueEntry(
@@ -419,9 +488,11 @@ def direct_consult(patient_id):
             status='in_progress',
             chief_complaint='Follow-up / Scheduled Consultation',
             destination_department='General OPD',
-            assigned_doctor='Dr. Sarah Kamau (General OPD)'
+            assigned_doctor=get_current_user().full_name
         )
         db.session.add(q)
+        db.session.flush()
+        AuditLog.log_event('consultation_started', 'queue_entry', q.id, actor=get_current_user())
         db.session.commit()
 
     return redirect(url_for('doctor.consultation', queue_id=q.id))
@@ -508,27 +579,139 @@ def appointments():
 def lab_results():
     """
     Central Diagnostic Lab Results Inbox for review and sign-off.
+    GET must never invent or persist results.
     """
     orders = LabOrder.query.order_by(LabOrder.created_at.desc()).all()
-
-    # Seed realistic lab findings if empty
-    for order in orders:
-        if not order.result_data:
-            order.result_data = json.dumps({
-                "Hemoglobin (Hb)": "14.2 g/dL (Normal: 13.0 - 17.5)",
-                "WBC Count": "10.8 x10^9/L (Slight Leukocytosis)",
-                "Platelets": "260 x10^9/L (Normal)",
-                "Malaria Blood Slide": "Negative for Plasmodium trophozoites",
-                "Urinalysis Dipstick": "Leukocytes: Trace, Nitrites: Negative, Protein: Negative"
-            })
-            db.session.commit()
-
     return render_template('doctor/lab_results.html', orders=orders)
+
+
+@doctor_bp.route('/lab_results/<int:order_id>/record', methods=['POST'])
+@doctor_bp.route('/lab_results/record', methods=['POST'])
+@permission_required('clinical:record_results')
+def record_lab_results(order_id=None):
+    """
+    Minimal deliberate authenticated result-entry endpoint.
+    Permission clinical:record_results enforced.
+    Validates structured result input, records actual actor/provenance, and marks order completed.
+    """
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
+    if order_id is None:
+        order_id = request.form.get('order_id', type=int)
+        if not order_id and request.is_json:
+            order_id = request.json.get('order_id')
+
+    if not order_id:
+        if request.is_json:
+            return jsonify({'success': False, 'error': 'order_id is required'}), 400
+        flash('Order ID is required to record lab results.', 'error')
+        return redirect(url_for('doctor.lab_results'))
+
+    order = LabOrder.query.get_or_404(order_id)
+    if order.status != 'pending':
+        if request.is_json:
+            return jsonify({'success': False, 'error': 'Only a pending order can receive initial results. Completed results require a documented amendment.'}), 400
+        flash('Cannot record results for a cancelled lab order.', 'error')
+        return redirect(url_for('doctor.lab_results'))
+
+    actor = get_current_user()
+    actor_name = actor.full_name if actor else 'Staff'
+    actor_id = actor.id if actor else None
+
+    results_payload = {}
+    if request.is_json:
+        data = request.get_json() or {}
+        results_payload = data.get('results') or data.get('result_data') or {}
+        if isinstance(results_payload, str):
+            try:
+                results_payload = json.loads(results_payload)
+            except Exception:
+                results_payload = {"Findings": results_payload}
+    else:
+        test_keys = request.form.getlist('test_param[]') or request.form.getlist('param_name[]')
+        test_vals = request.form.getlist('test_value[]') or request.form.getlist('param_value[]')
+        if test_keys and test_vals:
+            for k, v in zip(test_keys, test_vals):
+                k_c, v_c = k.strip(), v.strip()
+                if k_c and v_c:
+                    results_payload[k_c] = v_c
+
+        raw_json = request.form.get('results_json', '').strip()
+        if raw_json:
+            try:
+                parsed = json.loads(raw_json)
+                if isinstance(parsed, dict):
+                    results_payload.update(parsed)
+            except Exception:
+                pass
+
+        findings_text = request.form.get('findings', '').strip()
+        if findings_text and not results_payload:
+            results_payload = {"Diagnostic Findings": findings_text}
+
+        for t in order.test_list:
+            t_name = t.get('name', str(t)) if isinstance(t, dict) else str(t)
+            val = request.form.get(f'result_{t_name}') or (request.form.get(f"result_{t.get('code')}") if isinstance(t, dict) and t.get('code') else None)
+            if val and val.strip():
+                results_payload[t_name] = val.strip()
+
+    if (not isinstance(results_payload, dict) or not results_payload
+            or len(results_payload) > 100 or any(not isinstance(k, str) or not k.strip() or k.startswith('_') or not isinstance(v, (str, int, float)) or not str(v).strip() or len(k) > 200 or len(str(v)) > 10000 or (isinstance(v, float) and not __import__('math').isfinite(v)) for k, v in results_payload.items())):
+        if request.is_json:
+            return jsonify({'success': False, 'error': 'Structured non-empty test results are required.'}), 400
+        flash('Structured laboratory test results cannot be empty.', 'error')
+        return redirect(url_for('doctor.lab_results'))
+
+    provenance = {
+        "recorded_by_id": actor_id,
+        "recorded_by": actor_name,
+        "recorded_at": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+    }
+    stored = {key: str(value) for key, value in results_payload.items()}
+    stored["_provenance"] = provenance
+
+    order.result_data = json.dumps(stored)
+    order.status = 'completed'
+
+    if order.queue_entry and order.queue_entry.stage == 'laboratory':
+        order.queue_entry.stage = 'consultation'
+        order.queue_entry.status = 'waiting'
+
+    db.session.flush()
+
+    AuditLog.log_event(
+        'recorded_lab_results',
+        'lab_order',
+        order.id,
+        f"Recorded lab results for Order #{order.order_number} ({order.patient.full_name}) by {actor_name}.",
+        actor=actor,
+        severity='info'
+    )
+    db.session.commit()
+
+    if request.is_json:
+        return jsonify({
+            'success': True,
+            'order_id': order.id,
+            'order_number': order.order_number,
+            'status': order.status,
+            'results': results_payload
+        })
+
+    flash(f"Laboratory findings for Order {order.order_number} successfully recorded and verified.", 'success')
+    return redirect(url_for('doctor.lab_results'))
 
 
 @doctor_bp.route('/lab_results/<int:order_id>/review', methods=['POST'])
 def review_lab_order(order_id):
+    if request.method == 'POST':
+        from services.transactions import begin_write
+        begin_write()
     order = LabOrder.query.get_or_404(order_id)
+    if order.status != 'completed':
+        flash('Only completed lab results can be reviewed and signed off.', 'warning')
+        return redirect(url_for('doctor.lab_results'))
     order.reviewed_by_doctor = True
     order.reviewed_at = datetime.utcnow()
     db.session.commit()
@@ -697,7 +880,7 @@ def generate_medical_certificate(patient_id):
         }
 
         db.session.add(doc)
-        db.session.commit()
+        db.session.flush()
 
         AuditLog.log_event(
             'issued_medical_certificate',
@@ -707,6 +890,7 @@ def generate_medical_certificate(patient_id):
             actor=actor,
             severity='info'
         )
+        db.session.commit()
 
         flash(f"Medical Certificate {doc.document_number} generated successfully.", 'success')
         return redirect(url_for('doctor.print_medical_certificate', patient_id=patient.id, doc_id=doc.id))
@@ -721,7 +905,7 @@ def generate_medical_certificate(patient_id):
 @doctor_bp.route('/patient/<int:patient_id>/medical-certificate/<int:doc_id>/print')
 def print_medical_certificate(patient_id, doc_id):
     patient = Patient.query.get_or_404(patient_id)
-    doc = ClinicalDocument.query.get_or_404(doc_id)
+    doc = ClinicalDocument.query.filter_by(id=doc_id, patient_id=patient_id, document_type='medical_certificate').first_or_404()
     return render_template('clinical/print_medical_certificate.html', patient=patient, doc=doc)
 
 
@@ -772,7 +956,7 @@ def generate_referral_letter(patient_id):
         }
 
         db.session.add(doc)
-        db.session.commit()
+        db.session.flush()
 
         AuditLog.log_event(
             'issued_referral_letter',
@@ -782,6 +966,7 @@ def generate_referral_letter(patient_id):
             actor=actor,
             severity='info'
         )
+        db.session.commit()
 
         flash(f"Referral Letter {doc.document_number} issued successfully.", 'success')
         return redirect(url_for('doctor.print_referral_letter', patient_id=patient.id, doc_id=doc.id))
@@ -796,7 +981,7 @@ def generate_referral_letter(patient_id):
 @doctor_bp.route('/patient/<int:patient_id>/referral/<int:doc_id>/print')
 def print_referral_letter(patient_id, doc_id):
     patient = Patient.query.get_or_404(patient_id)
-    doc = ClinicalDocument.query.get_or_404(doc_id)
+    doc = ClinicalDocument.query.filter_by(id=doc_id, patient_id=patient_id, document_type='referral_letter').first_or_404()
     return render_template('clinical/print_referral_letter.html', patient=patient, doc=doc)
 
 
@@ -821,27 +1006,22 @@ def upload_attachment(patient_id):
 
     if not title:
         flash('Document title is required.', 'error')
-        return redirect(url_for('doctor.patient_chart', patient_id=patient.id))
+        return redirect(request.referrer or url_for('doctor.patient_chart', patient_id=patient.id))
 
-    saved_path = None
-    original_filename = None
-    file_size = 0
-    mime_type = None
+    if not file or not file.filename:
+        flash('Please select a valid document file to upload.', 'error')
+        return redirect(request.referrer or url_for('doctor.patient_chart', patient_id=patient.id))
 
-    if file and file.filename:
-        filename = secure_filename(file.filename)
-        original_filename = filename
-        upload_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'documents')
-        os.makedirs(upload_folder, exist_ok=True)
-        
-        timestamp_prefix = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        stored_filename = f"{timestamp_prefix}_{filename}"
-        file_dest = os.path.join(upload_folder, stored_filename)
-        file.save(file_dest)
-        
-        saved_path = f"uploads/documents/{stored_filename}"
-        file_size = os.path.getsize(file_dest)
-        mime_type = file.mimetype
+    from services.private_files import store_document
+
+    try:
+        meta = store_document(file)
+    except ValueError as e:
+        flash(f"Upload rejected: {str(e)}", 'error')
+        return redirect(request.referrer or url_for('doctor.patient_chart', patient_id=patient.id))
+    except Exception as e:
+        flash(f"Upload failed: {str(e)}", 'error')
+        return redirect(request.referrer or url_for('doctor.patient_chart', patient_id=patient.id))
 
     doc_num = ClinicalDocument.generate_document_number(doc_type, db.session)
     doc = ClinicalDocument(
@@ -850,17 +1030,17 @@ def upload_attachment(patient_id):
         document_type=doc_type,
         title=title,
         description=description,
-        file_path=saved_path,
-        file_name=original_filename,
-        file_size=file_size,
-        mime_type=mime_type,
+        file_path=meta['file_path'],
+        file_name=meta.get('file_name', secure_filename(file.filename)),
+        file_size=meta.get('file_size', 0),
+        mime_type=meta.get('mime_type'),
         created_by_id=actor.id if actor else None,
         created_by_name=actor.full_name if actor else 'Attending Clinician',
         created_at=datetime.utcnow()
     )
 
     db.session.add(doc)
-    db.session.commit()
+    db.session.flush()
 
     AuditLog.log_event(
         'uploaded_clinical_document',
@@ -870,6 +1050,7 @@ def upload_attachment(patient_id):
         actor=actor,
         severity='info'
     )
+    db.session.commit()
 
     flash(f"Attachment '{title}' uploaded to patient records successfully.", 'success')
     return redirect(request.referrer or url_for('doctor.patient_chart', patient_id=patient.id))

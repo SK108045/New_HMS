@@ -248,42 +248,63 @@
                 <h2 class="text-sm font-black text-slate-950 uppercase tracking-wide">Emergency Next-of-Kin & Deposit</h2>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 
                 <div>
                     <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
-                        Next-of-Kin Name
+                        Emergency Contact Name (Optional)
                     </label>
                     <input 
                         type="text" 
                         name="emergency_contact_name" 
-                        placeholder="e.g. David Mwangi" 
+                        value="{{ selected_patient.next_of_kin_name if selected_patient and selected_patient.next_of_kin_name else '' }}"
+                        placeholder="{{ selected_patient.next_of_kin_name if selected_patient and selected_patient.next_of_kin_name else 'e.g. David Mwangi' }}"
                         class="form-input text-xs"
                     >
+                    <span class="text-[10px] text-slate-500 font-mono mt-0.5 block">Defaults to Patient Next-of-Kin</span>
                 </div>
 
                 <div>
                     <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
-                        Contact Phone
+                        Contact Phone (Optional)
                     </label>
                     <input 
                         type="text" 
                         name="emergency_contact_phone" 
-                        placeholder="+254 700 000 000" 
+                        value="{{ selected_patient.next_of_kin_phone if selected_patient and selected_patient.next_of_kin_phone else '' }}"
+                        placeholder="{{ selected_patient.next_of_kin_phone if selected_patient and selected_patient.next_of_kin_phone else '+254 700 000 000' }}"
                         class="form-input text-xs font-mono"
                     >
+                    <span class="text-[10px] text-slate-500 font-mono mt-0.5 block">Defaults to Next-of-Kin Phone</span>
                 </div>
 
                 <div>
                     <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
-                        Relationship
+                        Relationship (Optional)
                     </label>
                     <input 
                         type="text" 
                         name="emergency_contact_relation" 
-                        placeholder="Spouse / Parent / Sibling" 
+                        value="{{ selected_patient.next_of_kin_relation if selected_patient and selected_patient.next_of_kin_relation else '' }}"
+                        placeholder="{{ selected_patient.next_of_kin_relation if selected_patient and selected_patient.next_of_kin_relation else 'Spouse / Parent / Sibling' }}"
                         class="form-input text-xs"
                     >
+                    <span class="text-[10px] text-slate-500 font-mono mt-0.5 block">Defaults to Next-of-Kin Relation</span>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-extrabold text-slate-800 uppercase tracking-wider mb-1 font-mono">
+                        Admission Deposit (KES)
+                    </label>
+                    <input
+                        type="number"
+                        name="deposit_amount"
+                        min="0"
+                        step="any"
+                        placeholder="0.00"
+                        class="form-input text-xs font-mono"
+                    >
+                    <span class="text-[10px] text-slate-500 font-mono mt-0.5 block">Declared deposit intake</span>
                 </div>
 
             </div>

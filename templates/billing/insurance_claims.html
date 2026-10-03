@@ -185,11 +185,15 @@
     <div x-show="showNewClaimModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
         <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-2xl max-w-lg w-full p-6 space-y-4" @click.stop>
             <div class="flex items-center justify-between border-b pb-3">
-                <h3 class="text-base font-black text-slate-950">New Insurance / SHA Pre-Authorisation</h3>
+                <div>
+                    <h3 class="text-base font-black text-slate-950">New Insurance / SHA Pre-Authorisation</h3>
+                    <p class="text-[11px] text-slate-500 font-medium">Internal Hospital Recording Only • Not direct integration with insurer</p>
+                </div>
                 <button type="button" @click="showNewClaimModal = false" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
             </div>
 
             <form method="POST" action="{{ url_for('billing.create_preauth_claim') }}" class="space-y-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div>
                     <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Select Patient Invoice *</label>
                     <select name="invoice_id" required class="form-select text-xs w-full rounded-xl border-slate-300">
@@ -217,7 +221,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Pre-Auth Approval Code</label>
-                        <input type="text" name="preauth_code" placeholder="Auto-generated if blank" class="form-input text-xs w-full rounded-xl border-slate-300">
+                        <input type="text" name="preauth_code" placeholder="Leave blank if pending insurer response" class="form-input text-xs w-full rounded-xl border-slate-300">
                     </div>
                 </div>
 
@@ -233,7 +237,52 @@
 
                 <div class="pt-2 flex items-center justify-end gap-2">
                     <button type="button" @click="showNewClaimModal = false" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-900 hover:bg-blue-950 text-white font-black rounded-xl text-xs">Generate Pre-Auth &rarr;</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-900 hover:bg-blue-950 text-white font-black rounded-xl text-xs">Record Pre-Auth &rarr;</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- UPDATE CLAIM STATUS MODAL -->
+    <div x-show="showUpdateModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+        <div class="bg-white rounded-3xl border-2 border-slate-300 shadow-2xl max-w-md w-full p-6 space-y-4" @click.stop>
+            <div class="flex items-center justify-between border-b pb-3">
+                <h3 class="text-base font-black text-slate-950">Update Insurance Claim Status</h3>
+                <button type="button" @click="showUpdateModal = false" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+            </div>
+
+            <form method="POST" :action="'/billing/claims/' + selectedClaim + '/update-status'" class="space-y-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">New Claim Status *</label>
+                    <select name="status" x-model="newStatus" required class="form-select text-xs w-full rounded-xl border-slate-300">
+                        <option value="preauth_approved">Pre-Auth Approved by Insurer</option>
+                        <option value="submitted">Submitted to Insurer</option>
+                        <option value="reimbursed">Reimbursed / Settled</option>
+                        <option value="rejected">Rejected by Insurer</option>
+                        <option value="disputed">Disputed / In Review</option>
+                    </select>
+                </div>
+
+                <div x-show="newStatus === 'preauth_approved'">
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Provider Pre-Auth Approval Code *</label>
+                    <input type="text" name="preauth_code" placeholder="Enter insurer authorization code" class="form-input text-xs w-full rounded-xl border-slate-300">
+                </div>
+
+                <div x-show="newStatus === 'reimbursed'">
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Reimbursed Amount (KES) *</label>
+                    <input type="number" step="0.01" name="approved_amount" placeholder="Final reimbursed amount" class="form-input text-xs w-full rounded-xl border-slate-300 font-mono font-bold">
+                </div>
+
+                <div x-show="newStatus === 'rejected'">
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Rejection Reason *</label>
+                    <textarea name="rejection_reason" rows="2" placeholder="Reason stated by insurance underwriter" class="form-input text-xs w-full rounded-xl border-slate-300"></textarea>
+                </div>
+
+                <div class="pt-2 flex items-center justify-end gap-2">
+                    <button type="button" @click="showUpdateModal = false" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-slate-900 hover:bg-slate-950 text-white font-black rounded-xl text-xs">Update Status &rarr;</button>
                 </div>
             </form>
         </div>

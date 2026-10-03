@@ -56,9 +56,35 @@
             <span class="text-lg font-black text-emerald-800 font-mono">
                 KES {{ "{:,.2f}".format(admission.total_bed_charge) }}
             </span>
-            <span class="text-[10px] font-bold text-slate-600 block">({{ admission.length_of_stay_days }}d &times; KES {{ "{:,.0f}".format(admission.bed.daily_rate) }})</span>
+            {% set segs = admission.get_bed_stay_segments() %}
+            {% if segs|length > 1 %}
+                <span class="text-[10px] font-bold text-slate-600 block">({{ segs|length }} Stay Segments with rate snapshots)</span>
+            {% else %}
+                <span class="text-[10px] font-bold text-slate-600 block">({{ admission.length_of_stay_days }}d &times; KES {{ "{:,.0f}".format(admission.initial_bed_rate or (admission.bed.daily_rate if admission.bed else 1500.0)) }})</span>
+            {% endif %}
         </div>
     </div>
+
+    <!-- Stay Segments Breakdown (if transferred) -->
+    {% set segs = admission.get_bed_stay_segments() %}
+    {% if segs|length > 1 %}
+        <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs">
+            <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider mb-2">Bed-Stay Segments &amp; Tariff Breakdown:</h4>
+            <div class="divide-y divide-slate-100 text-xs">
+                {% for seg in segs %}
+                    <div class="py-1.5 flex items-center justify-between">
+                        <div>
+                            <span class="font-bold text-slate-800">{{ seg.ward_name }} - {{ seg.bed_number }}</span>
+                            <span class="text-[11px] text-slate-500 font-mono ml-2">({{ seg.start_time.strftime('%d %b %H:%M') }} &rarr; {{ seg.end_time.strftime('%d %b %H:%M') }})</span>
+                        </div>
+                        <div class="font-mono text-slate-900">
+                            {{ seg.days }}d @ KES {{ "{:,.2f}".format(seg.rate) }} = <strong>KES {{ "{:,.2f}".format(seg.charge) }}</strong>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
 
     <!-- Main Discharge Form Card -->
     <form method="POST" action="{{ url_for('inpatient.discharge', admission_id=admission.id) }}" class="bg-white rounded-2xl border-2 border-slate-200 shadow-md p-6 sm:p-8 space-y-6">

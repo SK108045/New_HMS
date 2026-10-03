@@ -58,9 +58,8 @@ class ClinicalDocument(db.Model):
         prefix = prefix_map.get(doc_type, 'DOC')
         today_str = date.today().strftime('%Y%m')
         sess = session or db.session
-        count = sess.query(cls).filter(
-            cls.document_number.like(f'{prefix}-{today_str}-%')
-        ).count()
+        from services.identifiers import next_sequence
+        count = next_sequence(sess, cls.document_number, (f'{prefix}-{today_str}-%').removesuffix("%")) - 1
         return f"{prefix}-{today_str}-{count + 1:04d}"
 
     @property

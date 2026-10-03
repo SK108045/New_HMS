@@ -1,11 +1,11 @@
 import json
 from datetime import datetime
-from flask import request
+from flask import request, has_request_context
 from .base import db
 
 class AuditLog(db.Model):
     """
-    Immutable, Tamper-Evident System Audit Trail.
+    Application audit records committed with their associated business transaction.
     Logs all clinical actions, security events, 2FA verifications, and financial modifications.
     """
     __tablename__ = 'audit_logs'
@@ -30,18 +30,19 @@ class AuditLog(db.Model):
 
     @classmethod
     def log_event(cls, action, entity_type, entity_id=None, details="", actor=None, severity='info', extra_data=None):
-        """Standardized helper to log immutable audit events."""
+        """Stage an audit record; never commit or roll back a caller's transaction."""
         ip = None
         ua = None
         try:
             if request:
-                ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-                if ip and ',' in ip:
-                    ip = ip.split(',')[0].strip()
+                ip = request.remote_addr
                 ua = request.user_agent.string[:250] if request.user_agent else None
         except Exception:
             pass
 
+        if actor is None and has_request_context():
+            from auth.decorators import get_current_user
+            actor = get_current_user()
         actor_name = 'System'
         actor_id = None
         if actor:
@@ -69,10 +70,7 @@ class AuditLog(db.Model):
             created_at=datetime.utcnow()
         )
         db.session.add(log_entry)
-        try:
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
+        db.session.flush()
         return log_entry
 
     def __repr__(self):

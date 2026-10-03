@@ -2,7 +2,8 @@ import os
 import json
 import time
 from datetime import datetime, date, timedelta
-from flask import Flask, redirect, url_for, session, request, flash, send_from_directory
+from flask import Flask, redirect, url_for, session, request, flash, send_file, jsonify, abort, render_template
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from config import Config
 from models import (
     db, Patient, QueueEntry, Appointment, VitalsRecord,
@@ -21,19 +22,54 @@ from billing import billing_bp
 from admin import admin_bp
 from inpatient import inpatient_bp
 
+csrf = CSRFProtect()
+
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Ensure upload folders exist
+    _configure_secret(app)
+
+    # Patient files are private; public assets stay in static/.
+    os.makedirs(app.config['PRIVATE_UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    os.makedirs(os.path.join(app.root_path, 'static', 'uploads', 'documents'), exist_ok=True)
     os.makedirs(os.path.join(app.root_path, 'static', 'dist'), exist_ok=True)
     os.makedirs(os.path.join(app.root_path, 'static', 'js'), exist_ok=True)
     os.makedirs(os.path.join(app.root_path, 'static', 'images'), exist_ok=True)
 
     # Initialize extensions
     db.init_app(app)
+    csrf.init_app(app)
+    with app.app_context():
+        if db.engine.dialect.name == 'sqlite':
+            from sqlalchemy import event
+            @event.listens_for(db.engine, 'connect')
+            def configure_sqlite(connection, record):
+                cursor = connection.cursor()
+                cursor.execute('PRAGMA foreign_keys=ON')
+                cursor.execute('PRAGMA busy_timeout=10000')
+                if app.config.get('TESTING'):
+                    # Disposable fixtures do not need crash durability or filesystem syncs.
+                    cursor.execute('PRAGMA synchronous=OFF')
+                    cursor.execute('PRAGMA journal_mode=MEMORY')
+                cursor.close()
+
+    # Custom CSRF Error Handler
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(e):
+        if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': f'CSRF token validation failed: {e.description}'}), 400
+        return f"""<!DOCTYPE html>
+<html>
+<head><title>400 Bad Request - CSRF Validation Failed</title></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 50px 20px; text-align: center; background-color: #f8fafc; color: #0f172a;">
+    <div style="max-width: 500px; margin: 0 auto; background: white; padding: 32px; border-radius: 16px; border: 2px solid #cbd5e1; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
+        <h2 style="color: #dc2626; margin-top: 0;">400 Bad Request &bull; CSRF Token Error</h2>
+        <p style="color: #475569; font-size: 14px;">The request could not be processed because the Anti-CSRF security token is missing or invalid: <strong>{e.description}</strong>.</p>
+        <p style="margin-top: 24px;"><a href="javascript:history.back()" style="display: inline-block; padding: 10px 20px; background: #0f172a; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 13px;">&larr; Return &amp; Try Again</a></p>
+    </div>
+</body>
+</html>""", 400
 
     # Register blueprints
     app.register_blueprint(auth_bp)
@@ -45,11 +81,56 @@ def create_app(config_class=Config):
     app.register_blueprint(admin_bp)
     app.register_blueprint(inpatient_bp)
 
+    @app.route('/webhooks/paystack', methods=['POST'])
+    @csrf.exempt
+    def paystack_webhook():
+        from services.paystack_service import paystack_service
+        from models import PaystackTransaction
+        import hashlib, hmac
+        from decimal import Decimal, InvalidOperation
+        secret = paystack_service.get_secret_key()
+        if not secret:
+            return jsonify({'error': 'Gateway not configured.'}), 503
+        signature = request.headers.get('X-Paystack-Signature', '')
+        expected = hmac.new(secret.encode(), request.get_data(), hashlib.sha512).hexdigest()
+        if not hmac.compare_digest(expected, signature):
+            abort(403)
+        event = request.get_json(silent=True)
+        if not isinstance(event, dict):
+            abort(400)
+        if event.get('event') != 'charge.success':
+            return '', 200
+        data = event.get('data')
+        if not isinstance(data, dict) or not isinstance(data.get('reference'), str):
+            abort(400)
+        tx = PaystackTransaction.query.filter_by(reference=data['reference']).first()
+        if not tx:
+            return '', 200  # Another application may share this provider account.
+        try:
+            amount = Decimal(str(data.get('amount'))) / Decimal(100)
+            if not amount.is_finite():
+                raise ValueError()
+            verification = {'paid': True, 'status': data.get('status'), 'reference': data['reference'],
+                            'currency': data.get('currency'), 'amount': amount}
+            paystack_service.settle_consultation_payment(tx.reference, verification=verification,
+                                                        destination_dept=tx.destination_department,
+                                                        assigned_doctor=tx.assigned_doctor)
+        except (ValueError, InvalidOperation):
+            db.session.rollback()
+            abort(400)
+        return '', 200
+
     # Sliding Session Inactivity Middleware
     @app.before_request
     def enforce_session_security():
-        # Exclude static assets and authentication endpoints
-        if request.endpoint and (request.endpoint.startswith('static') or request.endpoint.startswith('auth.')):
+        # Never serve patient files through the public static handler.
+        if request.endpoint == 'static' and request.view_args:
+            filename = request.view_args.get('filename', '').replace('\\', '/')
+            if filename == 'uploads' or filename.startswith('uploads/'):
+                abort(404)
+
+        # Exclude public assets and authentication workflows.
+        if request.endpoint and (request.endpoint.startswith('static')):
             return
 
         if 'user_id' in session:
@@ -71,6 +152,9 @@ def create_app(config_class=Config):
             
             # Renew sliding activity timestamp
             session['last_active'] = now_ts
+
+        from auth.policy import enforce_request_security
+        return enforce_request_security()
 
     @app.route('/')
     def index():
@@ -97,10 +181,27 @@ def create_app(config_class=Config):
     # Universal Document Viewer & Streamer
     @app.route('/documents/view/<int:doc_id>')
     def view_document(doc_id):
+        from auth.decorators import get_current_user
+        user = get_current_user()
+        if not user or not user.has_permission('patient:view'):
+            abort(403)
         doc = ClinicalDocument.query.get_or_404(doc_id)
         if doc.file_path:
-            file_dir = os.path.join(app.root_path, 'static')
-            return send_from_directory(file_dir, doc.file_path)
+            from services.private_files import private_path
+            try:
+                path = private_path(doc.file_path)
+            except ValueError:
+                abort(404)
+            if not path.is_file():
+                abort(404)
+            response = send_file(path, as_attachment=not (doc.is_image or doc.is_pdf),
+                                 download_name=doc.file_name or path.name)
+            response.headers['Cache-Control'] = 'private, no-store'
+            response.headers['X-Content-Type-Options'] = 'nosniff'
+            response.headers['Content-Security-Policy'] = "sandbox; default-src 'none'"
+            AuditLog.log_event('document_viewed', 'clinical_document', doc.id, actor=user)
+            db.session.commit()
+            return response
         elif doc.document_type == 'medical_certificate':
             return redirect(url_for('doctor.print_medical_certificate', patient_id=doc.patient_id, doc_id=doc.id))
         elif doc.document_type == 'referral_letter':
@@ -110,42 +211,29 @@ def create_app(config_class=Config):
         flash('This document has no uploaded file attachment.', 'info')
         return redirect(request.referrer or url_for('doctor.dashboard'))
 
-    def get_network_base_url():
-        """Detect LAN IP / base URL for network sharing of onboarding links."""
-        env_base = os.getenv('HMS_BASE_URL')
-        if env_base:
-            return env_base.rstrip('/')
-        
-        # Check if host in current request is already a network domain/IP
+    @app.route('/patients/<int:patient_id>/photo')
+    def patient_photo(patient_id):
+        from auth.decorators import get_current_user
+        from services.private_files import private_path
+        user = get_current_user()
+        if not user or not user.has_permission('patient:view'):
+            abort(403)
+        patient = Patient.query.get_or_404(patient_id)
+        if not patient.photo_filename:
+            abort(404)
         try:
-            from flask import request as req
-            host = req.host
-            if host and not host.startswith(('127.0.0.1', 'localhost')):
-                scheme = req.scheme or 'http'
-                return f"{scheme}://{host}"
-        except Exception:
-            pass
-        
-        # Auto-detect machine LAN IP on the local network (e.g. 192.168.x.x)
-        import socket
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            s.connect(('8.8.8.8', 80))
-            lan_ip = s.getsockname()[0]
-        except Exception:
-            lan_ip = '127.0.0.1'
-        finally:
-            s.close()
-        
-        port = 5000
-        try:
-            from flask import request as req
-            if req and req.host and ':' in req.host:
-                port = req.host.split(':')[1]
-        except Exception:
-            pass
+            path = private_path('uploads/photos/' + patient.photo_filename)
+        except ValueError:
+            abort(404)
+        if not path.is_file():
+            abort(404)
+        response = send_file(path)
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        return response
 
-        return f"http://{lan_ip}:{port}"
+    def get_network_base_url():
+        return (os.environ.get('HMS_BASE_URL') or request.url_root).rstrip('/')
 
     # Context processors for global template helpers
     @app.context_processor
@@ -188,7 +276,9 @@ def create_app(config_class=Config):
             base = get_network_base_url()
             return f"{base}/auth/onboard-2fa/{token}"
 
+        import uuid
         return {
+            'new_request_key': lambda: uuid.uuid4().hex,
             'now': datetime.utcnow(),
             'today': date.today(),
             'facility_name': app.config.get('FACILITY_NAME', 'Apex Regional Medical Center'),
@@ -216,58 +306,55 @@ def create_app(config_class=Config):
             return '-'
         return value.strftime(format)
 
-    with app.app_context():
-        upgrade_db_schema()
-        db.create_all()
-        seed_initial_data()
-
+    register_cli(app)
+    if app.config.get('AUTO_INIT_DB', True):
+        with app.app_context():
+            from migrations import upgrade_database
+            upgrade_database()
+            seed_security_catalog()
+            if app.config.get('SEED_DEMO_DATA', False):
+                if not app.config.get('DEMO_LOGIN_ENABLED') or app.config.get('ENVIRONMENT') == 'production':
+                    raise RuntimeError('Demo data requires explicit development demo mode.')
+                seed_initial_data()
     return app
 
-def upgrade_db_schema():
-    """
-    Ensures missing columns in existing SQLite tables are dynamically added without data loss.
-    """
-    with db.engine.connect() as conn:
-        # Check users table
-        try:
-            res = conn.execute(db.text("PRAGMA table_info(users)"))
-            cols = {row[1] for row in res.fetchall()}
-            if cols:
-                user_alterations = [
-                    ("is_2fa_enabled", "BOOLEAN DEFAULT 0"),
-                    ("totp_secret", "VARCHAR(64)"),
-                    ("backup_codes_json", "TEXT"),
-                    ("failed_login_attempts", "INTEGER DEFAULT 0"),
-                    ("locked_until", "DATETIME"),
-                    ("password_changed_at", "DATETIME"),
-                    ("force_password_change", "BOOLEAN DEFAULT 0"),
-                    ("last_activity_at", "DATETIME"),
-                    ("custom_permissions_json", "TEXT")
-                ]
-                for col_name, col_type in user_alterations:
-                    if col_name not in cols:
-                        conn.execute(db.text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
-                        conn.commit()
-        except Exception:
-            pass
 
-        # Check audit_logs table
+def _configure_secret(app):
+    """Stable development sessions; explicit strong secret required in production."""
+    if app.config.get('SECRET_KEY'):
+        if app.config.get('ENVIRONMENT') == 'production' and len(app.config['SECRET_KEY']) < 32:
+            raise RuntimeError('Production SECRET_KEY must contain at least 32 characters.')
+        return
+    if app.config.get('ENVIRONMENT') == 'production':
+        raise RuntimeError('Set SECRET_KEY before starting HMS in production.')
+    import secrets
+    import tempfile
+    from pathlib import Path
+    path = Path(app.instance_path) / '.secret_key'
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if not path.exists():
+        descriptor, temporary = tempfile.mkstemp(prefix='.secret-', dir=path.parent)
         try:
-            res = conn.execute(db.text("PRAGMA table_info(audit_logs)"))
-            cols = {row[1] for row in res.fetchall()}
-            if cols:
-                audit_alterations = [
-                    ("ip_address", "VARCHAR(64)"),
-                    ("user_agent", "VARCHAR(255)"),
-                    ("severity", "VARCHAR(30) DEFAULT 'info'"),
-                    ("details_json", "TEXT")
-                ]
-                for col_name, col_type in audit_alterations:
-                    if col_name not in cols:
-                        conn.execute(db.text(f"ALTER TABLE audit_logs ADD COLUMN {col_name} {col_type}"))
-                        conn.commit()
-        except Exception:
-            pass
+            with os.fdopen(descriptor, 'w') as file:
+                file.write(secrets.token_urlsafe(48))
+                file.flush()
+                os.fsync(file.fileno())
+            try:
+                os.link(temporary, path)  # Publish a complete key; another worker may have won.
+            except FileExistsError:
+                pass
+        finally:
+            os.unlink(temporary)
+    app.config['SECRET_KEY'] = path.read_text().strip()
+    if len(app.config['SECRET_KEY']) < 32:
+        raise RuntimeError('The persistent development secret is invalid.')
+
+
+def upgrade_db_schema():
+    # Compatibility entry point: migrations are recorded and failures are visible.
+    from migrations import upgrade_database
+    upgrade_database()
+
 
 def seed_initial_data():
     """
@@ -364,13 +451,6 @@ def seed_initial_data():
             user = User(**u_data)
             user.set_password(raw_password)
             db.session.add(user)
-        else:
-            existing_user.full_name = u_data["full_name"]
-            existing_user.staff_id = u_data["staff_id"]
-            existing_user.role = u_data["role"]
-            existing_user.portal = u_data["portal"]
-            existing_user.department = u_data["department"]
-            existing_user.status = 'active'
 
     db.session.commit()
     print("Clinical staff user accounts verified and synchronized successfully.")
@@ -991,91 +1071,7 @@ def seed_initial_data():
             )
             db.session.add(wr1)
 
-    # =================== SEED SECURITY SETTINGS & RBAC PERMISSIONS ===================
-    if not SecuritySetting.query.first():
-        sec_settings = SecuritySetting(
-            require_2fa_for_all=False,
-            require_2fa_for_admin_doctor=True,
-            session_timeout_minutes=30,
-            max_failed_attempts=5,
-            lockout_duration_minutes=15,
-            password_min_length=8,
-            require_special_chars=True
-        )
-        db.session.add(sec_settings)
-
-    # Canonical System Permissions
-    canonical_permissions = [
-        # Patient Records
-        ("patient:view", "View Patient Records & History", "Patients", "Access demographic profiles and outpatient history"),
-        ("patient:register", "Register New Patients", "Patients", "Create new patient records and allocate hospital IDs"),
-        ("patient:edit", "Edit Patient Demographics", "Patients", "Modify patient contact info and insurance particulars"),
-        
-        # Clinical Consultation & EMR
-        ("clinical:consult", "Perform Medical Consultations", "Clinical", "Document clinical notes, examinations, and diagnoses"),
-        ("clinical:prescribe", "Prescribe Medications (Rx)", "Clinical", "Generate electronic prescriptions sent to pharmacy"),
-        ("clinical:order_labs", "Order Diagnostic Tests", "Clinical", "Request lab tests and radiology imaging"),
-        
-        # Clinical Documents
-        ("documents:generate_cert", "Issue Medical Sick-Off Certificates", "Documents", "Generate stamped clinical sick leave notes"),
-        ("documents:generate_referral", "Issue Specialist Referral Letters", "Documents", "Draft official hospital referral documents"),
-        ("documents:upload", "Upload & Manage Patient Attachments", "Documents", "Upload radiological scans, PDFs, and ID records"),
-        
-        # Inpatient Care & Wards
-        ("inpatient:admit", "Admit Patient to Wards", "Inpatient", "Assign ward beds and document intake clinical orders"),
-        ("inpatient:transfer", "Execute Inter-Ward Bed Transfers", "Inpatient", "Reassign beds and log transfer rationale"),
-        ("inpatient:chart", "Document Nursing & Ward Rounds", "Inpatient", "Record shift nursing notes and daily doctor progress"),
-        ("inpatient:discharge", "Clinical Inpatient Discharge", "Inpatient", "Finalize discharge clearance and generate certificates"),
-        
-        # Pharmacy & Dispensing
-        ("pharmacy:dispense", "Dispense Prescriptions", "Pharmacy", "Clear and dispense pharmaceutical orders with counseling"),
-        ("pharmacy:manage_stock", "Manage Drug Inventory & Batches", "Pharmacy", "Adjust stock, manage batches, and log purchase entries"),
-        
-        # Billing & Financials
-        ("billing:create_invoice", "Create & Stage Invoices", "Billing", "Compile invoices and apply departmental fee schedules"),
-        ("billing:collect_payment", "Collect Tender Payments", "Billing", "Process cash, M-Pesa, card, and insurance settlements"),
-        ("billing:waive_discount", "Waive Charges & Authorize Discounts", "Billing", "Grant authorized discounts and fee waivers"),
-        
-        # Hospital Administration & Security
-        ("admin:manage_users", "Manage Staff User Accounts", "Admin", "Create, edit, suspend, and reset staff credentials"),
-        ("admin:security_config", "Configure Security Policies & 2FA", "Admin", "Manage global 2FA and password requirements"),
-        ("admin:view_audit", "Access Immutable Audit Trail", "Admin", "Inspect all clinical and financial activity logs")
-    ]
-
-    for code, name, cat, desc in canonical_permissions:
-        if not Permission.query.filter_by(code=code).first():
-            p = Permission(code=code, name=name, category=cat, description=desc)
-            db.session.add(p)
-
-    db.session.flush()
-
-    # Seed Default Role-Permission Mappings if not configured
-    if RolePermission.query.count() == 0:
-        default_role_matrix = {
-            'doctor': [
-                'patient:view', 'clinical:consult', 'clinical:prescribe', 'clinical:order_labs',
-                'documents:generate_cert', 'documents:generate_referral', 'documents:upload',
-                'inpatient:chart', 'inpatient:discharge'
-            ],
-            'nurse': [
-                'patient:view', 'clinical:order_labs', 'inpatient:admit', 'inpatient:transfer',
-                'inpatient:chart', 'documents:upload'
-            ],
-            'pharmacist': [
-                'patient:view', 'pharmacy:dispense', 'pharmacy:manage_stock', 'documents:upload'
-            ],
-            'cashier': [
-                'patient:view', 'billing:create_invoice', 'billing:collect_payment', 'billing:waive_discount'
-            ],
-            'receptionist': [
-                'patient:view', 'patient:register', 'patient:edit', 'documents:upload'
-            ]
-        }
-
-        for role, perm_list in default_role_matrix.items():
-            for p_code in perm_list:
-                rp = RolePermission(role=role, permission_code=p_code)
-                db.session.add(rp)
+    seed_security_catalog()
 
     # Seed Sample Clinical Document (Medical Certificate for James Mwangi)
     if ClinicalDocument.query.count() == 0:
@@ -1107,6 +1103,177 @@ def seed_initial_data():
     db.session.commit()
     print("Initial clinical, EMR, Pharmacy, Billing, Inpatient Ward, and RBAC Security seed data initialized successfully.")
 
+def seed_security_catalog():
+    """Install permission definitions; preserve configured roles and accounts."""
+    initial_install = SecuritySetting.query.first() is None
+    if initial_install:
+        sec_settings = SecuritySetting(
+            require_2fa_for_all=False,
+            require_2fa_for_admin_doctor=True,
+            session_timeout_minutes=30,
+            max_failed_attempts=5,
+            lockout_duration_minutes=15,
+            password_min_length=8,
+            require_special_chars=True
+        )
+        db.session.add(sec_settings)
+
+    # Canonical System Permissions
+    canonical_permissions = [
+        # Patient Records
+        ("patient:view", "View Patient Records & History", "Patients", "Access demographic profiles and outpatient history"),
+        ("patient:register", "Register New Patients", "Patients", "Create new patient records and allocate hospital IDs"),
+        ("patient:edit", "Edit Patient Demographics", "Patients", "Modify patient contact info and insurance particulars"),
+        
+        # Clinical Consultation & EMR
+        ("clinical:consult", "Perform Medical Consultations", "Clinical", "Document clinical notes, examinations, and diagnoses"),
+        ("clinical:prescribe", "Prescribe Medications (Rx)", "Clinical", "Generate electronic prescriptions sent to pharmacy"),
+        ("clinical:record_results", "Record Laboratory Results", "Clinical", "Record completed diagnostic findings"),
+        ("telephony:send", "Send Patient SMS", "Patients", "Send reminders and verification messages"),
+        ("billing:collect_consultation", "Collect Consultation Payments", "Billing", "Collect the configured reception consultation fee"),
+        ("clinical:order_labs", "Order Diagnostic Tests", "Clinical", "Request lab tests and radiology imaging"),
+        
+        # Clinical Documents
+        ("documents:generate_cert", "Issue Medical Sick-Off Certificates", "Documents", "Generate stamped clinical sick leave notes"),
+        ("documents:generate_referral", "Issue Specialist Referral Letters", "Documents", "Draft official hospital referral documents"),
+        ("documents:upload", "Upload & Manage Patient Attachments", "Documents", "Upload radiological scans, PDFs, and ID records"),
+        
+        # Inpatient Care & Wards
+        ("inpatient:admit", "Admit Patient to Wards", "Inpatient", "Assign ward beds and document intake clinical orders"),
+        ("inpatient:transfer", "Execute Inter-Ward Bed Transfers", "Inpatient", "Reassign beds and log transfer rationale"),
+        ("inpatient:chart", "Document Nursing & Ward Rounds", "Inpatient", "Record shift nursing notes and daily doctor progress"),
+        ("inpatient:discharge", "Clinical Inpatient Discharge", "Inpatient", "Finalize discharge clearance and generate certificates"),
+        
+        # Pharmacy & Dispensing
+        ("pharmacy:dispense", "Dispense Prescriptions", "Pharmacy", "Clear and dispense pharmaceutical orders with counseling"),
+        ("pharmacy:manage_stock", "Manage Drug Inventory & Batches", "Pharmacy", "Adjust stock, manage batches, and log purchase entries"),
+        
+        # Billing & Financials
+        ("billing:create_invoice", "Create & Stage Invoices", "Billing", "Compile invoices and apply departmental fee schedules"),
+        ("billing:collect_payment", "Collect Tender Payments", "Billing", "Process cash, M-Pesa, card, and insurance settlements"),
+        ("billing:waive_discount", "Waive Charges & Authorize Discounts", "Billing", "Grant authorized discounts and fee waivers"),
+        
+        # Hospital Administration & Security
+        ("admin:manage_users", "Manage Staff User Accounts", "Admin", "Create, edit, suspend, and reset staff credentials"),
+        ("admin:security_config", "Configure Security Policies & 2FA", "Admin", "Manage global 2FA and password requirements"),
+        ("admin:view_audit", "Access Immutable Audit Trail", "Admin", "Inspect all clinical and financial activity logs")
+    ]
+
+    new_codes = set()
+    for code, name, cat, desc in canonical_permissions:
+        if not Permission.query.filter_by(code=code).first():
+            new_codes.add(code)
+            p = Permission(code=code, name=name, category=cat, description=desc)
+            db.session.add(p)
+
+    db.session.flush()
+    if not initial_install:
+        for role, code in [('doctor', 'clinical:record_results'), ('receptionist', 'telephony:send'), ('receptionist', 'billing:collect_consultation')]:
+            if code in new_codes:
+                db.session.add(RolePermission(role=role, permission_code=code))
+
+    # Seed Default Role-Permission Mappings if not configured
+    if initial_install:
+        default_role_matrix = {
+            'doctor': [
+                'patient:view', 'clinical:consult', 'clinical:prescribe', 'clinical:order_labs',
+                'documents:generate_cert', 'documents:generate_referral', 'documents:upload',
+                'inpatient:chart', 'inpatient:discharge', 'clinical:record_results'
+            ],
+            'nurse': [
+                'patient:view', 'clinical:order_labs', 'inpatient:admit', 'inpatient:transfer',
+                'inpatient:chart', 'documents:upload'
+            ],
+            'pharmacist': [
+                'patient:view', 'pharmacy:dispense', 'pharmacy:manage_stock', 'documents:upload'
+            ],
+            'cashier': [
+                'patient:view', 'billing:create_invoice', 'billing:collect_payment', 'billing:waive_discount'
+            ],
+            'receptionist': [
+                'patient:view', 'patient:register', 'patient:edit', 'documents:upload', 'telephony:send', 'billing:collect_consultation'
+            ]
+        }
+
+        for role, perm_list in default_role_matrix.items():
+            for p_code in perm_list:
+                rp = RolePermission(role=role, permission_code=p_code)
+                db.session.add(rp)
+
+    db.session.commit()
+
+
+def register_cli(app):
+    import click
+
+    @app.cli.command('db-upgrade')
+    def db_upgrade():
+        """Apply recorded, additive schema migrations without demo data."""
+        from migrations import upgrade_database
+        upgrade_database()
+        seed_security_catalog()
+        click.echo('Database upgraded; account and clinical data preserved.')
+
+    @app.cli.command('seed-demo')
+    def seed_demo():
+        """Explicitly populate a development demonstration database."""
+        if app.config.get('ENVIRONMENT') == 'production' or not app.config.get('DEMO_LOGIN_ENABLED'):
+            raise click.ClickException('Demo seeding requires HMS_ENABLE_DEMO_LOGIN=true in development.')
+        from migrations import upgrade_database
+        upgrade_database()
+        seed_security_catalog()
+        seed_initial_data()
+        click.echo('Development demo data initialized.')
+
+    @app.cli.command('create-admin')
+    @click.option('--username', prompt=True)
+    @click.option('--name', prompt='Full name')
+    @click.option('--password', prompt=True, hide_input=True, confirmation_prompt=True)
+    def create_admin(username, name, password):
+        """Create an initial administrator without published default passwords."""
+        if User.query.filter_by(username=username).first():
+            raise click.ClickException('That username already exists.')
+        settings = SecuritySetting.get_settings()
+        from auth.policy import validate_password_policy
+        valid, error = validate_password_policy(password, settings)
+        if not valid:
+            raise click.ClickException(error)
+        user = User(username=username, full_name=name, staff_id='ADM-' + username,
+                    role='admin', portal='all', department='Administration', status='active')
+        user.set_password(password, force_change=True)
+        db.session.add(user)
+        db.session.commit()
+        click.echo('Administrator created. First login requires password change and policy-based 2FA enrollment.')
+
+    @app.cli.command('migrate-private-files')
+    def migrate_private_files():
+        """Move legacy attachments and photos outside static/."""
+        import shutil
+        from pathlib import Path
+        private = Path(app.config['PRIVATE_UPLOAD_FOLDER'])
+        count = 0
+        for category in ('documents', 'photos'):
+            source = Path(app.root_path) / 'static' / 'uploads' / category
+            destination = private / category
+            destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+            if not source.exists():
+                continue
+            for file in source.iterdir():
+                if not file.is_file() or file.is_symlink():
+                    continue
+                target = destination / file.name
+                if target.exists():
+                    if target.read_bytes() != file.read_bytes():
+                        raise click.ClickException('Conflicting legacy file: ' + file.name)
+                    file.unlink()
+                else:
+                    shutil.move(str(file), str(target))
+                os.chmod(target, 0o600)
+                count += 1
+        click.echo(f'Moved {count} files to protected storage; existing document references remain valid.')
+
+
 if __name__ == '__main__':
     app = create_app()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host=os.environ.get('HMS_HOST', '127.0.0.1'), port=int(os.environ.get('PORT', 5000)),
+            debug=os.environ.get('HMS_DEBUG', '').lower() == 'true')

@@ -34,10 +34,14 @@ class User(db.Model):
     force_password_change = db.Column(db.Boolean, default=False, nullable=False)
     last_activity_at = db.Column(db.DateTime, nullable=True)
 
+    auth_version = db.Column(db.Integer, nullable=False, default=0)
+    active_session_token = db.Column(db.String(64), nullable=True)
+
     # Granular Custom Permissions Override (JSON array of permission codes)
     custom_permissions_json = db.Column(db.Text, nullable=True)
 
     def set_password(self, password, force_change=False):
+        self.auth_version = (self.auth_version or 0) + 1
         self.password_hash = generate_password_hash(password)
         self.password_changed_at = datetime.utcnow()
         self.force_password_change = force_change
@@ -50,10 +54,7 @@ class User(db.Model):
         """Generate a standard 32-character base32 secret for Google Authenticator and persist it."""
         if not self.totp_secret or force_new:
             self.totp_secret = pyotp.random_base32()
-            try:
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
+            db.session.flush()
         return self.totp_secret
 
     def get_totp_uri(self, issuer="Apex Regional Medical Center"):
@@ -88,7 +89,14 @@ class User(db.Model):
         """Generate a cryptographically signed timed token for employee 2FA onboarding."""
         from itsdangerous import URLSafeTimedSerializer
         serializer = URLSafeTimedSerializer(secret_key)
-        return serializer.dumps({'user_id': self.id, 'username': self.username}, salt='2fa-onboarding-token')
+        pw_sig = self.password_hash[-16:] if self.password_hash else ''
+        return serializer.dumps({
+            'user_id': self.id,
+            'username': self.username,
+            'pw_sig': pw_sig,
+            'auth_version': self.auth_version,
+            'is_2fa_enabled': bool(self.is_2fa_enabled),
+        }, salt='2fa-onboarding-token')
 
     @classmethod
     def verify_2fa_onboarding_token(cls, token: str, secret_key: str, max_age: int = 172800):
@@ -97,10 +105,39 @@ class User(db.Model):
         serializer = URLSafeTimedSerializer(secret_key)
         try:
             data = serializer.loads(token, salt='2fa-onboarding-token', max_age=max_age)
+            if not isinstance(data, dict):
+                return None
             user_id = data.get('user_id')
-            return cls.query.get(user_id)
-        except (SignatureExpired, BadSignature, Exception):
+            user = db.session.get(cls, user_id)
+            if not user or user.status != 'active':
+                return None
+            # Never expose enabled secrets / one-use on activation
+            if user.is_2fa_enabled:
+                return None
+            if data.get('is_2fa_enabled') is True:
+                return None
+            # Bind user password state
+            expected_pw_sig = user.password_hash[-16:] if user.password_hash else ''
+            if data.get('auth_version') != user.auth_version:
+                return None
+            if user.is_locked():
+                return None
+            if data.get('pw_sig') != expected_pw_sig:
+                return None
+            return user
+        except (SignatureExpired, BadSignature, ValueError, TypeError):
             return None
+
+    def requires_2fa(self, settings=None) -> bool:
+        """Check if 2FA enrollment is mandatory for this user under system policy."""
+        if settings is None:
+            from .security import SecuritySetting
+            settings = SecuritySetting.get_settings()
+        if settings.require_2fa_for_all:
+            return True
+        if settings.require_2fa_for_admin_doctor and self.role in ('admin', 'doctor'):
+            return True
+        return False
 
     def verify_backup_code(self, code: str) -> bool:
         """Verify and consume a one-time emergency backup recovery code."""
@@ -111,13 +148,16 @@ class User(db.Model):
         except Exception:
             return False
 
-        clean_code = str(code).strip().upper()
+        clean_code = str(code).strip().upper().replace(' ', '').replace('-', '')
+        if len(clean_code) != 8 or any(c not in '0123456789ABCDEF' for c in clean_code):
+            return False
+        clean_code = clean_code[:4] + '-' + clean_code[4:]
         for idx, h_code in enumerate(hashed_codes):
             if check_password_hash(h_code, clean_code):
                 # Consume used code
                 hashed_codes.pop(idx)
                 self.backup_codes_json = json.dumps(hashed_codes)
-                db.session.commit()
+                db.session.flush()
                 return True
         return False
 
@@ -133,13 +173,13 @@ class User(db.Model):
         self.failed_login_attempts += 1
         if self.failed_login_attempts >= max_attempts:
             self.locked_until = datetime.utcnow() + timedelta(minutes=lockout_minutes)
-        db.session.commit()
+        db.session.flush()
 
     def reset_failed_logins(self):
         """Reset failed count and clear lock on successful authentication."""
         self.failed_login_attempts = 0
         self.locked_until = None
-        db.session.commit()
+        db.session.flush()
 
     # ==================== RBAC & PERMISSION METHODS ====================
     def can_access_portal(self, portal_name):

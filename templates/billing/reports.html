@@ -14,7 +14,7 @@
                 <span>KRA FISCAL REPORT</span>
             </div>
             <h1 class="text-xl sm:text-2xl font-black text-slate-950 mt-1">Tax, VAT & Daily Revenue Reconciliation</h1>
-            <p class="text-xs text-slate-600 font-medium">Daily transaction breakdown across M-Pesa, Cash, Insurance, and Card payments with 16% standard VAT calculations.</p>
+            <p class="text-xs text-slate-600 font-medium">Daily transaction breakdown across M-Pesa, Cash, Insurance, and Card payments with tax amounts recorded on the underlying invoices.</p>
         </div>
         <div class="flex items-center gap-2 font-mono text-xs text-slate-600">
             <span>Report Date:</span>
@@ -41,8 +41,8 @@
             <div class="text-lg font-black text-blue-950 mt-1">KES {{ "{:,.2f}".format(insurance_total) }}</div>
         </div>
         <div class="p-4 bg-purple-50 rounded-2xl border-2 border-purple-300 shadow-xs">
-            <div class="text-[10px] font-mono font-bold text-purple-900 uppercase">VAT Liability (16%)</div>
-            <div class="text-lg font-black text-purple-950 mt-1">KES {{ "{:,.2f}".format(vat_16_tax) }}</div>
+            <div class="text-[10px] font-mono font-bold text-purple-900 uppercase">Recorded Tax in Payments</div>
+            <div class="text-lg font-black text-purple-950 mt-1">KES {{ "{:,.2f}".format(recorded_tax) }}</div>
         </div>
     </div>
 

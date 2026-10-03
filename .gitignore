@@ -3,6 +3,8 @@ venv/
 env/
 ENV/
 .env
+.env.*
+!.env.example
 
 # Python bytecode & cache
 __pycache__/
@@ -30,3 +32,14 @@ yarn-error.log*
 # Static compiled artifacts that can be generated (or keep dist)
 # uploads/
 uploads/
+
+# Local credentials, protected patient media, and database backups
+instance/
+SMS_Test/api.txt
+SMS_Test/live_api.txt
+SMS_Test/live_username.txt
+backups/
+*.db-wal
+*.db-shm
+.coverage
+.pytest_cache/

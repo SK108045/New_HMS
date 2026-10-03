@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta
 from flask import flash, redirect, render_template, request, url_for
 from auth.decorators import get_current_user, permission_required
+from auth.policy import validate_password_policy
 from models import (
     db, Appointment, AuditLog, DrugBatch, Invoice, LabOrder, MedicationItem,
     Patient, Payment, Prescription, QueueEntry, ShiftRegister, User,
@@ -19,15 +20,8 @@ ROLE_PORTALS = {
 }
 
 def log_action(action, entity_type, entity_id=None, details=None, severity='info'):
-    actor = get_current_user()
-    AuditLog.log_event(
-        action=action,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        details=details or "",
-        actor=actor,
-        severity=severity
-    )
+    return AuditLog.log_event(action, entity_type, entity_id, details or '',
+                              actor=get_current_user(), severity=severity)
 
 @admin_bp.route('/')
 @admin_bp.route('/dashboard')
@@ -74,6 +68,10 @@ def staff():
         elif User.query.filter(db.or_(User.username == username, User.staff_id == staff_id)).first():
             flash('A user already exists with that username or staff ID.', 'error')
         else:
+            is_valid, err_msg = validate_password_policy(password)
+            if not is_valid:
+                flash(err_msg, 'error')
+                return redirect(url_for('admin.staff'))
             user = User(
                 username=username, full_name=full_name, staff_id=staff_id, role=role,
                 portal=ROLE_PORTALS[role], department=request.form.get('department', '').strip() or 'General Administration',
@@ -102,12 +100,18 @@ def update_staff(user_id):
     if user.id == actor.id and (role != 'admin' or status != 'active'):
         flash('You cannot remove or disable your own administrator access.', 'error')
         return redirect(url_for('admin.staff'))
+    if user.role != role or user.status != status:
+        user.auth_version = (user.auth_version or 0) + 1
     user.role = role
     user.portal = ROLE_PORTALS[role]
     user.status = status
     user.department = request.form.get('department', user.department).strip() or user.department
     new_password = request.form.get('new_password', '')
     if new_password:
+        is_valid, err_msg = validate_password_policy(new_password)
+        if not is_valid:
+            flash(err_msg, 'error')
+            return redirect(url_for('admin.staff'))
         user.set_password(new_password, force_change=True)
         flash(f'Reset password for {user.full_name}. Staff member will be prompted to change it on next login.', 'info')
     else:
@@ -121,8 +125,9 @@ def update_staff(user_id):
 def force_staff_password_change(user_id):
     user = User.query.get_or_404(user_id)
     user.force_password_change = True
-    db.session.commit()
+    db.session.flush()
     log_action('staff_force_password_reset', 'user', user.id, f'Forced password change for {user.username}.')
+    db.session.commit()
     flash(f'{user.full_name} will be required to change their password on next sign-in.', 'info')
     return redirect(request.referrer or url_for('admin.staff'))
 
@@ -181,8 +186,9 @@ def update_security_settings():
     settings.updated_at = datetime.utcnow()
     settings.updated_by = actor.full_name if actor else 'System Administrator'
 
-    db.session.commit()
+    db.session.flush()
     log_action('security_settings_updated', 'security_setting', settings.id, "Hospital-wide security and 2FA policies updated.", severity='warning')
+    db.session.commit()
     flash('Hospital security policies updated and deployed successfully.', 'success')
     return redirect(url_for('admin.security'))
 
@@ -202,8 +208,9 @@ def update_role_permissions():
                 rp = RolePermission(role=role, permission_code=perm.code)
                 db.session.add(rp)
 
-    db.session.commit()
+    db.session.flush()
     log_action('rbac_matrix_updated', 'role_permission', None, "RBAC Role-Permission matrix reconfigured.", severity='warning')
+    db.session.commit()
     flash('Role-Based Access Control (RBAC) matrix saved successfully.', 'success')
     return redirect(url_for('admin.security'))
 
@@ -212,12 +219,14 @@ def update_role_permissions():
 @admin_bp.route('/security/reset-2fa/<int:user_id>', methods=['POST'])
 def reset_user_2fa(user_id):
     user = User.query.get_or_404(user_id)
+    user.auth_version = (user.auth_version or 0) + 1
     user.is_2fa_enabled = False
     user.totp_secret = None
     user.backup_codes_json = None
-    db.session.commit()
+    db.session.flush()
 
     log_action('admin_revoke_user_2fa', 'user', user.id, f"Admin revoked and deleted 2FA secret from DB for {user.full_name} ({user.username}).", severity='critical')
+    db.session.commit()
     flash(f"Two-Factor Authentication for {user.full_name} has been revoked and deleted from the database.", 'warning')
     
     referrer = request.referrer
@@ -230,9 +239,10 @@ def reset_user_2fa(user_id):
 def unlock_user(user_id):
     user = User.query.get_or_404(user_id)
     user.reset_failed_logins()
-    db.session.commit()
+    db.session.flush()
 
     log_action('admin_unlocked_user', 'user', user.id, f"Admin unlocked brute-forced account: {user.full_name} ({user.username}).", severity='info')
+    db.session.commit()
     flash(f"Account for {user.full_name} unlocked successfully.", 'success')
     return redirect(url_for('admin.security'))
 
@@ -241,9 +251,10 @@ def unlock_user(user_id):
 def force_user_password_change(user_id):
     user = User.query.get_or_404(user_id)
     user.force_password_change = True
-    db.session.commit()
+    db.session.flush()
 
     log_action('admin_forced_password_change', 'user', user.id, f"Admin flagged {user.full_name} to update password on next sign-in.", severity='info')
+    db.session.commit()
     flash(f"{user.full_name} will be required to change their password on next workstation login.", 'info')
     return redirect(url_for('admin.security'))
 

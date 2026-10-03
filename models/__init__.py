@@ -1,4 +1,5 @@
 from .base import db
+from .identifier import IdentifierCounter
 from .patient import Patient
 from .queue import QueueEntry
 from .appointment import Appointment, DoctorSchedule
@@ -9,7 +10,7 @@ from .pharmacy import (
     Supplier, PurchaseOrder, PurchaseOrderItem, ControlledDrugLog, QuarantineRecord
 )
 from .billing import (
-    Invoice, Payment, ShiftRegister,
+    Invoice, Payment, ShiftRegister, PaystackTransaction,
     InsuranceScheme, InsuranceClaim, CreditNote, FeeWaiver
 )
 from .user import User

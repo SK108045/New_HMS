@@ -3,6 +3,13 @@
 {% block title %}POS Cashier Terminal & Settlement - Billing Portal{% endblock %}
 
 {% block content %}
+{% if selected_patient and has_uninvoiced %}
+<form method="post" action="{{ url_for('billing.stage_invoice', patient_id=selected_patient.id) }}" class="mb-4 p-4 bg-amber-50 border rounded-xl">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<p>New charges are ready to be added to this patient's invoice.</p>
+<button class="btn-primary mt-2" type="submit">Prepare invoice for checkout</button>
+</form>
+{% endif %}
 <div class="space-y-6" x-data="posTerminal()">
 
     <!-- Top Station Command Header & Shift Strip -->
@@ -205,15 +212,21 @@
                     {% endif %}
 
                     <!-- Folio Financial Computation Bar -->
-                    {% set folio_subtotal = staged_items|sum(attribute='total_amount') %}
+                    {% if selected_invoice %}
+                        {% set folio_subtotal = selected_invoice.subtotal %}
+                        {% set folio_balance = selected_invoice.balance_due %}
+                    {% else %}
+                        {% set folio_subtotal = staged_items|sum(attribute='total_amount') %}
+                        {% set folio_balance = folio_subtotal %}
+                    {% endif %}
                     <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono">
                         <div class="flex items-center gap-3 text-xs">
                             <label class="text-slate-600 font-bold">Discount / Waiver (KES):</label>
                             <input 
                                 type="number" 
-                                x-model.number="discount" 
+                                value="0" disabled title="Request a fee waiver or credit note for independent approval"
                                 min="0" 
-                                max="{{ folio_subtotal }}" 
+                                max="{{ folio_balance }}"
                                 class="form-input text-xs font-mono font-bold w-28 py-1"
                             >
                         </div>
@@ -221,9 +234,13 @@
                         <div class="text-right space-y-0.5">
                             <div class="text-xs text-slate-500">
                                 Subtotal: <strong class="text-slate-800">KES {{ "%.2f"|format(folio_subtotal) }}</strong>
+                                {% if selected_invoice and selected_invoice.amount_paid > 0 %}
+                                    &bull; Paid: <strong class="text-emerald-700 font-bold">KES {{ "%.2f"|format(selected_invoice.amount_paid) }}</strong>
+                                    &bull; Balance: <strong class="text-slate-900 font-black">KES {{ "%.2f"|format(selected_invoice.balance_due) }}</strong>
+                                {% endif %}
                             </div>
                             <div class="text-base font-extrabold text-slate-900">
-                                Net Payable: KES <span x-text="formatMoney(Math.max(0, {{ folio_subtotal }} - discount))"></span>
+                                Net Payable: KES <span x-text="formatMoney(Math.max(0, {{ folio_balance }} - discount))"></span>
                             </div>
                         </div>
                     </div>
@@ -237,7 +254,10 @@
                         action="{{ url_for('billing.process_settlement', invoice_id=selected_invoice.id) }}"
                         class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-6"
                     >
-                        <input type="hidden" name="discount_amount" :value="discount">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="patient_id" value="{{ selected_patient.id }}">
+                        <input type="hidden" name="idempotency_key" value="{{ new_request_key() }}">
+                        <input type="hidden" name="discount_amount" value="0">
 
                         <div class="border-b border-slate-200 pb-3 flex items-center justify-between">
                             <div>
@@ -518,6 +538,7 @@
                 </div>
 
                 <form action="{{ url_for('billing.add_tariff_item', patient_id=selected_patient.id) }}" method="POST" class="space-y-3 text-xs">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div>
                         <label class="block font-bold text-slate-700 mb-1">Standard Hospital Tariff Catalog</label>
                         <select 
@@ -585,7 +606,9 @@ function posTerminal() {
         cardAmount: 0,
         
         get netDue() {
-            {% if staged_items %}
+            {% if selected_invoice %}
+                return Math.max(0, {{ selected_invoice.balance_due }} - this.discount);
+            {% elif staged_items %}
                 const sub = {{ staged_items|sum(attribute='total_amount') }};
                 return Math.max(0, sub - this.discount);
             {% else %}
